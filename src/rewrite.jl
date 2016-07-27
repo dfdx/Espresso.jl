@@ -1,8 +1,13 @@
 
-## expression pattern matching
+## pattern matching
+
+# PH is a constant, but we can modify contained value
+const PH = ["_"]
+
+set_placeholder_prefix(ph::AbstractString) = PH[1] = ph
 
 isplaceholder(x) = false
-isplaceholder(x::Symbol) = startswith(string(x), "_")
+isplaceholder(x::Symbol) = startswith(string(x), PH[1])
 
 function match!(m::Dict{Symbol,Any}, p, x)
     if isplaceholder(p)
@@ -17,6 +22,19 @@ function match!(m::Dict{Symbol,Any}, p, x)
     end
 end
 
+
+"""
+Match expression `ex` to a `pattern`, return nullable dictionary of matched
+symbols or subexpressions.
+Example:
+
+    ex = :(num1 ^ num2)
+    pattern = :(_x ^ _n)
+    match(pattern, ex)  # ==> Nullable(Dict{Symbol,Any}(:_n=>:num2,:_x=>:num1))
+
+By default, `match` uses `_` as a prefix for placeholders to match against, but
+it may also be configured using function `set_placeholder_prefix(ph)`.
+"""
 function Base.match(pattern::Expr, ex::Expr)
     m = Dict{Symbol,Any}()
     res = match!(m, pattern, ex)
@@ -28,7 +46,7 @@ function Base.match(pattern::Expr, ex::Expr)
 end
 
 
-## symbolic substitution
+## substitution
 
 """
 Substitute symbols in `ex` according to substitute table `st`.
@@ -46,6 +64,18 @@ end
 subs(ex::Expr; st...) = subs(ex, Dict(st))
 
 
+## rewriting
+
+"""
+Rewrite expression `ex` according to a transform from `pattern`
+to a substituting expression `subex`.
+Example (derivative of x^n):
+
+    ex = :(num1 ^ num2)
+    pattern = :(_x ^ _n)
+    subex = :(_n * _x ^ (_n - 1))
+    rewrite(ex, pattern, subex) # ==> :(num2 * num1 ^ (num2 - 1))
+"""
 function rewrite(ex::Expr, pattern::Expr, subex::Expr)
     st = match(pattern, ex)
     if isnull(st)
