@@ -136,25 +136,13 @@ end
 evaluate!(g::ExGraph, name::Symbol) = evaluate!(g, g.vars[name])
 
 
-## symbolic operations
-
-# TODO: generate $(op)($t1, t2)
-# TODO: or +(::Union{Expr,Number,Array}, ::Union{Expr,Number,Array})
-+(ex1::Expr, ex2::Expr) = :($ex1 + $ex2)
-*(ex1::Expr, ex2::Expr) = :($ex1 * $ex2)
-# +(ex1::Expr, n::Number) = :($ex1 + $n)
-# *(ex1::Expr, ex2::Expr) = :($ex1 * $ex2)
-Base.promote_rule(::Type{Expr}, ::Type{Number}) = Expr
-Base.convert(::Type{Expr}, x::Number) = :($x + 0)
-
-
-
 
 ## derivative rules
 
-const DERIV_RULES = Dict{Tuple{Symbol,Vector{Type}, Int}, Tuple{Expr,Expr}}()
+@runonce const DERIV_RULES =
+    Dict{Tuple{Symbol,Vector{Type}, Int}, Tuple{Expr,Expr}}()
 
-# accpets expressions like `foo(x::Number, y::Matrix)`
+# accepts expressions like `foo(x::Number, y::Matrix)`
 function typesof(ex::Expr)
     @assert ex.head == :call
     @assert reduce(&, [isa(exa, Expr) && exa.head == :(::)
@@ -162,11 +150,22 @@ function typesof(ex::Expr)
     return [eval(exa.args[2]) for exa in ex.args[2:end]]
 end
 
-macro deriv(ex::Expr, idx::Int, dex::Expr)
+# accepts expressions like `foo(x::Number, y::Matrix)`
+function without_types(ex::Expr)
+    @assert ex.head == :call
+    @assert reduce(&, [isa(exa, Expr) && exa.head == :(::)
+                       for exa in ex.args[2:end]])
+    new_args = Symbol[exa.args[1] for exa in ex.args[2:end]]
+    return Expr(ex.head, ex.args[1], new_args...)
+end
+
+
+macro deriv_rule(ex::Expr, idx::Int, dex::Expr)
     if ex.head == :call
         op = ex.args[1]
         types = typesof(ex)
-        DERIV_RULES[(op, types, idx)] = (ex, dex)
+        ex_no_types = without_types(ex)
+        DERIV_RULES[(op, types, idx)] = (ex_no_types, dex)
     else
         error("Can't define derrivatives on non-call expressions")
     end
@@ -176,12 +175,17 @@ function getrule(ex::Expr, types::Vector{DataType}, idx::Int)
     return DERIV_RULES[(ex.args[1], types, idx)]
 end
 
-function applyrule(op::Symbol, vars::Vector{Tuple{Symbol,Type}}, idx::Int)
-    rule = DERIV_RULES[(op, vars[idx][2])]
+function applyrule(rule::Tuple{Expr, Expr}, ex::Expr)
+    return rewrite(ex, rule[1], rule[2])
 end
 
 
-
+function main_deriv_rule()
+    ex = :(w1 ^ 2)
+    @deriv_rule (_x::Number ^ _n::Number) 1 (_n * _x^(_n - 1))    
+    rule = getrule(ex, [Number, Number], 1)
+    applyrule(rule, ex)
+end
 
 
 ## rdiff
