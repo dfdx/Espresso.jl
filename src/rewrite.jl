@@ -1,21 +1,20 @@
 
-## pattern matching
+## pat matching
 
-# PH is a constant, but we can modify contained value
-const PH = ["_"]
+const SPECIAL_PLACEHOLDERS = Set([:x, :y, :z, :a, :b, :c, :m, :n])
 
-set_placeholder_prefix(ph::AbstractString) = PH[1] = ph
 
 isplaceholder(x) = false
-isplaceholder(x::Symbol) = startswith(string(x), PH[1])
+isplaceholder(x::Symbol) = (startswith(string(x), "_")
+                            || in(x, SPECIAL_PLACEHOLDERS))
 
-function match!(m::Dict{Symbol,Any}, p, x)
+function matchex!(m::Dict{Symbol,Any}, p, x)
     if isplaceholder(p)
         m[p] = x
         return true
     elseif isa(p, Expr) && isa(x, Expr)
-        result = (match!(m, p.head, x.head) &&
-                  reduce(&, [match!(m, pa, xa)
+        result = (matchex!(m, p.head, x.head) &&
+                  reduce(&, [matchex!(m, pa, xa)
                              for (pa, xa) in zip(p.args, x.args)]))
     else
         return p == x
@@ -24,20 +23,25 @@ end
 
 
 """
-Match expression `ex` to a `pattern`, return nullable dictionary of matched
+Match expression `ex` to a pattern `pat`, return nullable dictionary of matched
 symbols or subexpressions.
 Example:
 
-    ex = :(num1 ^ num2)
-    pattern = :(_x ^ _n)
-    match(pattern, ex)  # ==> Nullable(Dict{Symbol,Any}(:_n=>:num2,:_x=>:num1))
+```
+ex = :(num1 ^ num2)
+pat = :(_x ^ _n)
+matchex(pat, ex)  # ==> Nullable(Dict{Symbol,Any}(:_n=>:num2,:_x=>:num1))
+```
 
-By default, `match` uses `_` as a prefix for placeholders to match against, but
-it may also be configured using function `set_placeholder_prefix(ph)`.
+NOTE: two symbols match if they are equal or symbol in pat is a placeholder.
+Placeholder is any symbol that starts with '-' or one of special symbols, stored
+in a constant SPECIAL_PLACEHOLDER. Currently they are:
+$(collect(SPECIAL_PLACEHOLDERS))
+
 """
-function Base.match(pattern::Expr, ex::Expr)
+function matchex(pat::Symbolic, ex::Symbolic)
     m = Dict{Symbol,Any}()
-    res = match!(m, pattern, ex)
+    res = matchex!(m, pat, ex)
     if res
         return Nullable(m)
     else
@@ -61,25 +65,33 @@ function subs(ex::Expr, st::Dict)
     return new_ex
 end
 
-subs(ex::Expr; st...) = subs(ex, Dict(st))
+function subs(s::Symbol, st::Dict)
+    return haskey(st, s) ? st[s] : s
+end
+
+function subs(s::Any, st::Dict)
+    return s
+end
+
+subs(ex; st...) = subs(ex, Dict(st))
 
 
 ## rewriting
 
 """
-Rewrite expression `ex` according to a transform from `pattern`
+Rewrite expression `ex` according to a transform from `pat`
 to a substituting expression `subex`.
 Example (derivative of x^n):
 
     ex = :(num1 ^ num2)
-    pattern = :(_x ^ _n)
+    pat = :(_x ^ _n)
     subex = :(_n * _x ^ (_n - 1))
-    rewrite(ex, pattern, subex) # ==> :(num2 * num1 ^ (num2 - 1))
+    rewrite(ex, pat, subex) # ==> :(num2 * num1 ^ (num2 - 1))
 """
-function rewrite(ex::Expr, pattern::Expr, subex::Expr)
-    st = match(pattern, ex)
+function rewrite(ex::Symbolic, pat::Symbolic, subex::Any)
+    st = matchex(pat, ex)
     if isnull(st)
-        error("Expression $ex doesn't match pattern $pattern")
+        error("Expression $ex doesn't match pat $pat")
     else
         return subs(subex, get(st))
     end

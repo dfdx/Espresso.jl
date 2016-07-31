@@ -25,7 +25,6 @@ end
 end
 
 function ExGraph(;input...)
-    println(input)
     g = ExGraph(ExNode[], Dict(), input, Dict(), 0)
     for (name, val) in input
         addnode!(g, :input; name=name, val=val)
@@ -140,11 +139,12 @@ evaluate!(g::ExGraph, name::Symbol) = evaluate!(g, g.vars[name])
 ## derivative rules
 
 @runonce const DERIV_RULES =
-    Dict{Tuple{Symbol,Vector{Type}, Int}, Tuple{Expr,Expr}}()
+    Dict{Tuple{Symbol,Vector{Type}, Int}, Tuple{Symbolic,Any}}()
 
 # accepts expressions like `foo(x::Number, y::Matrix)`
+# or
 function typesof(ex::Expr)
-    @assert ex.head == :call
+    @assert ex.head == :call || ex.head == :(=)
     @assert reduce(&, [isa(exa, Expr) && exa.head == :(::)
                        for exa in ex.args[2:end]])
     return [eval(exa.args[2]) for exa in ex.args[2:end]]
@@ -152,7 +152,7 @@ end
 
 # accepts expressions like `foo(x::Number, y::Matrix)`
 function without_types(ex::Expr)
-    @assert ex.head == :call
+    @assert ex.head == :call || ex.head == :(=)
     @assert reduce(&, [isa(exa, Expr) && exa.head == :(::)
                        for exa in ex.args[2:end]])
     new_args = Symbol[exa.args[1] for exa in ex.args[2:end]]
@@ -160,70 +160,130 @@ function without_types(ex::Expr)
 end
 
 
-macro deriv_rule(ex::Expr, idx::Int, dex::Expr)
+macro deriv_rule(ex::Expr, idx::Int, dex::Any)
     if ex.head == :call
         op = ex.args[1]
         types = typesof(ex)
         ex_no_types = without_types(ex)
         DERIV_RULES[(op, types, idx)] = (ex_no_types, dex)
+    elseif ex.head == :(=)
+        types = [eval(exa.args[2]) for exa in ex.args]
+        new_args = Symbol[exa.args[1] for exa in ex.args]
+        ex_no_types = Expr(ex.head, new_args...)
+        DERIV_RULES[(:(=), types[2:end], idx)] = (ex_no_types, dex)
     else
-        error("Can't define derrivatives on non-call expressions")
+        error("Can only define derivative on calls and assignments")
     end
 end
 
-function getrule(ex::Expr, types::Vector{DataType}, idx::Int)
-    return DERIV_RULES[(ex.args[1], types, idx)]
+## function getrule(ex::Expr, types::Vector{DataType}, idx::Int)
+##     return DERIV_RULES[(ex.args[1], types, idx)]
+## end
+
+function getrule(op::Symbol, types::Vector{DataType}, idx::Int)
+    key = (op, types, idx)
+    if haskey(DERIV_RULES, key)
+        return DERIV_RULES[key]
+    else
+        error("Can't find derivation rule for $key")
+    end
 end
 
-function applyrule(rule::Tuple{Expr, Expr}, ex::Expr)
+function applyrule(rule::Tuple{Expr, Any}, ex::Expr)
     return rewrite(ex, rule[1], rule[2])
 end
 
 
-function main_deriv_rule()
-    ex = :(w1 ^ 2)
-    @deriv_rule (_x::Number ^ _n::Number) 1 (_n * _x^(_n - 1))    
-    rule = getrule(ex, [Number, Number], 1)
-    applyrule(rule, ex)
-end
-
+include("deriv_rules.jl")  # TODO: consider different location
 
 ## rdiff
 
+function to_expr(node::ExNode)
+    op = node.op
+    ex = :(($op)($(node.deps...)))
+    return ex
+end
+
 """
-Fill derivatives of all variables below `y`.
-Seed is a current values of dz/dy and is equal 1 for output var and
+Fill derivatives of dependencies of `y`.
+`dzdy` is a current values of dz/dy and is equal to 1 for output var and
 some expression for intermediate vars.
 Naming:
  * z - output variable
  * y - variable at hand
  * x - one of y's dependencies
 """
-function dfill!(g::ExGraph, y::Symbol, seed::Any)
-    dzdy = seed
+function fill_deriv!(g::ExGraph, y::Symbol, dzdy::Any)
     y_node = g.vars[y]
+    types = [typeof(g.vars[x].val) for x in y_node.deps]
     for (i, x) in enumerate(y_node.deps)
         x_node = g.vars[x]
-        dydx = applyrule(y_node.op, y_node.deps, i) # TODO
-        a = dzdy * dydx
-        if in(x, g.adj)
+        rule = getrule(y_node.op, types, i)
+        dydx = applyrule(rule, to_expr(y_node))
+        a = simplify(dzdy * dydx)
+        if haskey(g.adj, x)
             g.adj[x] += a
         else
             g.adj[x] = a
         end
     end
+    return g.adj  # for convenience, may become not-destructuring later
 end
 
+"""
+Calculate derivatives of all direct and indirect dependencies of z,
+store result in adjoint dict `g.adj`.
+"""
+function calc_deriv!(g::ExGraph, z::Symbol)
+    fill_deriv!(g, z, 1)
+    for dep in g.vars[z].deps
+        calc_deriv!(g, dep)
+    end
+end
+
+
+function constants(g::ExGraph)
+    d = Dict{Symbol, Any}()
+    for node in g.tape
+        if node.op == :constant
+            d[node.name] = node.val
+        end
+    end
+    return d
+end
+
+"""
+Substitute all constant node names in adjoint dict with
+their corresponding values
+"""
+function subs_constants!(g::ExGraph)
+    st = constants(g)
+    for i in eachindex(g.adj)
+        g.adj[i] = subs(g.adj[i], st)
+    end
+end
+
+
+function rdiff(ex::Expr; output=nothing, inputs...)    
+    g = ExGraph(;inputs...)
+    parse!(g, ex)
+    output = output != nothing ? output : g.tape[end].name
+    evaluate!(g, output)
+    calc_deriv!(g, output)
+    subs_constants!(g)
+    d_exprs = [simplify(g.adj[x]) for (x,val) in inputs]
+    return d_exprs
+end
 
 
 ################# main ###################
 
 function main()
-    ex = quote
-        z = x1*x2 + sin(x1)
-    end
-    g = ExGraph(;x1=1, x2=2)
+    # ex = :(z = x1*x2 + sin(x1))
+    ex = :(z = x1 ^ 2)
+    g = ExGraph(;x1=1., x2=2.)
     parse!(g, ex)
-    @time evaluate!(g, :w2) # precompile
-    @time val = evaluate!(g, :z)
+    evaluate!(g, :z)
+    calc_deriv!(g, :z)
+    subs_constants!(g)
 end
