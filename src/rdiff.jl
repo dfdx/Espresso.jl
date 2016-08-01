@@ -135,64 +135,7 @@ end
 evaluate!(g::ExGraph, name::Symbol) = evaluate!(g, g.vars[name])
 
 
-
-## derivative rules
-
-@runonce const DERIV_RULES =
-    Dict{Tuple{Symbol,Vector{Type}, Int}, Tuple{Symbolic,Any}}()
-
-# accepts expressions like `foo(x::Number, y::Matrix)`
-# or
-function typesof(ex::Expr)
-    @assert ex.head == :call || ex.head == :(=)
-    @assert reduce(&, [isa(exa, Expr) && exa.head == :(::)
-                       for exa in ex.args[2:end]])
-    return [eval(exa.args[2]) for exa in ex.args[2:end]]
-end
-
-# accepts expressions like `foo(x::Number, y::Matrix)`
-function without_types(ex::Expr)
-    @assert ex.head == :call || ex.head == :(=)
-    @assert reduce(&, [isa(exa, Expr) && exa.head == :(::)
-                       for exa in ex.args[2:end]])
-    new_args = Symbol[exa.args[1] for exa in ex.args[2:end]]
-    return Expr(ex.head, ex.args[1], new_args...)
-end
-
-
-macro deriv_rule(ex::Expr, idx::Int, dex::Any)
-    if ex.head == :call
-        op = ex.args[1]
-        types = typesof(ex)
-        ex_no_types = without_types(ex)
-        DERIV_RULES[(op, types, idx)] = (ex_no_types, dex)
-    elseif ex.head == :(=)
-        types = [eval(exa.args[2]) for exa in ex.args]
-        new_args = Symbol[exa.args[1] for exa in ex.args]
-        ex_no_types = Expr(ex.head, new_args...)
-        DERIV_RULES[(:(=), types[2:end], idx)] = (ex_no_types, dex)
-    else
-        error("Can only define derivative on calls and assignments")
-    end
-end
-
-## function getrule(ex::Expr, types::Vector{DataType}, idx::Int)
-##     return DERIV_RULES[(ex.args[1], types, idx)]
-## end
-
-function getrule(op::Symbol, types::Vector{DataType}, idx::Int)
-    key = (op, types, idx)
-    if haskey(DERIV_RULES, key)
-        return DERIV_RULES[key]
-    else
-        error("Can't find derivation rule for $key")
-    end
-end
-
-function applyrule(rule::Tuple{Expr, Any}, ex::Expr)
-    return rewrite(ex, rule[1], rule[2])
-end
-
+# derivation
 
 include("deriv_rules.jl")  # TODO: consider different location
 

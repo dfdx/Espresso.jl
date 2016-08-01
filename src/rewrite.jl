@@ -1,12 +1,15 @@
 
 ## pat matching
 
-const SPECIAL_PLACEHOLDERS = Set([:x, :y, :z, :a, :b, :c, :m, :n])
-
+# TODO: rename to PLACEHOLDERS and activate this list only when calling
+# Hydra.setup_profile(:deriv)
+# hmmm... what if a person changes it and still wants to use `rdiff`?
+const DEFAULT_PLACEHOLDERS = [Set([:x, :y, :z, :a, :b, :c, :m, :n])]
+set_default_placeholders(set::Set{Symbol}) = (DEFAULT_PLACEHOLDERS[1] = set)
 
 isplaceholder(x) = false
 isplaceholder(x::Symbol) = (startswith(string(x), "_")
-                            || in(x, SPECIAL_PLACEHOLDERS))
+                            || in(x, DEFAULT_PLACEHOLDERS[1]))
 
 function matchex!(m::Dict{Symbol,Any}, p, x)
     if isplaceholder(p)
@@ -29,14 +32,14 @@ Example:
 
 ```
 ex = :(num1 ^ num2)
-pat = :(_x ^ _n)
-matchex(pat, ex)  # ==> Nullable(Dict{Symbol,Any}(:_n=>:num2,:_x=>:num1))
+pat = :(x ^ n)
+matchex(pat, ex)  # ==> Nullable(Dict{Symbol,Any}(:n=>:num2,:x=>:num1))
 ```
 
 NOTE: two symbols match if they are equal or symbol in pat is a placeholder.
 Placeholder is any symbol that starts with '-' or one of special symbols, stored
-in a constant SPECIAL_PLACEHOLDER. Currently they are:
-$(collect(SPECIAL_PLACEHOLDERS))
+in a constant DEFAULT_PLACEHOLDERS. Currently they are:
+$(collect(DEFAULT_PLACEHOLDERS))
 
 """
 function matchex(pat::Symbolic, ex::Symbolic)
@@ -96,4 +99,3 @@ function rewrite(ex::Symbolic, pat::Symbolic, subex::Any)
         return subs(subex, get(st))
     end
 end
-
