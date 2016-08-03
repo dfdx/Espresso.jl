@@ -7,7 +7,7 @@ import Base: *, +
     typ::Any
 end
 
-toExH(ex::Expr) = ExH{ex.head}(ex.head, ex.args, ex.typ)
+to_exh(ex::Expr) = ExH{ex.head}(ex.head, ex.args, ex.typ)
 
 @runonce type ExNode{Op}
     name::Symbol                # name of a variable
@@ -72,7 +72,7 @@ end
 Parse Julia expression and build ExGraph in-place.
 Return the name of the output variable.
 """
-parse!(g::ExGraph, ex::Expr) = parse!(g, toExH(ex))
+parse!(g::ExGraph, ex::Expr) = parse!(g, to_exh(ex))
 parse!(g::ExGraph, ::LineNumberNode) = :nil
 parse!(g::ExGraph, s::Symbol) = s
 
@@ -135,10 +135,6 @@ end
 evaluate!(g::ExGraph, name::Symbol) = evaluate!(g, g.vars[name])
 
 
-# derivation
-
-include("deriv_rules.jl")  # TODO: consider different location
-
 ## rdiff
 
 function to_expr(node::ExNode)
@@ -156,33 +152,55 @@ Naming:
  * y - variable at hand
  * x - one of y's dependencies
 """
-function fill_deriv!(g::ExGraph, y::Symbol, dzdy::Any)
+function fill_deriv!(g::ExGraph, y::Symbol)
+    # TODO: do we need dzdy? seems like we cat take it from adj dict
     y_node = g.vars[y]
-    types = [typeof(g.vars[x].val) for x in y_node.deps]
-    for (i, x) in enumerate(y_node.deps)
-        x_node = g.vars[x]
-        rule = find_rule(y_node.op, types, i)
-        dydx = apply_rule(rule, to_expr(y_node))
-        a = simplify(dzdy * dydx)
-        if haskey(g.adj, x)
-            g.adj[x] += a
-        else
-            g.adj[x] = a
+    println("Inspecting $y")
+    if y_node.op == :(=)
+        x = y_node.deps[1]
+        g.adj[x] = g.adj[y]  # already filled by parent?
+    elseif y_node.op == :input
+        # do nothing
+    elseif y_node.op == :constant
+        # do nothing
+    else
+        types = [typeof(g.vars[x].val) for x in y_node.deps]
+        for (i, x) in enumerate(y_node.deps)
+            x_node = g.vars[x]
+            if x_node.op == :constant
+                g.adj[x] = 0.
+                continue
+            end
+            rule = find_rule(y_node.op, types, i)
+            dydx = apply_rule(rule, to_expr(y_node))
+            dzdy = g.adj[y]
+            a = simplify(dzdy * dydx)
+            if haskey(g.adj, x)
+                g.adj[x] += a
+            else
+                g.adj[x] = a
+            end
         end
     end
-    return g.adj  # for convenience, may become not-destructuring later
 end
 
 """
 Calculate derivatives of all direct and indirect dependencies of z,
 store result in adjoint dict `g.adj`.
 """
-function calc_deriv!(g::ExGraph, z::Symbol)
-    fill_deriv!(g, z, 1)
-    for dep in g.vars[z].deps
-        calc_deriv!(g, dep)
+function calc_deriv!(g)
+    # fill_deriv!(g, z)
+    for y in reverse([node.name for node in g.tape])
+        fill_deriv!(g, y)
     end
 end
+
+## function calc_deriv!(g::ExGraph, z::Symbol)
+##     fill_deriv!(g, z)
+##     for dep in g.vars[z].deps
+##         calc_deriv!(g, dep)
+##     end
+## end
 
 
 function constants(g::ExGraph)
@@ -207,7 +225,7 @@ function subs_constants!(g::ExGraph)
 end
 
 
-function rdiff(ex::Expr; output=nothing, inputs...)    
+function rdiff(ex::Expr; output=nothing, inputs...)
     g = ExGraph(;inputs...)
     parse!(g, ex)
     output = output != nothing ? output : g.tape[end].name
@@ -224,9 +242,16 @@ end
 function main()
     # ex = :(z = x1*x2 + sin(x1))
     ex = :(z = x1 ^ 2)
-    g = ExGraph(;x1=1., x2=2.)
+    inputs = [(:x1, 1)]
+    output = nothing
+
+    g = ExGraph(;inputs...)
     parse!(g, ex)
-    evaluate!(g, :z)
-    calc_deriv!(g, :z)
+    output = output != nothing ? output : g.tape[end].name
+    evaluate!(g, output)
+    g.adj[output] = 1.
+    calc_deriv!(g)
+    g.adj
     subs_constants!(g)
+    d_exprs = [simplify(g.adj[x]) for (x,val) in inputs]
 end
