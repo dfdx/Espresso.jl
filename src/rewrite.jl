@@ -82,7 +82,7 @@ subs(ex; st...) = subs(ex, Dict(st))
 ## rewriting
 
 """
-Rewrite expression `ex` according to a transform from `pat`
+Rewrite expression `ex` according to a transform from pattern `pat`
 to a substituting expression `subex`.
 Example (derivative of x^n):
 
@@ -94,7 +94,7 @@ Example (derivative of x^n):
 function rewrite(ex::Symbolic, pat::Symbolic, subex::Any)
     st = matchex(pat, ex)
     if isnull(st)
-        error("Expression $ex doesn't match pat $pat")
+        error("Expression $ex doesn't match pattern $pat")
     else
         return subs(subex, get(st))
     end

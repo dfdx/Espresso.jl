@@ -161,8 +161,8 @@ function fill_deriv!(g::ExGraph, y::Symbol, dzdy::Any)
     types = [typeof(g.vars[x].val) for x in y_node.deps]
     for (i, x) in enumerate(y_node.deps)
         x_node = g.vars[x]
-        rule = getrule(y_node.op, types, i)
-        dydx = applyrule(rule, to_expr(y_node))
+        rule = find_rule(y_node.op, types, i)
+        dydx = apply_rule(rule, to_expr(y_node))
         a = simplify(dzdy * dydx)
         if haskey(g.adj, x)
             g.adj[x] += a
