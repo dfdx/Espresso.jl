@@ -1,33 +1,19 @@
 
 
 
+
 @runonce const DERIV_RULES =
-    Dict{Tuple{Symbol,Vector{Type}, Int}, Tuple{Symbolic,Any}}()
+        Dict{Tuple{Symbol,Vector{Type}, Int}, Tuple{Symbolic,Any}}()
 
-# accepts expressions like `foo(x::Number, y::Matrix)`
-# or
-function typesof(ex::Expr)
-    @assert ex.head == :call || ex.head == :(=)
-    @assert reduce(&, [isa(exa, Expr) && exa.head == :(::)
-                       for exa in ex.args[2:end]])
-    return [eval(exa.args[2]) for exa in ex.args[2:end]]
-end
-
-# accepts expressions like `foo(x::Number, y::Matrix)`
-function without_types(ex::Expr)
-    @assert ex.head == :call || ex.head == :(=)
-    @assert reduce(&, [isa(exa, Expr) && exa.head == :(::)
-                       for exa in ex.args[2:end]])
-    new_args = Symbol[exa.args[1] for exa in ex.args[2:end]]
-    return Expr(ex.head, ex.args[1], new_args...)
-end
+# @runonce const DERIV_RULES = SearchTree()
 
 
 macro deriv_rule(ex::Expr, idx::Int, dex::Any)
     if ex.head == :call
         op = ex.args[1]
-        types = typesof(ex)
-        ex_no_types = without_types(ex)
+        types = [eval(exa.args[2]) for exa in ex.args[2:end]]
+        new_args = Symbol[exa.args[1] for exa in ex.args[2:end]]        
+        ex_no_types = Expr(ex.head, ex.args[1], new_args...)
         DERIV_RULES[(op, types, idx)] = (ex_no_types, dex)
     elseif ex.head == :(=)
         types = [eval(exa.args[2]) for exa in ex.args]
@@ -43,12 +29,38 @@ end
 ##     return DERIV_RULES[(ex.args[1], types, idx)]
 ## end
 
+
+
+function type_ansestors{T}(t::Type{T})
+    types = Type[]
+    while t != Any
+        push!(types, t)
+        t = super(t)
+    end
+    push!(types, Any)
+    return types
+end
+
+
+
+function find_rule(op::Symbol, types::Vector{DataType}, idx)
+    type_ans = map(type_ansestors, types)
+    type_products = product(type_ans...)
+    ks = [(op, [tp...], idx) for tp in type_products]
+    for k in ks
+        if haskey(DERIV_RULES, k)
+            return DERIV_RULES[k]
+        end
+    end
+    error("Can't find differentiation rule for ($op, $types, $idx)")
+end
+
 function getrule(op::Symbol, types::Vector{DataType}, idx::Int)
-    key = (op, types, idx)
-    if haskey(DERIV_RULES, key)
-        return DERIV_RULES[key]
+    k = (op, types, idx)
+    if hask(DERIV_RULES, k)
+        return DERIV_RULES[k]
     else
-        error("Can't find derivation rule for $key")
+        error("Can't find derivation rule for $k")
     end
 end
 
@@ -65,7 +77,7 @@ end
 
 
 
-@deriv_rule (x::Float64 ^ n::Int) 1 (n * x^(n-1))
+@deriv_rule (x::Number ^ n::Int) 1 (n * x^(n-1))
 @deriv_rule (a::Float64 ^ x::Int) 2 (log(a) * a^x)
 @deriv_rule (x::Float64 + y::Float64) 1 x
 @deriv_rule (x::Float64 + y::Float64) 2 y

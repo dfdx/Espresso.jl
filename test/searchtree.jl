@@ -14,3 +14,6 @@ put!(tree, [:a, :b, :c], 42)
 @test scan(tree, [:a, :b, :c, :d]) == (nothing, 4)
 @test scan(tree, [:a, :b, :c, :d, :e]) == (nothing, 4)
 
+tree[:x, :y, :z] = 24
+@test tree[:x, :y, :z] == Nullable(24)
+@test isnull(tree[:w])

@@ -20,6 +20,9 @@ function Base.put!(tree::SearchTree, keys::Vector, val)
     end
 end
 
+Base.setindex!(tree::SearchTree, val::Any, keys...) = put!(tree, [keys...], val)
+
+
 function scan(tree::SearchTree, keys::Vector, key_idx::Int)
     if key_idx == length(keys)
         return (tree.val, -1)
@@ -35,4 +38,10 @@ end
 
 scan(tree::SearchTree, keys::Vector) = scan(tree, keys, 0)
 
-    
+
+function Base.find(tree::SearchTree, keys::Vector)
+    res, key_idx = scan(tree, keys)
+    return key_idx == -1 ? Nullable(res) : Nullable()
+end
+
+Base.getindex(tree::SearchTree, keys...) = find(tree, [keys...])

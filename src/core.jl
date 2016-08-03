@@ -1,6 +1,8 @@
 
+using Iterators
+
 include("utils.jl")
-include("searchtree.jl")
+# include("searchtree.jl")
 include("types.jl")
 include("rewrite.jl")
 include("simplify.jl")
