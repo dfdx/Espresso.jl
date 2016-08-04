@@ -240,9 +240,10 @@ end
 ################# main ###################
 
 function main()
-    # ex = :(z = x1*x2 + sin(x1))
-    ex = :(z = x1 ^ 2)
-    inputs = [(:x1, 1)]
+    ex = :(x1*x2 - x1)
+    # ex = :(2 * (x1*x2 + sin(x1)) - x1)
+    # ex = :(z = x1 ^ 2 + x2)
+    inputs = [(:x1, 1), (:x2, 1)]
     output = nothing
 
     g = ExGraph(;inputs...)
@@ -253,5 +254,6 @@ function main()
     calc_deriv!(g)
     g.adj
     subs_constants!(g)
+    g.adj
     d_exprs = [simplify(g.adj[x]) for (x,val) in inputs]
 end

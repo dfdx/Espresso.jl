@@ -60,9 +60,18 @@ end
 
 @diff_rule (x::Number ^ n::Int) 1 (n * x^(n-1))
 @diff_rule (a::Number ^ x::Number) 2 (log(a) * a^x)
-@diff_rule (x::Number + y::Number) 1 x
-@diff_rule (x::Number + y::Number) 2 y
 
+@diff_rule (x::Number * y::Number) 1 y
+@diff_rule (x::Number * y::Number) 2 x
+
+@diff_rule (x::Number + y::Number) 1 1
+@diff_rule (x::Number + y::Number) 2 1
+
+@diff_rule (x::Number - y::Number) 1 1
+@diff_rule (x::Number - y::Number) 2 -1
+
+@diff_rule sin(x::Number) 1 cos(x)
+@diff_rule cos(x::Number) 1 sin(x)
 
 
 
