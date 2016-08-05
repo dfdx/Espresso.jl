@@ -66,6 +66,14 @@ end
 
 @diff_rule (x::Number + y::Number) 1 1
 @diff_rule (x::Number + y::Number) 2 1
+@diff_rule (x::Number + y::Number + z::Number) 1 1
+@diff_rule (x::Number + y::Number + z::Number) 2 1
+@diff_rule (x::Number + y::Number + z::Number) 3 1
+@diff_rule (w::Number + x::Number + y::Number + z::Number) 1 1
+@diff_rule (w::Number + x::Number + y::Number + z::Number) 2 1
+@diff_rule (w::Number + x::Number + y::Number + z::Number) 3 1
+@diff_rule (w::Number + x::Number + y::Number + z::Number) 4 1
+
 
 @diff_rule (x::Number - y::Number) 1 1
 @diff_rule (x::Number - y::Number) 2 -1

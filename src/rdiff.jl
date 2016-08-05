@@ -9,6 +9,8 @@ end
 
 to_exh(ex::Expr) = ExH{ex.head}(ex.head, ex.args, ex.typ)
 
+# TODO: return :call op
+
 @runonce type ExNode{Op}
     name::Symbol                # name of a variable
     op::Symbol                  # operation that produced it or special symbol
@@ -20,12 +22,13 @@ end
     tape::Vector{ExNode}              # list of ExNode's
     vars::Dict{Symbol, ExNode}        # map from var name to its node in the graph
     input::Vector{Tuple{Symbol,Any}}  # list of input variables
+    expanded::Dict{Symbol,Any}        # expanded expressions for each var name
     adj::Dict{Symbol,Any}             # dictionary of adjoints (derivatives)
     last_id::Int                      # helper, index of last generated var name
 end
 
 function ExGraph(;input...)
-    g = ExGraph(ExNode[], Dict(), input, Dict(), 0)
+    g = ExGraph(ExNode[], Dict(), input, Dict(), Dict(), 0)
     for (name, val) in input
         addnode!(g, :input; name=name, val=val)
     end
@@ -56,6 +59,9 @@ function addnode!(g::ExGraph, name::Symbol, op::Symbol,
     node = ExNode{op}(name, op, deps, val)
     push!(g.tape, node)
     g.vars[name] = node
+    if op != :constant && op != :input        
+        g.expanded[name] = to_expr(node)
+    end
     return name
 end
 
@@ -153,9 +159,7 @@ Naming:
  * x - one of y's dependencies
 """
 function fill_deriv!(g::ExGraph, y::Symbol)
-    # TODO: do we need dzdy? seems like we cat take it from adj dict
     y_node = g.vars[y]
-    println("Inspecting $y")
     if y_node.op == :(=)
         x = y_node.deps[1]
         g.adj[x] = g.adj[y]  # already filled by parent?
@@ -224,13 +228,32 @@ function subs_constants!(g::ExGraph)
     end
 end
 
+"""
+Substitute all temporary variables with their corresponding expressions
+"""
+function subs_temp!(g::ExGraph)
+    # TODO: not working
+    for node in g.tape
+        if node.op == :input
+            g.expanded[name] = node.name
+        elseif node.op == :constant
+            g.expanded[name] = node.val
+        elseif node.op == :(=)
+            g.expanded[name] = node.deps[1]
+        else
+            g.expanded[name] = subs(g.expanded[name], g.expanded)
+        end
+    end
+end
+
 
 function rdiff(ex::Expr; output=nothing, inputs...)
     g = ExGraph(;inputs...)
     parse!(g, ex)
     output = output != nothing ? output : g.tape[end].name
     evaluate!(g, output)
-    calc_deriv!(g, output)
+    g.adj[output] = 1.
+    calc_deriv!(g)
     subs_constants!(g)
     d_exprs = [simplify(g.adj[x]) for (x,val) in inputs]
     return d_exprs
@@ -240,10 +263,11 @@ end
 ################# main ###################
 
 function main()
-    ex = :(x1*x2 - x1)
+    # ex = :(x1*x2 - x1)
     # ex = :(2 * (x1*x2 + sin(x1)) - x1)
     # ex = :(z = x1 ^ 2 + x2)
-    inputs = [(:x1, 1), (:x2, 1)]
+    ex = :(a*x^2)
+    inputs = [(:x, 1), (:a, 1)]
     output = nothing
 
     g = ExGraph(;inputs...)
@@ -254,6 +278,7 @@ function main()
     calc_deriv!(g)
     g.adj
     subs_constants!(g)
+    subs_temp!(g)
     g.adj
     d_exprs = [simplify(g.adj[x]) for (x,val) in inputs]
 end
