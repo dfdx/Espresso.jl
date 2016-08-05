@@ -1,6 +1,6 @@
 
 
-
+const DIFF_PHS = Set([:x, :y, :z, :a, :b, :c, :m, :n])
 
 @runonce const DIFF_RULES =
         Dict{Tuple{Symbol,Vector{Type}, Int}, Tuple{Symbolic,Any}}()

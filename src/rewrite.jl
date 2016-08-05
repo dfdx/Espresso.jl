@@ -4,15 +4,15 @@
 # TODO: rename to PLACEHOLDERS and activate this list only when calling
 # Hydra.setup_profile(:deriv)
 # hmmm... what if a person changes it and still wants to use `rdiff`?
-const DEFAULT_PLACEHOLDERS = [Set([:x, :y, :z, :a, :b, :c, :m, :n])]
+const DEFAULT_PLACEHOLDERS = [Set([])]
 set_default_placeholders(set::Set{Symbol}) = (DEFAULT_PLACEHOLDERS[1] = set)
 
-isplaceholder(x) = false
-isplaceholder(x::Symbol) = (startswith(string(x), "_")
-                            || in(x, DEFAULT_PLACEHOLDERS[1]))
+isplaceholder(x, phs) = false
+isplaceholder(x::Symbol, phs) = (startswith(string(x), "_")
+                                 || in(x, phs))
 
-function matchex!(m::Dict{Symbol,Any}, p, x)
-    if isplaceholder(p)
+function matchex!(m::Dict{Symbol,Any}, p, x; phs::Vector{Set{Symbol}}=DEFAULT_PLACEHOLDERS[1])
+    if isplaceholder(p, phs)
         m[p] = x
         return true
     elseif isa(p, Expr) && isa(x, Expr)
@@ -42,9 +42,9 @@ in a constant DEFAULT_PLACEHOLDERS. Currently they are:
 $(collect(DEFAULT_PLACEHOLDERS))
 
 """
-function matchex(pat::Symbolic, ex::Symbolic)
+function matchex(pat::Symbolic, ex::Symbolic; phs::Vector{Set{Symbol}}=DEFAULT_PLACEHOLDERS[1])
     m = Dict{Symbol,Any}()
-    res = matchex!(m, pat, ex)
+    res = matchex!(m, pat, ex; phs)
     if res
         return Nullable(m)
     else
@@ -91,8 +91,9 @@ Example (derivative of x^n):
     subex = :(_n * _x ^ (_n - 1))
     rewrite(ex, pat, subex) # ==> :(num2 * num1 ^ (num2 - 1))
 """
-function rewrite(ex::Symbolic, pat::Symbolic, subex::Any)
-    st = matchex(pat, ex)
+function rewrite(ex::Symbolic, pat::Symbolic, subex::Any;
+                 phs::Vector{Set{Symbol}}=DEFAULT_PLACEHOLDERS[1])
+    st = matchex(pat, ex; phs)
     if isnull(st)
         error("Expression $ex doesn't match pattern $pat")
     else

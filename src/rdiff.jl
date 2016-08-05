@@ -1,6 +1,4 @@
 
-import Base: *, +
-
 @runonce type ExH{H}
     head::Symbol
     args::Vector
