@@ -1,5 +1,6 @@
 
 using Iterators
+using Compat
 
 include("utils.jl")
 include("types.jl")

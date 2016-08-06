@@ -23,10 +23,6 @@ function ExGraph(;input...)
     return g
 end
 
-function ExGraph()
-    return ExGraph(ExNode[], Dict(), Dict(), Dict(), 0)
-end
-
 function Base.show(io::IO, g::ExGraph)
     print(io, "ExGraph\n")
     for node in g.tape
@@ -36,7 +32,7 @@ end
 
 function genname(g::ExGraph)
     g.last_id += 1
-    return symbol("w$(g.last_id)")
+    return Symbol("w$(g.last_id)")
 end
 
 

@@ -7,6 +7,7 @@ export matchex,
        ExH,
        to_exh,
        to_expr,
+       simplify,
        _rdiff,
        rdiff
 

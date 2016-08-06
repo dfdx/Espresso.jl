@@ -23,7 +23,7 @@ function type_ansestors{T}(t::Type{T})
     types = Type[]
     while t != Any
         push!(types, t)
-        t = super(t)
+        t = @compat supertype(t)
     end
     push!(types, Any)
     return types

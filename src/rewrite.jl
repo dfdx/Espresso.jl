@@ -13,8 +13,9 @@ function matchex!(m::Dict{Symbol,Any}, p, x; phs=DEFAULT_PHS[1])
         m[p] = x
         return true
     elseif isa(p, Expr) && isa(x, Expr)
-        result = (matchex!(m, p.head, x.head) &&
-                  reduce(&, [matchex!(m, pa, xa; phs=phs)
+        result = (matchex!(m, p.head, x.head)
+                  && length(p.args) == length(x.args)
+                  && reduce(&, [matchex!(m, pa, xa; phs=phs)
                              for (pa, xa) in zip(p.args, x.args)]))
     else
         return p == x
