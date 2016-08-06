@@ -1,40 +1,30 @@
 
-@runonce type ExH{H}
-    head::Symbol
-    args::Vector
-    typ::Any
+@runonce type ExNode{H}
+    name::Symbol                   # name of a variable
+    ex::Any                        # simple expression that produces `name`
+    val::Any                       # value if any (e.g. for consts)
 end
 
-to_exh(ex::Expr) = ExH{ex.head}(ex.head, ex.args, ex.typ)
-
-# TODO: return :call op
-
-@runonce type ExNode{Op}
-    name::Symbol                # name of a variable
-    op::Symbol                  # operation that produced it or special symbol
-    deps::Vector{Symbol}        # dependencies of this variable (e.g. args of op)
-    val::Any                    # value if any (e.g. for consts)
-end
+to_expr(node::ExNode) = node.ex
 
 @runonce type ExGraph
-    tape::Vector{ExNode}              # list of ExNode's
-    vars::Dict{Symbol, ExNode}        # map from var name to its node in the graph
-    input::Vector{Tuple{Symbol,Any}}  # list of input variables
-    expanded::Dict{Symbol,Any}        # expanded expressions for each var name
-    adj::Dict{Symbol,Any}             # dictionary of adjoints (derivatives)
-    last_id::Int                      # helper, index of last generated var name
+    tape::Vector{ExNode}           # list of ExNode's
+    idx::Dict{Symbol, ExNode}      # map from var name to its node in the graph
+    input::Dict{Symbol,Any}        # input variables and their initializers
+    expanded::Dict{Symbol,Any}     # expanded expressions that produce var
+    last_id::Int                   # helper, index of last generated var name
 end
 
 function ExGraph(;input...)
-    g = ExGraph(ExNode[], Dict(), input, Dict(), Dict(), 0)
+    g = ExGraph(ExNode[], Dict(), Dict(), Dict(), 0)
     for (name, val) in input
-        addnode!(g, :input; name=name, val=val)
+        addnode!(g, name, Expr(:input, name), val)
     end
     return g
 end
 
 function ExGraph()
-    return ExGraph(ExNode[], Dict(), [], Dict(), 0)
+    return ExGraph(ExNode[], Dict(), Dict(), Dict(), 0)
 end
 
 function Base.show(io::IO, g::ExGraph)
@@ -50,23 +40,54 @@ function genname(g::ExGraph)
 end
 
 
-## addnode!
+## deps
 
-function addnode!(g::ExGraph, name::Symbol, op::Symbol,
-                  deps::Vector{Symbol}, val::Any)
-    node = ExNode{op}(name, op, deps, val)
-    push!(g.tape, node)
-    g.vars[name] = node
-    if op != :constant && op != :input        
-        g.expanded[name] = to_expr(node)
-    end
-    return name
+deps(node::ExNode{:input}) = Symbol[]
+deps(node::ExNode{:constant}) = Symbol[]
+deps(node::ExNode{:(=)}) = [node.ex.args[2]]
+deps(node::ExNode{:call}) = node.ex.args[2:end]
+
+
+## special expressions
+
+constant(x) = Expr(:constant, x)
+input(x, val) = Expr(:input, x, val)
+
+
+## expand expressions
+
+expand_expr(expanded::Dict{Symbol,Any}, ex::Expr) =
+    expand_expr(expanded, to_exh(ex))
+
+expand_expr(expanded::Dict{Symbol,Any}, ex) = ex
+expand_expr(expanded::Dict{Symbol,Any}, exh::ExH{:input}) = exh.args[1]
+expand_expr(expanded::Dict{Symbol,Any}, exh::ExH{:constant}) = exh.args[1]
+
+function expand_expr(expanded::Dict{Symbol,Any}, exh::ExH{:(=)})
+    return expand_expr(expanded, exh.args[2])
 end
 
-function addnode!(g::ExGraph, op::Symbol;
-                  name=:generate, deps=Symbol[], val=nothing)
-    name = (name == :generate ? genname(g) : name)
-    return addnode!(g, name, op, deps, val)
+function expand_expr(expanded::Dict{Symbol,Any}, exh::ExH{:call})
+    op = exh.args[1]
+    expd_args = [expand_expr(expanded, arg) for arg in exh.args[2:end]]
+    new_ex = Expr(:call, op, expd_args...)
+    return subs(new_ex, expanded)
+end
+
+
+
+
+## addnode!
+
+
+# NOTE: `ex` should be SIMPLE expression already! 
+function addnode!(g::ExGraph, name::Symbol, ex::Symbolic, val::Any)
+    node = ExNode{ex.head}(name, ex, val)
+    push!(g.tape, node)
+    g.idx[name] = node
+    # g.expanded[name] = subs(ex, g.expanded)
+    g.expanded[name] = expand_expr(g.expanded, ex)
+    return name
 end
 
 
@@ -81,25 +102,24 @@ parse!(g::ExGraph, ::LineNumberNode) = :nil
 parse!(g::ExGraph, s::Symbol) = s
 
 function parse!(g::ExGraph, x::Number)
-    name = addnode!(g, :constant; val=x)
+    name = addnode!(g, genname(g), constant(x), x)
     return name
 end
 
 
 function parse!(g::ExGraph, ex::ExH{:(=)})
     op = :(=)
-    rhs, lhs = ex.args
-    name = rhs
-    deps = [parse!(g, lhs)]
-    addnode!(g, op; name=name, deps=deps)
+    lhs, rhs = ex.args
+    name = lhs
+    dep = parse!(g, rhs)
+    addnode!(g, name, :($name = $dep), nothing)
     return name
 end
 
 function parse!(g::ExGraph, ex::ExH{:call})
     op = ex.args[1]
-    # deps = flatten(Symbol, [parse!(g, arg) for arg in ex.args[2:end]])
     deps = Symbol[parse!(g, arg) for arg in ex.args[2:end]]
-    name = addnode!(g, op; deps=deps)
+    name = addnode!(g, genname(g), Expr(:call, op, deps...), nothing)
     return name
 end
 
@@ -116,167 +136,113 @@ evaluate!(g::ExGraph, node::ExNode{:input}) = node.val
 
 function evaluate!(g::ExGraph, node::ExNode{:(=)})
     if (node.val != nothing) return node.val end
-    dep_node = g.vars[node.deps[1]]
+    dep_node = g.idx[deps(node)[1]]
     node.val = evaluate!(g, dep_node)
     return node.val
 end
 
 # consider all other cases as function calls
-function evaluate!{Op}(g::ExGraph, node::ExNode{Op})
+function evaluate!(g::ExGraph, node::ExNode{:call})
     if (node.val != nothing) return node.val end
-    dep_nodes = [g.vars[dep] for dep in node.deps]
+    dep_nodes = [g.idx[dep] for dep in deps(node)]
     # why this short version doesn't work?
     # dep_vals = [evaluate!(g, dep_node) for dep_node in dep_nodes]
     for dep_node in dep_nodes
         evaluate!(g, dep_node)
     end
+    op = node.ex.args[1]
     dep_vals = [dep_node.val for dep_node in dep_nodes]
-    ex = :(($Op)($(dep_vals...)))
+    ex = :(($op)($(dep_vals...)))
     node.val = eval(ex)
     return node.val
 end
 
-evaluate!(g::ExGraph, name::Symbol) = evaluate!(g, g.vars[name])
+evaluate!(g::ExGraph, name::Symbol) = evaluate!(g, g.idx[name])
 
 
-## rdiff
+## forward pass
 
-function to_expr(node::ExNode)
-    op = node.op
-    ex = :(($op)($(node.deps...)))
-    return ex
+function forward_pass(g::ExGraph, ex::Any)
+    parse!(g, ex)
+    evaluate!(g, g.tape[end].name)
+    return g
 end
 
-"""
-Fill derivatives of dependencies of `y`.
-`dzdy` is a current values of dz/dy and is equal to 1 for output var and
-some expression for intermediate vars.
-Naming:
- * z - output variable
- * y - variable at hand
- * x - one of y's dependencies
-"""
-function fill_deriv!(g::ExGraph, y::Symbol)
-    y_node = g.vars[y]
-    if y_node.op == :(=)
-        x = y_node.deps[1]
-        g.adj[x] = g.adj[y]  # already filled by parent?
-    elseif y_node.op == :input
-        # do nothing
-    elseif y_node.op == :constant
-        # do nothing
-    else
-        types = [typeof(g.vars[x].val) for x in y_node.deps]
-        for (i, x) in enumerate(y_node.deps)
-            x_node = g.vars[x]
-            if x_node.op == :constant
-                g.adj[x] = 0.
-                continue
-            end
-            rule = find_rule(y_node.op, types, i)
-            dydx = apply_rule(rule, to_expr(y_node))
-            dzdy = g.adj[y]
-            a = simplify(dzdy * dydx)
-            if haskey(g.adj, x)
-                g.adj[x] += a
-            else
-                g.adj[x] = a
-            end
-        end
-    end
+
+## reverse step
+
+function rev_step!(g::ExGraph, node::ExNode{:(=)}, adj::Dict{Symbol,Any})
+    y = node.name
+    x = deps(node)[1]
+    adj[x] = adj[y]
 end
 
-"""
-Calculate derivatives of all direct and indirect dependencies of z,
-store result in adjoint dict `g.adj`.
-"""
-function calc_deriv!(g)
-    # fill_deriv!(g, z)
-    for y in reverse([node.name for node in g.tape])
-        fill_deriv!(g, y)
-    end
+function rev_step!(g::ExGraph, node::ExNode{:constant}, adj::Dict{Symbol,Any})
+    adj[node.name] = 0.
 end
 
-## function calc_deriv!(g::ExGraph, z::Symbol)
-##     fill_deriv!(g, z)
-##     for dep in g.vars[z].deps
-##         calc_deriv!(g, dep)
-##     end
-## end
-
-
-function constants(g::ExGraph)
-    d = Dict{Symbol, Any}()
-    for node in g.tape
-        if node.op == :constant
-            d[node.name] = node.val
-        end
-    end
-    return d
+function rev_step!(g::ExGraph, node::ExNode{:input}, adj::Dict{Symbol,Any})
+    # do nothing
 end
 
-"""
-Substitute all constant node names in adjoint dict with
-their corresponding values
-"""
-function subs_constants!(g::ExGraph)
-    st = constants(g)
-    for i in eachindex(g.adj)
-        g.adj[i] = subs(g.adj[i], st)
-    end
-end
-
-"""
-Substitute all temporary variables with their corresponding expressions
-"""
-function subs_temp!(g::ExGraph)
-    # TODO: not working
-    for node in g.tape
-        if node.op == :input
-            g.expanded[name] = node.name
-        elseif node.op == :constant
-            g.expanded[name] = node.val
-        elseif node.op == :(=)
-            g.expanded[name] = node.deps[1]
+function rev_step!(g::ExGraph, node::ExNode{:call}, adj::Dict{Symbol,Any})
+    y = node.name
+    types = [typeof(g.idx[x].val) for x in deps(node)]
+    for (i, x) in enumerate(deps(node))
+        x_node = g.idx[x]
+        op = node.ex.args[1]
+        rule = find_rule(op, types, i)
+        dydx = apply_rule(rule, to_expr(node))        
+        dzdy = adj[y]
+        a = simplify(dzdy * dydx)
+        # a = dzdy * dydx
+        if haskey(adj, x)
+            adj[x] += a
         else
-            g.expanded[name] = subs(g.expanded[name], g.expanded)
+            adj[x] = a
         end
     end
 end
 
 
-function rdiff(ex::Expr; output=nothing, inputs...)
-    g = ExGraph(;inputs...)
-    parse!(g, ex)
-    output = output != nothing ? output : g.tape[end].name
-    evaluate!(g, output)
-    g.adj[output] = 1.
-    calc_deriv!(g)
-    subs_constants!(g)
-    d_exprs = [simplify(g.adj[x]) for (x,val) in inputs]
-    return d_exprs
+## reverse pass
+
+function reverse_recursive!(g::ExGraph, curr::Symbol, adj::Dict{Symbol, Any})
+    node = g.idx[curr]
+    rev_step!(g, node, adj)
+    for dep in deps(node)
+        reverse_recursive!(g, dep, adj)
+    end
+end
+
+function reverse_pass(g::ExGraph, output::Symbol)
+    adj = Dict{Symbol,Any}()
+    adj[output] = 1.
+    reverse_recursive!(g, output, adj)
+    return adj
+end
+
+function reverse_pass(g::ExGraph, outputs::Vector{Symbol})
+    derivs = Dict{Symbol, Any}()
+    for output in outputs
+        derivs[output] = reverse_pass(g, output)
+    end
+    return derivs
 end
 
 
-################# main ###################
-
-function main()
-    # ex = :(x1*x2 - x1)
-    # ex = :(2 * (x1*x2 + sin(x1)) - x1)
-    # ex = :(z = x1 ^ 2 + x2)
-    ex = :(a*x^2)
-    inputs = [(:x, 1), (:a, 1)]
-    output = nothing
-
-    g = ExGraph(;inputs...)
-    parse!(g, ex)
-    output = output != nothing ? output : g.tape[end].name
-    evaluate!(g, output)
-    g.adj[output] = 1.
-    calc_deriv!(g)
-    g.adj
-    subs_constants!(g)
-    subs_temp!(g)
-    g.adj
-    d_exprs = [simplify(g.adj[x]) for (x,val) in inputs]
+function _rdiff(ex::Expr; xs...)
+    g = ExGraph(;xs...)
+    forward_pass(g, ex)
+    output = g.tape[end].name
+    adj = reverse_pass(g, output)
+    return g, adj
 end
+
+function rdiff(ex::Expr; xs...)
+    g, adj = _rdiff(ex; xs...)
+    names = [name for (name, val) in xs]
+    derivs = [adj[name] for name in names]
+    return derivs
+end
+    
