@@ -6,6 +6,7 @@
 end
 
 to_exh(ex::Expr) = ExH{ex.head}(ex.head, ex.args, ex.typ)
+to_expr(exh::ExH) = Expr(exh.head, exh.args..., exh.typ)
 
 
 @runonce type ExNode{H}
@@ -63,6 +64,29 @@ constant(x) = Expr(:constant, x)
 input(x, val) = Expr(:input, x, val)
 
 
+## expand expressions
+
+expand_expr(expanded::Dict{Symbol,Any}, ex::Expr) =
+    expand_expr(expanded, to_exh(ex))
+
+expand_expr(expanded::Dict{Symbol,Any}, ex) = ex
+expand_expr(expanded::Dict{Symbol,Any}, exh::ExH{:input}) = exh.args[1]
+expand_expr(expanded::Dict{Symbol,Any}, exh::ExH{:constant}) = exh.args[1]
+
+function expand_expr(expanded::Dict{Symbol,Any}, exh::ExH{:(=)})
+    return to_expr(expand_expr(expanded, exh.args[2]))
+end
+
+function expand_expr(expanded::Dict{Symbol,Any}, exh::ExH{:call})
+    op = exh.args[1]
+    expd_args = [expand_expr(expanded, arg) for arg in exh.args[2:end]]
+    new_ex = Expr(:call, op, expd_args...)
+    return subs(new_ex, expanded)
+end
+
+
+
+
 ## addnode!
 
 
@@ -71,7 +95,8 @@ function addnode!(g::ExGraph, name::Symbol, ex::Symbolic, val::Any)
     node = ExNode{ex.head}(name, ex, val)
     push!(g.tape, node)
     g.idx[name] = node
-    g.expanded[name] = subs(ex, g.expanded)
+    # g.expanded[name] = subs(ex, g.expanded)
+    g.expanded[name] = expand_expr(g.expanded, ex)
     return name
 end
 
@@ -214,4 +239,13 @@ function reverse_pass(g::ExGraph, outputs::Vector{Symbol})
         derivs[output] = reverse_pass(g, output)
     end
     return derivs
+end
+
+
+function rdiff(ex::Expr; xs...)
+    g = ExGraph(;xs...)
+    forward_pass(g, ex)
+    output = g.tape[end].name
+    adj = reverse_pass(g, output)
+    return g, adj
 end
