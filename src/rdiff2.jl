@@ -242,10 +242,18 @@ function reverse_pass(g::ExGraph, outputs::Vector{Symbol})
 end
 
 
-function rdiff(ex::Expr; xs...)
+function _rdiff(ex::Expr; xs...)
     g = ExGraph(;xs...)
     forward_pass(g, ex)
     output = g.tape[end].name
     adj = reverse_pass(g, output)
     return g, adj
 end
+
+function rdiff(ex::Expr; xs...)
+    g, adj = _rdiff(ex; xs...)
+    names = [name for (name, val) in xs]
+    derivs = [adj[name] for name in names]
+    return derivs
+end
+    

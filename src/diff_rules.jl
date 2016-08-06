@@ -5,8 +5,6 @@ const DIFF_PHS = Set([:x, :y, :z, :a, :b, :c, :m, :n])
 @runonce const DIFF_RULES =
         Dict{Tuple{Symbol,Vector{Type}, Int}, Tuple{Symbolic,Any}}()
 
-# @runonce const DIFF_RULES = SearchTree()
-
 
 macro diff_rule(ex::Expr, idx::Int, dex::Any)
     if ex.head == :call
@@ -15,11 +13,6 @@ macro diff_rule(ex::Expr, idx::Int, dex::Any)
         new_args = Symbol[exa.args[1] for exa in ex.args[2:end]]        
         ex_no_types = Expr(ex.head, ex.args[1], new_args...)
         DIFF_RULES[(op, types, idx)] = (ex_no_types, dex)
-    ## elseif ex.head == :(=)
-    ##     types = [eval(exa.args[2]) for exa in ex.args]
-    ##     new_args = Symbol[exa.args[1] for exa in ex.args]
-    ##     ex_no_types = Expr(ex.head, new_args...)
-    ##     DIFF_RULES[(:(=), types, idx)] = (ex_no_types, dex)
     else
         error("Can only define derivative on calls and assignments")
     end
@@ -55,11 +48,7 @@ function apply_rule(rule::Tuple{Expr, Any}, ex::Expr)
 end
 
 
-
-
-
-@diff_rule (x::Number ^ n::Int) 1 (n * x^(n-1))
-@diff_rule (a::Number ^ x::Number) 2 (log(a) * a^x)
+# basic rules
 
 @diff_rule (x::Number * y::Number) 1 y
 @diff_rule (x::Number * y::Number) 2 x
@@ -79,11 +68,17 @@ end
 @diff_rule (x::Number - y::Number) 2 -1
 
 @diff_rule sin(x::Number) 1 cos(x)
-@diff_rule cos(x::Number) 1 sin(x)
+@diff_rule cos(x::Number) 1 -sin(x)
 
+@diff_rule sqrt(x::Number) 1 (0.5 * x^(-0.5))
+@diff_rule exp(x::Number) 1 exp(x)
 
+@diff_rule (x::Number ^ n::Int) 1 (n * x^(n-1))
+@diff_rule (a::Number ^ x::Number) 2 (log(a) * a^x)
 
-
+@diff_rule log(x::Number) 1 (1/x)
+# TODO: log_b(x) = ln(x) / ln(b) --> infer rule for 1st arg (b)
+@diff_rule log(b::Int, x::Number) 2 (1 / (x * log(b)))
 
 
 
