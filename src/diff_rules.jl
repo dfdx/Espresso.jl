@@ -51,7 +51,7 @@ end
 
 
 function apply_rule(rule::Tuple{Expr, Any}, ex::Expr)
-    return rewrite(ex, rule[1], rule[2])
+    return rewrite(ex, rule[1], rule[2]; phs=DIFF_PHS)
 end
 
 
