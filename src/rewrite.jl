@@ -29,15 +29,22 @@ symbols or subexpressions.
 Example:
 
 ```
-ex = :(num1 ^ num2)
-pat = :(x ^ n)
-matchex(pat, ex)  # ==> Nullable(Dict{Symbol,Any}(:n=>:num2,:x=>:num1))
+ex = :(u ^ v)
+pat = :(_x ^ _n)
+matchex(pat, ex)
+# ==> Nullable(Dict{Symbol,Any}(:_n=>:v,:_x=>:u))
 ```
 
 NOTE: two symbols match if they are equal or symbol in pat is a placeholder.
-Placeholder is any symbol that starts with '-' or one of special symbols, stored
-in a constant DEFAULT_PHS. Currently they are:
-$(collect(DEFAULT_PHS))
+Placeholder is any symbol that starts with '_'. It's also possible to pass
+list of placeholder names (not necessarily starting wiht '_') via `phs` parameter:
+
+```
+ex = :(u ^ v)
+pat = :(x ^ n)
+matchex(pat, ex; phs=Set([:x, :n]))
+# ==> Nullable(Dict{Symbol,Any}(:n=>:v,:x=>:u))
+```
 
 """
 function matchex(pat::Symbolic, ex::Symbolic; phs = DEFAULT_PHS[1])
@@ -56,6 +63,7 @@ end
 """
 Substitute symbols in `ex` according to substitute table `st`.
 Example:
+
     ex = :(x ^ n)
     subs(ex, x=2)  # gives :(2 ^ n)
 """
@@ -84,10 +92,10 @@ Rewrite expression `ex` according to a transform from pattern `pat`
 to a substituting expression `subex`.
 Example (derivative of x^n):
 
-    ex = :(num1 ^ num2)
+    ex = :(u ^ v)
     pat = :(_x ^ _n)
     subex = :(_n * _x ^ (_n - 1))
-    rewrite(ex, pat, subex) # ==> :(num2 * num1 ^ (num2 - 1))
+    rewrite(ex, pat, subex) # ==> :(v * u ^ (v - 1))
 """
 function rewrite(ex::Symbolic, pat::Symbolic, subex::Any; phs=DEFAULT_PHS[1])
     st = matchex(pat, ex; phs=phs)
