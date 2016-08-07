@@ -66,3 +66,9 @@ rdiff(:(x1*x2 + sin(x1)), x1=1., x2=1.)
 This is a hybrid algorithm in sense that it uses techniques from
 automatic differentiation (AD), but produces symbolic expression for each input.
 
+Differentiation algorithm is heavily inspired by [ReverseDiffSource.jl][1],
+but has a number of differences in implementation and capabilities.
+
+
+
+[1]: https://github.com/JuliaDiff/ReverseDiffSource.jl

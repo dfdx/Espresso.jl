@@ -8,6 +8,7 @@ macro simple_rule(pat, subex)
 end
 
 
+# TODO: this also tries to evaluate symbolic names, although it shouldn't 
 function tryeval(ex)
     try
         return Nullable(eval(ex))
@@ -37,9 +38,8 @@ end
 # fallback for non-expressions
 simplify(x) = x
 
-
+# simplification rules
 
 @simple_rule (x * 1) x
 @simple_rule (1 * x) x
-@simple_rule (2 - 1) 1
 @simple_rule (x ^ 1) x

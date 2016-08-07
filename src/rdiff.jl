@@ -32,7 +32,7 @@ end
 
 function genname(g::ExGraph)
     g.last_id += 1
-    return Symbol("w$(g.last_id)")
+    return Symbol("tmp$(g.last_id)")
 end
 
 
@@ -124,6 +124,11 @@ function parse!(g::ExGraph, ex::ExH{:block})
     return names[end]
 end
 
+function parse!(g::ExGraph, ex::ExH{:body})
+    names = Symbol[parse!(g, subex) for subex in ex.args]
+    return names[end]
+end
+
 
 ## evaluate!
 
@@ -164,6 +169,27 @@ function forward_pass(g::ExGraph, ex::Any)
     return g
 end
 
+## constant substitution
+function constants(g::ExGraph)
+    d = Dict{Symbol, Any}()
+    for node in g.tape
+        if node.op == :constant
+            d[node.name] = node.val
+        end
+    end
+    return d
+end
+
+"""
+Substitute all constants in adjoint dict with their corresponding values
+"""
+function subs_constants!(adj::Dict{Symbol,Any}, st::Dict{Symbol,Any})
+    st = constants(g)
+    for i in eachindex(g.adj)
+        g.adj[i] = subs(g.adj[i], st)
+    end
+end
+      
 
 ## reverse step
 
@@ -187,11 +213,11 @@ function rev_step!(g::ExGraph, node::ExNode{:call}, adj::Dict{Symbol,Any})
     for (i, x) in enumerate(deps(node))
         x_node = g.idx[x]
         op = node.ex.args[1]
+        global _op = op
         rule = find_rule(op, types, i)
         dydx = apply_rule(rule, to_expr(node))        
         dzdy = adj[y]
         a = simplify(dzdy * dydx)
-        # a = dzdy * dydx
         if haskey(adj, x)
             adj[x] += a
         else
@@ -215,15 +241,12 @@ function reverse_pass(g::ExGraph, output::Symbol)
     adj = Dict{Symbol,Any}()
     adj[output] = 1.
     reverse_recursive!(g, output, adj)
-    return adj
-end
-
-function reverse_pass(g::ExGraph, outputs::Vector{Symbol})
-    derivs = Dict{Symbol, Any}()
-    for output in outputs
-        derivs[output] = reverse_pass(g, output)
+    eadj = similar(adj)
+    for (name, dex) in adj
+        expanded = subs(dex, g.expanded)
+        eadj[name] = simplify(expanded)
     end
-    return derivs
+    return eadj
 end
 
 
@@ -235,10 +258,30 @@ function _rdiff(ex::Expr; xs...)
     return g, adj
 end
 
-function rdiff(ex::Expr; xs...)
+function rdiff(ex::Expr; xs...)    
     g, adj = _rdiff(ex; xs...)
     names = [name for (name, val) in xs]
     derivs = [adj[name] for name in names]
     return derivs
 end
-    
+
+function rdiff(f::Function; xs...)
+    types = [typeof(x[2]) for x in xs]
+    args, types, ex = funexpr(f, types)
+    ex = sanitize(ex)
+    derivs = rdiff(ex; xs...)
+end
+
+
+
+#####################
+
+logistic(x) = 1 / (1 + exp(-x))
+
+function main()
+    f = logistic
+    xs = [(:x, 1)]
+    rdiff(f; xs...)
+end
+
+

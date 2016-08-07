@@ -43,15 +43,30 @@ function find_rule(op::Symbol, types::Vector{DataType}, idx::Int)
 end
 
 
+function find_rule(ref::GlobalRef, types::Vector{DataType}, idx::Int)
+    # experimental: ignore module name in reference
+    return find_rule(ref.name, types, idx)
+end
+
+
 function apply_rule(rule::Tuple{Expr, Any}, ex::Expr)
     return rewrite(ex, rule[1], rule[2]; phs=DIFF_PHS)
 end
 
 
-# basic rules
+## basic rules
+
+@diff_rule (-x::Number) 1 -x
 
 @diff_rule (x::Number * y::Number) 1 y
 @diff_rule (x::Number * y::Number) 2 x
+
+@diff_rule (x::Number / y::Number) 1 (x / y)
+@diff_rule (x::AbstractArray / y::Number) 1 x ./ y
+
+@diff_rule (x::Number / y::Real) 2 (-x * y / (y * y))
+@diff_rule (x::AbstractArray / y::Real) 2 (sum(-x .* y) / (y * y))
+
 
 @diff_rule (x::Number + y::Number) 1 1
 @diff_rule (x::Number + y::Number) 2 1
