@@ -213,7 +213,6 @@ function rev_step!(g::ExGraph, node::ExNode{:call}, adj::Dict{Symbol,Any})
     for (i, x) in enumerate(deps(node))
         x_node = g.idx[x]
         op = node.ex.args[1]
-        global _op = op
         rule = find_rule(op, types, i)
         dydx = apply_rule(rule, to_expr(node))        
         dzdy = adj[y]
@@ -272,16 +271,5 @@ function rdiff(f::Function; xs...)
     derivs = rdiff(ex; xs...)
 end
 
-
-
-#####################
-
-logistic(x) = 1 / (1 + exp(-x))
-
-function main()
-    f = logistic
-    xs = [(:x, 1)]
-    rdiff(f; xs...)
-end
 
 
