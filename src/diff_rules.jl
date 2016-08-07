@@ -36,10 +36,10 @@ function find_rule(op::Symbol, types::Vector{DataType}, idx::Int)
     ks = [(op, [tp...], idx) for tp in type_products]
     for k in ks
         if haskey(DIFF_RULES, k)
-            return DIFF_RULES[k]
+            return Nullable(DIFF_RULES[k])
         end
     end
-    error("Can't find differentiation rule for ($op, $types, $idx)")
+    return Nullable()
 end
 
 

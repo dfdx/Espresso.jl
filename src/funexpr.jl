@@ -4,13 +4,6 @@ sanitize(ex::Expr) = sanitize(to_exh(ex))
 sanitize(ex::LineNumberNode) = nothing
 sanitize(ex::ExH{:return}) = ex.args[1]
 
-## function sanitize(ex::ExH{:call})
-##     # experimental: replace GlobalRef to function to actual function name
-##     op = isa(ex.args[1])
-##     sanitized_args = [sanitize(arg) for arg in ex.args[2:end]]
-##     new_args = filter(arg -> arg != nothing, sanitized_args)
-##     return Expr(H, op, new_args...)
-## end
 
 function sanitize(ref::GlobalRef)
     # experimental: replace GlobalRef to function to actual function name

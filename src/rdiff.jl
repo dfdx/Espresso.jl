@@ -76,7 +76,7 @@ end
 ## addnode!
 
 
-# NOTE: `ex` should be SIMPLE expression already! 
+# NOTE: `ex` should be SIMPLE expression already!
 function addnode!(g::ExGraph, name::Symbol, ex::Symbolic, val::Any)
     node = ExNode{ex.head}(name, ex, val)
     push!(g.tape, node)
@@ -189,7 +189,28 @@ function subs_constants!(adj::Dict{Symbol,Any}, st::Dict{Symbol,Any})
         g.adj[i] = subs(g.adj[i], st)
     end
 end
-      
+
+
+## register rule
+
+"""
+Register new differentiation rule for function `fname` with arguments
+of `types` at index `idx`, return this new rule.
+"""
+function register_rule(fname::Symbol, types::Vector{DataType}, idx::Int)    
+    f = eval(fname)
+    args, _, ex = funexpr(f, types)    
+    ex = sanitize(ex)
+    xs = [(arg, ones(T)[1]) for (arg, T) in zip(args, types)]
+    derivs = rdiff(ex; xs...)
+    dex = derivs[idx]
+    fex = Expr(:call, fname, args...)
+    # TODO: use @diff_rule instead for more flexibility
+    DIFF_RULES[(fname, types, idx)] = (fex, dex)
+    return (fex, dex)
+end
+
+
 
 ## reverse step
 
@@ -213,8 +234,9 @@ function rev_step!(g::ExGraph, node::ExNode{:call}, adj::Dict{Symbol,Any})
     for (i, x) in enumerate(deps(node))
         x_node = g.idx[x]
         op = node.ex.args[1]
-        rule = find_rule(op, types, i)
-        dydx = apply_rule(rule, to_expr(node))        
+        maybe_rule = find_rule(op, types, i)
+        rule = !isnull(maybe_rule) ? get(maybe_rule) : register_rule(op, types, i)
+        dydx = apply_rule(rule, to_expr(node))
         dzdy = adj[y]
         a = simplify(dzdy * dydx)
         if haskey(adj, x)
@@ -257,7 +279,7 @@ function _rdiff(ex::Expr; xs...)
     return g, adj
 end
 
-function rdiff(ex::Expr; xs...)    
+function rdiff(ex::Expr; xs...)
     g, adj = _rdiff(ex; xs...)
     names = [name for (name, val) in xs]
     derivs = [adj[name] for name in names]
@@ -270,6 +292,3 @@ function rdiff(f::Function; xs...)
     ex = sanitize(ex)
     derivs = rdiff(ex; xs...)
 end
-
-
-
