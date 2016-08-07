@@ -96,8 +96,14 @@ Return the name of the output variable.
 parse!(g::ExGraph, ex::Expr) = parse!(g, to_exh(ex))
 parse!(g::ExGraph, ::LineNumberNode) = :nil
 parse!(g::ExGraph, s::Symbol) = s
+parse!(g::ExGraph, ref::GlobalRef) = ref
 
 function parse!(g::ExGraph, x::Number)
+    name = addnode!(g, genname(g), constant(x), x)
+    return name
+end
+
+function parse!(g::ExGraph, x::AbstractArray)
     name = addnode!(g, genname(g), constant(x), x)
     return name
 end
@@ -112,8 +118,21 @@ function parse!(g::ExGraph, ex::ExH{:(=)})
     return name
 end
 
+
+ensure_opname(op::Symbol) = op
+ensure_opname(op::GlobalRef) = op
+
+function ensure_opname(op::Expr)
+    if op.head == :(.)
+        return GlobalRef(eval(op.args[1]), op.args[2].value)
+    else
+        error("Name of operation is an expression of unknown kind")
+    end
+end
+
 function parse!(g::ExGraph, ex::ExH{:call})
-    op = ex.args[1]
+    println("ex = $(to_expr(ex)); head = $(ex.head); args = $(ex.args)")
+    op = ensure_opname(ex.args[1])
     deps = Symbol[parse!(g, arg) for arg in ex.args[2:end]]
     name = addnode!(g, genname(g), Expr(:call, op, deps...), nothing)
     return name
@@ -197,9 +216,9 @@ end
 Register new differentiation rule for function `fname` with arguments
 of `types` at index `idx`, return this new rule.
 """
-function register_rule(fname::Symbol, types::Vector{DataType}, idx::Int)    
+function register_rule(fname::OpName, types::Vector{DataType}, idx::Int)
     f = eval(fname)
-    args, _, ex = funexpr(f, types)    
+    args, _, ex = funexpr(f, types)
     ex = sanitize(ex)
     xs = [(arg, ones(T)[1]) for (arg, T) in zip(args, types)]
     derivs = rdiff(ex; xs...)

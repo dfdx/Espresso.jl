@@ -3,7 +3,7 @@
 const DIFF_PHS = Set([:x, :y, :z, :a, :b, :c, :m, :n])
 
 @runonce const DIFF_RULES =
-        Dict{Tuple{Symbol,Vector{Type}, Int}, Tuple{Symbolic,Any}}()
+        Dict{Tuple{OpName,Vector{Type}, Int}, Tuple{Symbolic,Any}}()
 
 
 macro diff_rule(ex::Expr, idx::Int, dex::Any)
@@ -30,7 +30,7 @@ function type_ansestors{T}(t::Type{T})
 end
 
 
-function find_rule(op::Symbol, types::Vector{DataType}, idx::Int)
+function find_rule(op::OpName, types::Vector{DataType}, idx::Int)
     type_ans = map(type_ansestors, types)
     type_products = product(type_ans...)
     ks = [(op, [tp...], idx) for tp in type_products]
@@ -43,10 +43,10 @@ function find_rule(op::Symbol, types::Vector{DataType}, idx::Int)
 end
 
 
-function find_rule(ref::GlobalRef, types::Vector{DataType}, idx::Int)
-    # experimental: ignore module name in reference
-    return find_rule(ref.name, types, idx)
-end
+## function find_rule(ref::GlobalRef, types::Vector{DataType}, idx::Int)
+##     # experimental: ignore module name in reference
+##     return find_rule(ref.name, types, idx)
+## end
 
 
 function apply_rule(rule::Tuple{Expr, Any}, ex::Expr)

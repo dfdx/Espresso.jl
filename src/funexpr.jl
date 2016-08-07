@@ -5,10 +5,10 @@ sanitize(ex::LineNumberNode) = nothing
 sanitize(ex::ExH{:return}) = ex.args[1]
 
 
-function sanitize(ref::GlobalRef)
-    # experimental: replace GlobalRef to function to actual function name
-    return ref.name
-end
+## function sanitize(ref::GlobalRef)
+##     # experimental: replace GlobalRef to function to actual function name
+##     return ref.name
+## end
 
 function sanitize{H}(ex::ExH{H})
     sanitized_args = [sanitize(arg) for arg in ex.args]

@@ -1,5 +1,5 @@
 
-import Hydra: SearchTree, put!, scan, find
+import Espresso: SearchTree, put!, scan, find
 
 tree = SearchTree()
 put!(tree, [:a, :b, :c], 42)

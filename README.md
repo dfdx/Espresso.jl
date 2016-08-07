@@ -1,6 +1,6 @@
-# Hydra
+# Espresso
 
-[![Build Status](https://travis-ci.org/dfdx/Hydra.jl.svg?branch=master)](https://travis-ci.org/dfdx/Hydra.jl)
+[![Build Status](https://travis-ci.org/dfdx/Espresso.jl.svg?branch=master)](https://travis-ci.org/dfdx/Espresso.jl)
 
 Symbolic transformations and hybrid differentiation.
 

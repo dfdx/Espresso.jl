@@ -1,4 +1,4 @@
-module Hydra
+module Espresso
 
 export matchex,
        subs,
