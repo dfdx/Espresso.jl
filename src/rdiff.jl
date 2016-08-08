@@ -206,7 +206,7 @@ Register new differentiation rule for function `fname` with arguments
 of `types` at index `idx`, return this new rule.
 """
 function register_rule(fname::OpName, types::Vector{DataType}, idx::Int)
-    f = eval(symbol(fname))  # TODO: should handle Module.func notation too
+    f = eval(fname)
     args, _, ex = funexpr(f, types)
     ex = sanitize(ex)
     xs = [(arg, ones(T)[1]) for (arg, T) in zip(args, types)]

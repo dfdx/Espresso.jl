@@ -6,16 +6,14 @@ const DIFF_PHS = Set([:x, :y, :z, :a, :b, :c, :m, :n])
         Dict{Tuple{OpName,Vector{Type}, Int}, Tuple{Symbolic,Any}}()
 
 
-## opname(op::Symbol) = op
-## opname(op::GlobalRef) = op
+if VERSION < v"0.5"
+    func_name(f) = f.env.name
+    func_mod(f) = f.env.module
+else
+    func_name(f) = Base.function_name(f)
+    func_mod(f) = Base.function_module(f)
+end
 
-## function opname(op::Expr)
-##     if op.head == :(.)
-##         return GlobalRef(eval(op.args[1]), op.args[2].value)
-##     else
-##         error("Name of operation is an expression of unknown kind")
-##     end
-## end
 
 """
 Return canonical representation of a function name, e.g.:
@@ -24,22 +22,34 @@ Return canonical representation of a function name, e.g.:
     Base.+  ==> +
     Mod.foo ==> Mod.foo
 """
-function canonical(f)
-    qname = string(eval(f))
-    parts = split(qname, ".")
-    if length(parts) == 1
-        # not qualified
-        return Symbol(parts[1])
-    elseif length(parts) == 2
-        # qualified
-        mod, func = parts
-        return Expr(:., Symbol(mod), QuoteNode(Symbol(func)))
+function canonical(qname)
+    f = eval(qname)
+    mod = func_mod(f)
+    name = func_name(f)
+    if mod == Base
+        return Symbol(name)
     else
-        error("Can't handle nested modules yet.")
+        return Expr(:., Symbol(mod), QuoteNode(Symbol(name)))
     end
 end
 
-opname(op) = string(canonical(op))
+## function canonical(f)
+##     qname = string(eval(f))
+##     parts = split(qname, ".")
+##     if length(parts) == 1
+##         # not qualified
+##         return Symbol(parts[1])
+##     elseif length(parts) == 2
+##         # qualified
+##         mod, func = parts
+##         return Expr(:., Symbol(mod), QuoteNode(Symbol(func)))
+##     else
+##         error("Can't handle nested modules yet.")
+##     end
+## end
+
+# opname(op) = string(canonical(op))
+opname(op) = canonical(op)
 
 
 macro diff_rule(ex::Expr, idx::Int, dex::Any)

@@ -1,9 +1,9 @@
 
-typealias Symbolic Union{Expr, Symbol, GlobalRef}
+typealias Symbolic Union{Expr, Symbol}
 typealias Numeric Union{Number, Array}
 
-# name of operation in a :call node - either symbol or module + symbol
-typealias OpName AbstractString
+# name of operation in a :call node - either symbol or Module.symbol
+typealias OpName Union{Symbol, Expr}
 
 @runonce type ExH{H}
     head::Symbol

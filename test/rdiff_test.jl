@@ -9,6 +9,7 @@ if VERSION < v"0.5-"
     x = 5
     @test isapprox(eval(dlogistic_expr), dlogistic(x))
 
-    @test rdiff(:(x + logistic(x)), x=1) == [:(1.0 + exp(-x) * (1 + exp(-x)) ^ -2)]
+    @test (rdiff(:(x + Main.logistic(x)), x=1) ==
+           [:(1.0 + exp(-x) * (1 + exp(-x)) ^ -2)])
     
 end
