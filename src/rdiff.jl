@@ -119,20 +119,9 @@ function parse!(g::ExGraph, ex::ExH{:(=)})
 end
 
 
-ensure_opname(op::Symbol) = op
-ensure_opname(op::GlobalRef) = op
-
-function ensure_opname(op::Expr)
-    if op.head == :(.)
-        return GlobalRef(eval(op.args[1]), op.args[2].value)
-    else
-        error("Name of operation is an expression of unknown kind")
-    end
-end
-
 function parse!(g::ExGraph, ex::ExH{:call})
-    println("ex = $(to_expr(ex)); head = $(ex.head); args = $(ex.args)")
-    op = ensure_opname(ex.args[1])
+    # println("ex = $(to_expr(ex)); head = $(ex.head); args = $(ex.args)")
+    op = canonical(ex.args[1])
     deps = Symbol[parse!(g, arg) for arg in ex.args[2:end]]
     name = addnode!(g, genname(g), Expr(:call, op, deps...), nothing)
     return name
@@ -217,7 +206,7 @@ Register new differentiation rule for function `fname` with arguments
 of `types` at index `idx`, return this new rule.
 """
 function register_rule(fname::OpName, types::Vector{DataType}, idx::Int)
-    f = eval(fname)
+    f = eval(symbol(fname))  # TODO: should handle Module.func notation too
     args, _, ex = funexpr(f, types)
     ex = sanitize(ex)
     xs = [(arg, ones(T)[1]) for (arg, T) in zip(args, types)]
@@ -252,7 +241,7 @@ function rev_step!(g::ExGraph, node::ExNode{:call}, adj::Dict{Symbol,Any})
     types = [typeof(g.idx[x].val) for x in deps(node)]
     for (i, x) in enumerate(deps(node))
         x_node = g.idx[x]
-        op = node.ex.args[1]
+        op = opname(node.ex.args[1])
         maybe_rule = find_rule(op, types, i)
         rule = !isnull(maybe_rule) ? get(maybe_rule) : register_rule(op, types, i)
         dydx = apply_rule(rule, to_expr(node))

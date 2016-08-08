@@ -6,9 +6,45 @@ const DIFF_PHS = Set([:x, :y, :z, :a, :b, :c, :m, :n])
         Dict{Tuple{OpName,Vector{Type}, Int}, Tuple{Symbolic,Any}}()
 
 
+## opname(op::Symbol) = op
+## opname(op::GlobalRef) = op
+
+## function opname(op::Expr)
+##     if op.head == :(.)
+##         return GlobalRef(eval(op.args[1]), op.args[2].value)
+##     else
+##         error("Name of operation is an expression of unknown kind")
+##     end
+## end
+
+"""
+Return canonical representation of a function name, e.g.:
+
+    Main.+  ==> +
+    Base.+  ==> +
+    Mod.foo ==> Mod.foo
+"""
+function canonical(f)
+    qname = string(eval(f))
+    parts = split(qname, ".")
+    if length(parts) == 1
+        # not qualified
+        return Symbol(parts[1])
+    elseif length(parts) == 2
+        # qualified
+        mod, func = parts
+        return Expr(:., Symbol(mod), QuoteNode(Symbol(func)))
+    else
+        error("Can't handle nested modules yet.")
+    end
+end
+
+opname(op) = string(canonical(op))
+
+
 macro diff_rule(ex::Expr, idx::Int, dex::Any)
     if ex.head == :call
-        op = ex.args[1]
+        op = opname(ex.args[1])
         types = [eval(exa.args[2]) for exa in ex.args[2:end]]
         new_args = Symbol[exa.args[1] for exa in ex.args[2:end]]        
         ex_no_types = Expr(ex.head, ex.args[1], new_args...)
@@ -65,7 +101,7 @@ end
 @diff_rule (x::AbstractArray / y::Number) 1 x ./ y
 
 @diff_rule (n::Number / x::Real) 2 (-n * x ^ -2)
-# @diff_rule (x::AbstractArray / y::Real) 2 (sum(-x .* y) / (y * y))
+@diff_rule (x::AbstractArray / y::Real) 2 (sum(-x .* y) / (y * y))
 
 
 @diff_rule (x::Number + y::Number) 1 1
