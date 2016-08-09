@@ -153,6 +153,7 @@ end
 # consider all other cases as function calls
 function evaluate!(g::ExGraph, node::ExNode{:call})
     if (node.val != nothing) return node.val end
+    # TODO: dep may be a global constant (like π)
     dep_nodes = [g.idx[dep] for dep in deps(node)]
     # why this short version doesn't work?
     # dep_vals = [evaluate!(g, dep_node) for dep_node in dep_nodes]
@@ -209,6 +210,7 @@ function register_rule(fname::OpName, types::Vector{DataType}, idx::Int)
     f = eval(fname)
     args, _, ex = funexpr(f, types)
     ex = sanitize(ex)
+    # TODO: replace `ones()` with `example_val()` that can handle arrays
     xs = [(arg, ones(T)[1]) for (arg, T) in zip(args, types)]
     derivs = rdiff(ex; xs...)
     dex = derivs[idx]
@@ -280,12 +282,17 @@ end
 
 
 function _rdiff(ex::Expr; xs...)
+    mod = current_module()  # <-- 
     g = ExGraph(;xs...)
     forward_pass(g, ex)
     output = g.tape[end].name
     adj = reverse_pass(g, output)
     return g, adj
 end
+
+# TODO: add `mod` field to ExGraph, pass `current_module()` from rdiff
+# use it in `evaluate!` to resolve constants and
+# in `canonical` to resolve functions
 
 function rdiff(ex::Expr; xs...)
     g, adj = _rdiff(ex; xs...)
@@ -298,5 +305,6 @@ function rdiff(f::Function; xs...)
     types = [typeof(x[2]) for x in xs]
     args, types, ex = funexpr(f, types)
     ex = sanitize(ex)
+    # TODO: map xs to args
     derivs = rdiff(ex; xs...)
 end

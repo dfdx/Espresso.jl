@@ -1,7 +1,7 @@
 
 ## symbolic operations
 
-import Base: +, -, *, /
+import Base: +, -, *, /, .+, .-, .*, ./
 
 (+)(ex::Symbolic, v::Numeric) = :($ex + $v)
 (+)(v::Numeric, ex::Symbolic) = :($v + $ex)
@@ -18,6 +18,24 @@ import Base: +, -, *, /
 (/)(ex::Symbolic, v::Numeric) = :($ex / $v)
 (/)(v::Numeric, ex::Symbolic) = :($v / $ex)
 (/)(ex1::Symbolic, ex2::Symbolic) = :($ex1 / $ex2)
+
+# elemetwise operations
+
+(.+)(ex::Symbolic, v::Numeric) = :($ex .+ $v)
+(.+)(v::Numeric, ex::Symbolic) = :($v .+ $ex)
+(.+)(ex1::Symbolic, ex2::Symbolic) = :($ex1 .+ $ex2)
+
+(.-)(ex::Symbolic, v::Numeric) = :($ex .- $v)
+(.-)(v::Numeric, ex::Symbolic) = :($v .- $ex)
+(.-)(ex1::Symbolic, ex2::Symbolic) = :($ex1 .- $ex2)
+
+(.*)(ex::Symbolic, v::Numeric) = :($ex .* $v)
+(.*)(v::Numeric, ex::Symbolic) = :($v .* $ex)
+(.*)(ex1::Symbolic, ex2::Symbolic) = :($ex1 .* $ex2)
+
+(./)(ex::Symbolic, v::Numeric) = :($ex ./ $v)
+(./)(v::Numeric, ex::Symbolic) = :($v ./ $ex)
+(./)(ex1::Symbolic, ex2::Symbolic) = :($ex1 ./ $ex2)
 
 ## Note: this is also correct, but generates more ugly expressions
 ## 
