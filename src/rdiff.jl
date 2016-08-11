@@ -60,7 +60,7 @@ expand_expr(expanded::Dict{Symbol,Any}, exh::ExH{:input}) = exh.args[1]
 expand_expr(expanded::Dict{Symbol,Any}, exh::ExH{:constant}) = exh.args[1]
 
 function expand_expr(expanded::Dict{Symbol,Any}, exh::ExH{:(=)})
-    return expand_expr(expanded, exh.args[2])
+    return expanded[exh.args[2]]
 end
 
 function expand_expr(expanded::Dict{Symbol,Any}, exh::ExH{:call})
@@ -77,7 +77,7 @@ end
 
 
 # NOTE: `ex` should be SIMPLE expression already!
-function addnode!(g::ExGraph, name::Symbol, ex::Symbolic, val::Any)
+function addnode!(g::ExGraph, name::Symbol, ex::Symbolic, val::Any)    
     node = ExNode{ex.head}(name, ex, val)
     push!(g.tape, node)
     g.idx[name] = node
@@ -119,8 +119,7 @@ function parse!(g::ExGraph, ex::ExH{:(=)})
 end
 
 
-function parse!(g::ExGraph, ex::ExH{:call})
-    # println("ex = $(to_expr(ex)); head = $(ex.head); args = $(ex.args)")
+function parse!(g::ExGraph, ex::ExH{:call})    
     op = canonical(ex.args[1])
     deps = Symbol[parse!(g, arg) for arg in ex.args[2:end]]
     name = addnode!(g, genname(g), Expr(:call, op, deps...), nothing)
@@ -208,7 +207,7 @@ of `types` at index `idx`, return this new rule.
 """
 function register_rule(fname::OpName, types::Vector{DataType}, idx::Int)
     f = eval(fname)
-    args, _, ex = funexpr(f, types)
+    args, ex = funexpr(f, types)
     ex = sanitize(ex)
     # TODO: replace `ones()` with `example_val()` that can handle arrays
     xs = [(arg, ones(T)[1]) for (arg, T) in zip(args, types)]
@@ -303,7 +302,7 @@ end
 
 function rdiff(f::Function; xs...)
     types = [typeof(x[2]) for x in xs]
-    args, types, ex = funexpr(f, types)
+    args, ex = funexpr(f, types)
     ex = sanitize(ex)
     # TODO: map xs to args
     derivs = rdiff(ex; xs...)

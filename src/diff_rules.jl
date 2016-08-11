@@ -101,5 +101,15 @@ end
 @diff_rule log(b::Int, x::Number) 2 (1 / (x * log(b)))
 
 
+# abs
 
+@diff_rule abs(x::Number) 1 (sign(x) * x)
+@diff_rule abs(x::AbstractArray) 1 (sign(x) .* x)
 
+# min, max
+
+@diff_rule max(x::Number, y::Number) 1 (x > y) * x
+@diff_rule max(x::Number, y::Number) 2 (y > x) * y
+
+@diff_rule min(x::Number, y::Number) 1 (x < y) * x
+@diff_rule min(x::Number, y::Number) 2 (y < x) * y

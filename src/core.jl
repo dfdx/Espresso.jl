@@ -17,3 +17,10 @@ include("rdiff.jl")
 ## inc(x) = x + 1
 ## include("TestMod.jl")
 ## using TestMod
+
+
+function f(x)
+    y = 2x
+    z = y^2
+    return z
+end

@@ -25,23 +25,38 @@ if VERSION < v"0.5.0-"
         flambda = Base.uncompressed_ast(fdef)
         fcode = flambda.args[3]
         fargs = flambda.args[1]
-        return fargs, types, sanitize(fcode)
+        return fargs, sanitize(fcode)
     end
 
-else
+else    
+
+    function replace_slots(ex::Expr, slotnames::Vector)
+        new_args = Array(Any, length(ex.args))
+        for (i, arg) in enumerate(ex.args)
+            if isa(arg, Slot)
+                new_args[i] = slotnames[arg.id] 
+            elseif isa(arg, Expr)
+                new_args[i] = replace_slots(arg, slotnames)
+            else
+                new_args[i] = arg
+            end
+        end
+        new_ex = Expr(ex.head, new_args...)
+        return new_ex
+    end
 
     function funexpr(f::Function, types::Vector{DataType})
         ms = methods(f, types).ms
         length(ms) != 1 && error("Found $(length(fs)) methods for function $f " *
                                  "with types $types, expected exactly 1 method")
-        ex = Base.uncompressed_ast(ms[1].lambda_template)
-        fcode = flambda.args[3]
-        fargs = flambda.args[1]
-        return fargs, types, sanitize(fcode)
+        lambda = ms[1].lambda_template
+        slot_ex_arr = Base.uncompressed_ast(lambda)
+        slot_ex = sanitize(Expr(:block, slot_ex_arr...))        
+        slotnames = lambda.slotnames
+        ex = replace_slots(slot_ex, slotnames)
+        # 1st arg is a function name, next `lambda.nargs-1` are actual arg names
+        args = map(Symbol, slotnames[2:lambda.nargs])
+        return args, sanitize(ex)
     end
-
-
-    # TODO: handle Base.Math.log and friends (update `conventional`)
-
 
 end

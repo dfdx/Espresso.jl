@@ -31,7 +31,7 @@ flatten{T}(::Type{T}, a::Vector) = convert(Vector{T}, flatten(a))
 
 ## package-specific stuff
 
-if VERSION < v"0.5"
+if VERSION < v"0.5-"
     func_name(f) = f.env.name
     func_mod(f) = f.env.module
 else
