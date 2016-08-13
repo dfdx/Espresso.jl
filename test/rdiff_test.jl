@@ -7,7 +7,7 @@ dlogistic_expr = rdiff(logistic; x=1)[1]
 x = 5
 @test isapprox(eval(dlogistic_expr), dlogistic(x))
 
-@test (rdiff(:(x + Main.logistic(x)), x=1) ==
+@test (rdiff(:(x + logistic(x)), x=1) ==
        [:(1.0 + exp(-x) * (1 + exp(-x)) ^ -2)])
            
 

@@ -18,9 +18,7 @@ include("rdiff.jl")
 ## include("TestMod.jl")
 ## using TestMod
 
-
-function f(x)
-    y = 2x
-    z = y^2
-    return z
+function main()
+    # TODO: check actual derivatives
+    rdiff(:(W*x + b), W=ones(3, 4), x=ones(4), b=ones(3))
 end

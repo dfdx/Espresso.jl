@@ -44,7 +44,7 @@ function dot_expr(args::Vector{Symbol})
     @assert length(args) >= 1
     if length(args) == 1
         return args[1]
-    else        
+    else
         ex = Expr(:., args[1], QuoteNode(args[2]))
         for i=3:length(args)
             ex = Expr(:., ex, QuoteNode(args[i]))
@@ -56,13 +56,15 @@ end
 
 """
 Return canonical representation of a function name, e.g.:
-    
+
     Base.+  ==> +
     Main.+  ==> + (resolved to Base.+)
     Mod.foo ==> Mod.foo
 """
-function canonical(qname)
-    f = eval(qname)
+function canonical(mod::Module, qname)
+    # println(mod, typeof(qname))
+    f = eval(mod, qname)
+    # println("$f of type $(typeof(f))")
     mod = func_mod(f)
     name = func_name(f)
     if mod == Base || mod == Base.Math # what else should we add?
@@ -74,3 +76,19 @@ function canonical(qname)
         return Expr(:., mod_ex, QuoteNode(name))
     end
 end
+
+
+function type_ansestors{T<:Number}(t::Type{T})
+    types = Type[]
+    while t != Any
+        push!(types, t)
+        t = @compat supertype(t)
+    end
+    push!(types, Any)
+    return types
+end
+
+type_ansestors{T}(t::Type{Vector{T}}) =
+    [t, Vector, DenseVector, AbstractVector, AbstractArray, Any]
+type_ansestors{T}(t::Type{Matrix{T}}) =
+    [t, Matrix, DenseMatrix, AbstractMatrix, AbstractArray, Any]

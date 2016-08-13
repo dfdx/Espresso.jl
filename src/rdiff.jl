@@ -12,11 +12,13 @@ to_expr(node::ExNode) = node.ex
     idx::Dict{Symbol, ExNode}      # map from var name to its node in the graph
     input::Dict{Symbol,Any}        # input variables and their initializers
     expanded::Dict{Symbol,Any}     # expanded expressions that produce var
+    mod::Module                    # module to evaluate expressions in
     last_id::Int                   # helper, index of last generated var name
 end
 
-function ExGraph(;input...)
-    g = ExGraph(ExNode[], Dict(), Dict(), Dict(), 0)
+function ExGraph(;mod=nothing, input...)
+    mod = mod == nothing ? current_module() : mod
+    g = ExGraph(ExNode[], Dict(), Dict(), Dict(), mod, 0)
     for (name, val) in input
         addnode!(g, name, Expr(:input, name), val)
     end
@@ -120,7 +122,7 @@ end
 
 
 function parse!(g::ExGraph, ex::ExH{:call})    
-    op = canonical(ex.args[1])
+    op = canonical(g.mod, ex.args[1])
     deps = Symbol[parse!(g, arg) for arg in ex.args[2:end]]
     name = addnode!(g, genname(g), Expr(:call, op, deps...), nothing)
     return name
@@ -237,13 +239,22 @@ function rev_step!(g::ExGraph, node::ExNode{:input}, adj::Dict{Symbol,Any})
     # do nothing
 end
 
+global _node
+global _adj
+global _g
+
 function rev_step!(g::ExGraph, node::ExNode{:call}, adj::Dict{Symbol,Any})
     y = node.name
     types = [typeof(g.idx[x].val) for x in deps(node)]
     for (i, x) in enumerate(deps(node))
         x_node = g.idx[x]
-        op = opname(node.ex.args[1])
+        op = opname(g.mod, node.ex.args[1])
         maybe_rule = find_rule(op, types, i)
+        if isnull(maybe_rule)
+            global _node = node
+            global _adj = adj
+            global _g = g
+        end
         rule = !isnull(maybe_rule) ? get(maybe_rule) : register_rule(op, types, i)
         dydx = apply_rule(rule, to_expr(node))
         dzdy = adj[y]
@@ -282,7 +293,7 @@ end
 
 function _rdiff(ex::Expr; xs...)
     mod = current_module()  # <-- 
-    g = ExGraph(;xs...)
+    g = ExGraph(;mod=mod, xs...)
     forward_pass(g, ex)
     output = g.tape[end].name
     adj = reverse_pass(g, output)

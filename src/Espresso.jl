@@ -12,7 +12,9 @@ export matchex,
        to_expr,
        simplify,
        _rdiff,
-       rdiff
+       rdiff,
+       @diff_rule,
+       @simple_rule
 
 include("core.jl")
 

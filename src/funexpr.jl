@@ -11,7 +11,8 @@ function sanitize{H}(ex::ExH{H})
 end
 
 function sanitize(ref::GlobalRef)
-    return canonical(ref)
+    mod = Main # module doesn't actually matter since GlobalRef contains it anyway
+    return canonical(mod, ref)
 end
 
 
