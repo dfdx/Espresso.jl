@@ -12,11 +12,13 @@ to_expr(node::ExNode) = node.ex
     idx::Dict{Symbol, ExNode}      # map from var name to its node in the graph
     input::Dict{Symbol,Any}        # input variables and their initializers
     expanded::Dict{Symbol,Any}     # expanded expressions that produce var
+    mod::Module                    # module to evaluate expressions in
     last_id::Int                   # helper, index of last generated var name
 end
 
-function ExGraph(;input...)
-    g = ExGraph(ExNode[], Dict(), Dict(), Dict(), 0)
+function ExGraph(;mod=nothing, input...)
+    mod = mod == nothing ? current_module() : mod
+    g = ExGraph(ExNode[], Dict(), Dict(), Dict(), mod, 0)
     for (name, val) in input
         addnode!(g, name, Expr(:input, name), val)
     end
@@ -60,7 +62,7 @@ expand_expr(expanded::Dict{Symbol,Any}, exh::ExH{:input}) = exh.args[1]
 expand_expr(expanded::Dict{Symbol,Any}, exh::ExH{:constant}) = exh.args[1]
 
 function expand_expr(expanded::Dict{Symbol,Any}, exh::ExH{:(=)})
-    return expand_expr(expanded, exh.args[2])
+    return expanded[exh.args[2]]
 end
 
 function expand_expr(expanded::Dict{Symbol,Any}, exh::ExH{:call})
@@ -77,7 +79,7 @@ end
 
 
 # NOTE: `ex` should be SIMPLE expression already!
-function addnode!(g::ExGraph, name::Symbol, ex::Symbolic, val::Any)
+function addnode!(g::ExGraph, name::Symbol, ex::Symbolic, val::Any)    
     node = ExNode{ex.head}(name, ex, val)
     push!(g.tape, node)
     g.idx[name] = node
@@ -119,9 +121,8 @@ function parse!(g::ExGraph, ex::ExH{:(=)})
 end
 
 
-function parse!(g::ExGraph, ex::ExH{:call})
-    # println("ex = $(to_expr(ex)); head = $(ex.head); args = $(ex.args)")
-    op = canonical(ex.args[1])
+function parse!(g::ExGraph, ex::ExH{:call})    
+    op = canonical(g.mod, ex.args[1])
     deps = Symbol[parse!(g, arg) for arg in ex.args[2:end]]
     name = addnode!(g, genname(g), Expr(:call, op, deps...), nothing)
     return name
@@ -153,6 +154,7 @@ end
 # consider all other cases as function calls
 function evaluate!(g::ExGraph, node::ExNode{:call})
     if (node.val != nothing) return node.val end
+    # TODO: dep may be a global constant (like π)
     dep_nodes = [g.idx[dep] for dep in deps(node)]
     # why this short version doesn't work?
     # dep_vals = [evaluate!(g, dep_node) for dep_node in dep_nodes]
@@ -207,8 +209,9 @@ of `types` at index `idx`, return this new rule.
 """
 function register_rule(fname::OpName, types::Vector{DataType}, idx::Int)
     f = eval(fname)
-    args, _, ex = funexpr(f, types)
+    args, ex = funexpr(f, types)
     ex = sanitize(ex)
+    # TODO: replace `ones()` with `example_val()` that can handle arrays
     xs = [(arg, ones(T)[1]) for (arg, T) in zip(args, types)]
     derivs = rdiff(ex; xs...)
     dex = derivs[idx]
@@ -236,13 +239,22 @@ function rev_step!(g::ExGraph, node::ExNode{:input}, adj::Dict{Symbol,Any})
     # do nothing
 end
 
+global _node
+global _adj
+global _g
+
 function rev_step!(g::ExGraph, node::ExNode{:call}, adj::Dict{Symbol,Any})
     y = node.name
     types = [typeof(g.idx[x].val) for x in deps(node)]
     for (i, x) in enumerate(deps(node))
         x_node = g.idx[x]
-        op = opname(node.ex.args[1])
+        op = opname(g.mod, node.ex.args[1])
         maybe_rule = find_rule(op, types, i)
+        if isnull(maybe_rule)
+            global _node = node
+            global _adj = adj
+            global _g = g
+        end
         rule = !isnull(maybe_rule) ? get(maybe_rule) : register_rule(op, types, i)
         dydx = apply_rule(rule, to_expr(node))
         dzdy = adj[y]
@@ -280,12 +292,17 @@ end
 
 
 function _rdiff(ex::Expr; xs...)
-    g = ExGraph(;xs...)
+    mod = current_module()  # <-- 
+    g = ExGraph(;mod=mod, xs...)
     forward_pass(g, ex)
     output = g.tape[end].name
     adj = reverse_pass(g, output)
     return g, adj
 end
+
+# TODO: add `mod` field to ExGraph, pass `current_module()` from rdiff
+# use it in `evaluate!` to resolve constants and
+# in `canonical` to resolve functions
 
 function rdiff(ex::Expr; xs...)
     g, adj = _rdiff(ex; xs...)
@@ -296,7 +313,8 @@ end
 
 function rdiff(f::Function; xs...)
     types = [typeof(x[2]) for x in xs]
-    args, types, ex = funexpr(f, types)
+    args, ex = funexpr(f, types)
     ex = sanitize(ex)
+    # TODO: map xs to args
     derivs = rdiff(ex; xs...)
 end

@@ -6,73 +6,20 @@ const DIFF_PHS = Set([:x, :y, :z, :a, :b, :c, :m, :n])
         Dict{Tuple{OpName,Vector{Type}, Int}, Tuple{Symbolic,Any}}()
 
 
-if VERSION < v"0.5"
-    func_name(f) = f.env.name
-    func_mod(f) = f.env.module
-else
-    func_name(f) = Base.function_name(f)
-    func_mod(f) = Base.function_module(f)
-end
-
-
-"""
-Return canonical representation of a function name, e.g.:
-
-    Main.+  ==> +
-    Base.+  ==> +
-    Mod.foo ==> Mod.foo
-"""
-function canonical(qname)
-    f = eval(qname)
-    mod = func_mod(f)
-    name = func_name(f)
-    if mod == Base
-        return Symbol(name)
-    else
-        return Expr(:., Symbol(mod), QuoteNode(Symbol(name)))
-    end
-end
-
-## function canonical(f)
-##     qname = string(eval(f))
-##     parts = split(qname, ".")
-##     if length(parts) == 1
-##         # not qualified
-##         return Symbol(parts[1])
-##     elseif length(parts) == 2
-##         # qualified
-##         mod, func = parts
-##         return Expr(:., Symbol(mod), QuoteNode(Symbol(func)))
-##     else
-##         error("Can't handle nested modules yet.")
-##     end
-## end
-
-# opname(op) = string(canonical(op))
-opname(op) = canonical(op)
+opname(mod, op) = canonical(mod, op)
 
 
 macro diff_rule(ex::Expr, idx::Int, dex::Any)
     if ex.head == :call
-        op = opname(ex.args[1])
+        # TODO: check this particular use of `current_module()`
+        op = opname(current_module(), ex.args[1])
         types = [eval(exa.args[2]) for exa in ex.args[2:end]]
-        new_args = Symbol[exa.args[1] for exa in ex.args[2:end]]        
+        new_args = Symbol[exa.args[1] for exa in ex.args[2:end]]
         ex_no_types = Expr(ex.head, ex.args[1], new_args...)
         DIFF_RULES[(op, types, idx)] = (ex_no_types, dex)
     else
         error("Can only define derivative on calls and assignments")
     end
-end
-
-
-function type_ansestors{T}(t::Type{T})
-    types = Type[]
-    while t != Any
-        push!(types, t)
-        t = @compat supertype(t)
-    end
-    push!(types, Any)
-    return types
 end
 
 
@@ -89,12 +36,6 @@ function find_rule(op::OpName, types::Vector{DataType}, idx::Int)
 end
 
 
-## function find_rule(ref::GlobalRef, types::Vector{DataType}, idx::Int)
-##     # experimental: ignore module name in reference
-##     return find_rule(ref.name, types, idx)
-## end
-
-
 function apply_rule(rule::Tuple{Expr, Any}, ex::Expr)
     return rewrite(ex, rule[1], rule[2]; phs=DIFF_PHS)
 end
@@ -104,8 +45,35 @@ end
 
 @diff_rule (-x::Number) 1 -1
 
-@diff_rule (x::Number * y::Number) 1 y
-@diff_rule (x::Number * y::Number) 2 x
+# @diff_rule (x::Number * y::Number) 1 y
+# @diff_rule (x::Number * y::Number) 2 x
+
+# multiplication
+
+@diff_rule *(x::Number, y::Number) 1 y
+@diff_rule *(x::Number, y::AbstractArray) 1 sum(y)
+@diff_rule *(x::AbstractArray, y::Number) 1 y
+@diff_rule *(x::AbstractArray, y::AbstractArray) 1 y'
+
+@diff_rule *(x::Number, y::Number) 2 x
+@diff_rule *(x::Number, y::AbstractArray) 2 x
+@diff_rule *(x::AbstractArray, y::Number) 2 sum(x)
+@diff_rule *(x::AbstractArray, y::AbstractArray) 2 x'
+
+# dot multiplication
+
+@diff_rule .*(x::Number, y::Number) 1 y
+@diff_rule .*(x::Number, y::AbstractArray) 1 sum(y)
+@diff_rule .*(x::AbstractArray, y::Number) 1 y
+@diff_rule .*(x::AbstractArray, y::AbstractArray) 1 y
+
+@diff_rule .*(x::Number, y::Number) 2 x
+@diff_rule .*(x::Number, y::AbstractArray) 2 x
+@diff_rule .*(x::AbstractArray, y::Number) 2 sum(x)
+@diff_rule .*(x::AbstractArray, y::AbstractArray) 2 x
+
+@diff_rule (x::Number ^ n::Int) 1 (n * x^(n-1))
+@diff_rule (a::Number ^ x::Number) 2 (log(a) * a^x)
 
 @diff_rule (x::Number / y::Number) 1 (x / y)
 @diff_rule (x::AbstractArray / y::Number) 1 x ./ y
@@ -114,33 +82,99 @@ end
 @diff_rule (x::AbstractArray / y::Real) 2 (sum(-x .* y) / (y * y))
 
 
-@diff_rule (x::Number + y::Number) 1 1
-@diff_rule (x::Number + y::Number) 2 1
-@diff_rule (x::Number + y::Number + z::Number) 1 1
-@diff_rule (x::Number + y::Number + z::Number) 2 1
-@diff_rule (x::Number + y::Number + z::Number) 3 1
-@diff_rule (w::Number + x::Number + y::Number + z::Number) 1 1
-@diff_rule (w::Number + x::Number + y::Number + z::Number) 2 1
-@diff_rule (w::Number + x::Number + y::Number + z::Number) 3 1
-@diff_rule (w::Number + x::Number + y::Number + z::Number) 4 1
+@diff_rule (x::Any + y::Any) 1 1
+@diff_rule (x::Any + y::Any) 2 1
+@diff_rule (x::Any + y::Any + z::Any) 1 1
+@diff_rule (x::Any + y::Any + z::Any) 2 1
+@diff_rule (x::Any + y::Any + z::Any) 3 1
+@diff_rule (w::Any + x::Any + y::Any + z::Any) 1 1
+@diff_rule (w::Any + x::Any + y::Any + z::Any) 2 1
+@diff_rule (w::Any + x::Any + y::Any + z::Any) 3 1
+@diff_rule (w::Any + x::Any + y::Any + z::Any) 4 1
 
+@diff_rule (x::Any .+ y::Any) 1 1
+@diff_rule (x::Any .+ y::Any) 2 1
 
-@diff_rule (x::Number - y::Number) 1 1
-@diff_rule (x::Number - y::Number) 2 -1
+@diff_rule (x::Any - y::Any) 1 1
+@diff_rule (x::Any - y::Any) 2 -1
+
+@diff_rule (x::Any .- y::Any) 1 1
+@diff_rule (x::Any .- y::Any) 2 -1
+
+@diff_rule sum(x::Number) 1 1
+@diff_rule sum(x::AbstractArray) 1 ones(size(x))
+
+# dot
+
+@diff_rule dot(x::Number, y::Number) 1 y
+@diff_rule dot(x::Number, y::Number) 2 x
+
+@diff_rule vecdot(x::AbstractVector, y::AbstractVector) 1 y
+@diff_rule vecdot(x::AbstractVector, y::AbstractVector) 2 x
+
+@diff_rule dot(x::AbstractArray, y::AbstractArray) 1 y
+@diff_rule dot(x::AbstractArray, y::AbstractArray) 2 x
+
+# trigonomeric functions
 
 @diff_rule sin(x::Number) 1 cos(x)
+@diff_rule sin(x::AbstractArray) 1 cos(x)
 @diff_rule cos(x::Number) 1 -sin(x)
+@diff_rule cos(x::AbstractArray) 1 -sin(x)
+
+@diff_rule tan(x::Number) 1 (1. + tan(x)  * tan(x))
+@diff_rule tan(x::AbstractArray) 1 (1. + tan(x) .* tan(x))
+
+@diff_rule sinh(x::Number) 1 cosh(x)
+@diff_rule sinh(x::AbstractArray) 1 cosh(x)
+
+@diff_rule cosh(x::Number) 1 sinh(x)
+@diff_rule cosh(x::AbstractArray) 1 sinh(x)
+
+@diff_rule tanh(x::Number) 1 (1. - tanh(x)  * tanh(x))
+@diff_rule tanh(x::AbstractArray) 1 (1. - tanh(x) .* tanh(x))
+
+@diff_rule asin(x::Number) 1 (1 / sqrt(1 - x*x))
+@diff_rule asin(x::AbstractArray) 1 (1 ./ sqrt(1 - x.*x))
+
+@diff_rule acos(x::Number) 1 (1  / sqrt(1 - x *x))
+@diff_rule acos(x::AbstractArray) 1 (-1 ./ sqrt(1 - x.*x))
+
+@diff_rule atan(x::Number) 1 (1  / (1 + x*x))
+@diff_rule atan(x::AbstractArray) 1 (1 ./ (1 + x.*x))
+
+# sqrt
 
 @diff_rule sqrt(x::Number) 1 (0.5 * x^(-0.5))
-@diff_rule exp(x::Number) 1 exp(x)
+@diff_rule sqrt(x::AbstractVector) 1 (0.5 .* x .^ (-0.5))
 
-@diff_rule (x::Number ^ n::Int) 1 (n * x^(n-1))
-@diff_rule (a::Number ^ x::Number) 2 (log(a) * a^x)
+# exp, log
+
+@diff_rule exp(x::Number) 1 exp(x)
+@diff_rule exp(x::AbstractArray) 1 exp(x)
 
 @diff_rule log(x::Number) 1 (1/x)
-# TODO: log_b(x) = ln(x) / ln(b) --> infer rule for 1st arg (b)
-@diff_rule log(b::Int, x::Number) 2 (1 / (x * log(b)))
 
+# abs
 
+@diff_rule abs(x::Number) 1 (sign(x) * x)
+@diff_rule abs(x::AbstractArray) 1 (sign(x) .* x)
 
+# min, max
 
+@diff_rule max(x::Number, y::Number) 1 (x > y) * x
+@diff_rule max(x::Number, y::Number) 2 (y > x) * y
+
+@diff_rule min(x::Number, y::Number) 1 (x < y) * x
+@diff_rule min(x::Number, y::Number) 2 (y < x) * y
+
+@diff_rule sign(x::Any) 1 0.
+
+# transpose
+
+@diff_rule transpose(x::Number) 1 1
+@diff_rule transpose(x::AbstractArray) 1 transpose(ones(size(x)))
+
+@diff_rule size(x::Any) 1 0.
+@diff_rule size(x::Any, y::Any) 1 0.
+@diff_rule size(x::Any, y::Any) 2 0.
