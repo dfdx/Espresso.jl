@@ -67,7 +67,7 @@ function canonical(mod::Module, qname)
     # println("$f of type $(typeof(f))")
     mod = func_mod(f)
     name = func_name(f)
-    if mod == Base || mod == Base.Math # what else should we add?
+    if mod == Base || mod == Base.Math || mod == Base.LinAlg 
         return Symbol(name)
     else
         # there should be a smarter way to do it...

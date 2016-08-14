@@ -109,8 +109,11 @@ end
 @diff_rule dot(x::Number, y::Number) 1 y
 @diff_rule dot(x::Number, y::Number) 2 x
 
+@diff_rule vecdot(x::AbstractVector, y::AbstractVector) 1 y
+@diff_rule vecdot(x::AbstractVector, y::AbstractVector) 2 x
+
 @diff_rule dot(x::AbstractArray, y::AbstractArray) 1 y
-@diff_rule dot(x::AbstractArray, y::AbstractArray) 1 x
+@diff_rule dot(x::AbstractArray, y::AbstractArray) 2 x
 
 # trigonomeric functions
 
