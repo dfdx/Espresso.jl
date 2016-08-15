@@ -1,5 +1,10 @@
 
-## symbolic operations
+# ops.jl - overloaded operators for constucting symbolic expressions.
+#
+# A couple of examples:
+#
+#    :x + :y      ==>  :(x + y)
+#    2 * :(x + y) ==>  :(2 * (x + y))
 
 import Base: +, -, *, /, .+, .-, .*, ./
 
@@ -19,7 +24,7 @@ import Base: +, -, *, /, .+, .-, .*, ./
 (/)(v::Numeric, ex::Symbolic) = :($v / $ex)
 (/)(ex1::Symbolic, ex2::Symbolic) = :($ex1 / $ex2)
 
-# elemetwise operations
+# elementwise operations
 
 (.+)(ex::Symbolic, v::Numeric) = :($ex .+ $v)
 (.+)(v::Numeric, ex::Symbolic) = :($v .+ $ex)
@@ -38,7 +43,7 @@ import Base: +, -, *, /, .+, .-, .*, ./
 (./)(ex1::Symbolic, ex2::Symbolic) = :($ex1 ./ $ex2)
 
 ## Note: this is also correct, but generates more ugly expressions
-## 
+##
 ## for op in [:(+), :(-), :(*), :(/)]
 ##     for T in [Number, Array]
 ##         @eval begin

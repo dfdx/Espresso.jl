@@ -1,4 +1,20 @@
 
+# rewrite.jl - expression pattern matching and rewriting.
+# 
+# The general idea behind functions in this file is to provide easy means
+# of finding specific pieces of expressions and using them elsewhere.
+# At the time of writing it is used in 2 parts of this package:
+#
+# * for applyging derivatives, e.g. `x^n` ==> `n*x^(n-1)`
+# * for expression simplification, e.g. `1 * x` ==> `x`
+#
+# Pieces of expression are matched to so-called placeholders - symbols that either
+# start with `_` (e.g. `_x`) or are passed via `phs` paraneter, or set globally
+# using `set_default_placeholders(::Set{Symbol})`. Using list of placeholders
+# instead of _-prefixed names is convenient when writing a lot of transformation
+# rules where using underscores creates unnecessary noise.
+
+
 ## pat matching
 
 const DEFAULT_PHS = [Set{Symbol}()]
@@ -35,7 +51,7 @@ matchex(pat, ex)
 # ==> Nullable(Dict{Symbol,Any}(:_n=>:v,:_x=>:u))
 ```
 
-NOTE: two symbols match if they are equal or symbol in pat is a placeholder.
+NOTE: two symbols match if they are equal or symbol in pattern is a placeholder.
 Placeholder is any symbol that starts with '_'. It's also possible to pass
 list of placeholder names (not necessarily starting wiht '_') via `phs` parameter:
 

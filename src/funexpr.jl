@@ -1,4 +1,10 @@
 
+# funexpr.jl - extract arguments and (sanitized) expression of a function body.
+#
+# Here sanitization means removing things like LineNumberNode and replacing
+# hard-to-consume nodes (e.g. `GloabalRef` and `return`) with their simple
+# counterparts (e.g. expression with `.` and variable node).
+
 sanitize(x) = x
 sanitize(ex::Expr) = sanitize(to_exh(ex))
 sanitize(ex::LineNumberNode) = nothing
@@ -18,6 +24,7 @@ end
 
 if VERSION < v"0.5.0-"
 
+    """Extract arguments and (sanitized) expression of a function body"""
     function funexpr(f::Function, types::Vector{DataType})
         fs = methods(f, types)
         length(fs) != 1 && error("Found $(length(fs)) methods for function $f " *
@@ -46,6 +53,7 @@ else
         return new_ex
     end
 
+    """Extract arguments and (sanitized) expression of a function body"""
     function funexpr(f::Function, types::Vector{DataType})
         ms = methods(f, types).ms
         length(ms) != 1 && error("Found $(length(fs)) methods for function $f " *

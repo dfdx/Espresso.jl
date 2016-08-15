@@ -1,4 +1,9 @@
 
+# core.jl - single place to load all package definitions.
+# 
+# If you are willing to learn the package structure, just go through
+# included files one by one, read header notes and other comments
+
 using Iterators
 using Compat
 
@@ -7,15 +12,7 @@ include("types.jl")
 include("rewrite.jl")
 include("simplify.jl")
 include("ops.jl")
-include("diff_rules.jl")
 include("funexpr.jl")
+include("diff_rules.jl")
 include("rdiff.jl")
 
-
-function main()
-    # TODO: check actual derivatives
-    rdiff(:(W*x + b), W=ones(3, 4), x=ones(4), b=ones(3))
-
-    rdiff(dot, x=rand(3), y=rand(3))
-    rdiff(:(dot(x, y)), x=rand(3), y=rand(3))          
-end

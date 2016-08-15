@@ -1,7 +1,29 @@
 
+# simplify.jl - simplify numeric expressions in Julia.
+# 
+# Common examples of expressions that may be simplified are multiplication
+# by 1 or fully numeric expressions that may be just calculated out.
+# 
+# Simplification is performed by rewriting original expression according to
+# a list of simplification rules defined using macro `@simple_rule`.
+# This macro as well as function `simplify` are exposed to the outer world.
+
+# TODO: check if it's possible to add new simplification rules from
+# outside the module
+
 const SIMPLE_RULES = Dict{Symbolic, Any}()
 const SIMPLE_PHS = Set([:x, :y, :a, :b])
 
+"""
+Macro to add simplification rules. Example:
+
+    @simple_rule (-x * -y) (x * y)
+
+where `(-x * -y)` is a pattern to match expression and `(x * y)` is what
+it should be transformed to (see `rewrite()` to understand expression rewriting).
+Symbols $SIMPLE_PHS may be used as placeholders when defining new rules, all
+other symbols will be taken literally.
+"""
 macro simple_rule(pat, subex)
     SIMPLE_RULES[pat] = subex
     nothing
@@ -37,6 +59,13 @@ end
 # fallback for non-expressions
 _simplify(x) = x
 
+"""
+Simplify expression `x` by applying a set of rules. Common examples of
+simplification include calculation of fully numeric subexpressions, removing
+needless multiplication by 1, etc.
+
+Use macro `@simple_rule` to add new simplification rules.
+"""
 function simplify(x)
     # several rounds of simplification may be needed, so we simplify 
     # until there are no more changes to `x`, but no more than 5 times

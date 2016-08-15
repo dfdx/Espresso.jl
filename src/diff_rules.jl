@@ -1,4 +1,13 @@
 
+# diff_rules.jl - differentiation rules for basic operations.
+#
+# The most important macors and methods here are:
+#
+# * `@diff_rule` - define new differentiation rule
+# * `find_rule` - find differentiation rule
+# * `apply_rule` - rewrite expression according to the rule
+#
+# Differentiation procedure itself is described in `rdiff.jl`.
 
 const DIFF_PHS = Set([:x, :y, :z, :a, :b, :c, :m, :n])
 
@@ -8,7 +17,25 @@ const DIFF_PHS = Set([:x, :y, :z, :a, :b, :c, :m, :n])
 
 opname(mod, op) = canonical(mod, op)
 
+"""
+Define new differentiation rule. Arguments:
 
+ * `ex` - original expression in a form `func(arg1::Type1, arg2::Type2, ...)`
+ * `idx` - index of argument to differentiate over
+ * `dex` - expression of corresponding derivative
+
+Example:
+
+    @diff_rule *(x::Number, y::Number) 1 y
+
+Which means: derivative of a product of 2 numbers w.r.t. 1st argument 
+is a second argument. 
+
+Note that rules are always defined as if arguments were ordinary variables
+and not functions of some other variables, because this case will be
+automatically handled by chain rule in the differentiation engine. 
+
+"""
 macro diff_rule(ex::Expr, idx::Int, dex::Any)
     if ex.head == :call
         # TODO: check this particular use of `current_module()`
@@ -23,6 +50,20 @@ macro diff_rule(ex::Expr, idx::Int, dex::Any)
 end
 
 
+"""
+Find differentiation rule for `op` with arguments of `types`
+w.r.t. `idx`th argument. Example:
+
+    rule = find_rule(:*, [Int, Int], 1)
+
+Which reads as: find rule for product of 2 Ints w.r.t. 1st argument.
+
+In addition to the types passed, rules for all combinations of all their
+ansestors (as defined by `type_ansestors()`) will be checked.
+
+Rule itself is an opaque object containing information needed for derivation
+and guaranted to be compatible with `apply_rule()`.
+"""
 function find_rule(op::OpName, types::Vector{DataType}, idx::Int)
     type_ans = map(type_ansestors, types)
     type_products = product(type_ans...)
@@ -35,7 +76,9 @@ function find_rule(op::OpName, types::Vector{DataType}, idx::Int)
     return Nullable()
 end
 
-
+"""
+Apply rule retrieved using `find_rule()` to an expression. 
+"""
 function apply_rule(rule::Tuple{Expr, Any}, ex::Expr)
     return rewrite(ex, rule[1], rule[2]; phs=DIFF_PHS)
 end
@@ -45,10 +88,7 @@ end
 
 @diff_rule (-x::Number) 1 -1
 
-# @diff_rule (x::Number * y::Number) 1 y
-# @diff_rule (x::Number * y::Number) 2 x
-
-# multiplication
+# product
 
 @diff_rule *(x::Number, y::Number) 1 y
 @diff_rule *(x::Number, y::AbstractArray) 1 sum(y)
@@ -60,7 +100,7 @@ end
 @diff_rule *(x::AbstractArray, y::Number) 2 sum(x)
 @diff_rule *(x::AbstractArray, y::AbstractArray) 2 x'
 
-# dot multiplication
+# elementwise product
 
 @diff_rule .*(x::Number, y::Number) 1 y
 @diff_rule .*(x::Number, y::AbstractArray) 1 sum(y)
@@ -72,15 +112,15 @@ end
 @diff_rule .*(x::AbstractArray, y::Number) 2 sum(x)
 @diff_rule .*(x::AbstractArray, y::AbstractArray) 2 x
 
+# other arithmetic operations
+
 @diff_rule (x::Number ^ n::Int) 1 (n * x^(n-1))
 @diff_rule (a::Number ^ x::Number) 2 (log(a) * a^x)
 
 @diff_rule (x::Number / y::Number) 1 (x / y)
 @diff_rule (x::AbstractArray / y::Number) 1 x ./ y
-
 @diff_rule (n::Number / x::Real) 2 (-n * x ^ -2)
 @diff_rule (x::AbstractArray / y::Real) 2 (sum(-x .* y) / (y * y))
-
 
 @diff_rule (x::Any + y::Any) 1 1
 @diff_rule (x::Any + y::Any) 2 1
@@ -104,7 +144,7 @@ end
 @diff_rule sum(x::Number) 1 1
 @diff_rule sum(x::AbstractArray) 1 ones(size(x))
 
-# dot
+# dot product
 
 @diff_rule dot(x::Number, y::Number) 1 y
 @diff_rule dot(x::Number, y::Number) 2 x
