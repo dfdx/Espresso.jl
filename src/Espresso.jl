@@ -14,7 +14,8 @@ export matchex,
        _rdiff,
        rdiff,
        @diff_rule,
-       @simple_rule
+       @simple_rule,
+       is_indexed       
 
 include("core.jl")
 

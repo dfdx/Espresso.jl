@@ -45,7 +45,7 @@ macro diff_rule(ex::Expr, idx::Int, dex::Any)
         ex_no_types = Expr(ex.head, ex.args[1], new_args...)
         DIFF_RULES[(op, types, idx)] = (ex_no_types, dex)
     else
-        error("Can only define derivative on calls and assignments")
+        error("Can only define derivative on calls")
     end
 end
 

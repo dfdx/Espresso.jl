@@ -38,7 +38,7 @@ end
 """Flatten vector of vectors in-place"""
 function flatten!(b::Vector, a::Vector)
     for x in a
-        if isa(x, Array)
+        if isa(x, AbstractArray)
             flatten!(b, x)
         else
             push!(b, x)
@@ -48,8 +48,35 @@ function flatten!(b::Vector, a::Vector)
 end
 
 """Flatten vector of vectors"""
-flatten(a::Vector) = flatten!(eltype(a)[], a)
+flatten(a::Vector) = flatten!([], a)
 flatten{T}(::Type{T}, a::Vector) = convert(Vector{T}, flatten(a))
+
+"""Flatten one level of nested vectors"""
+function flatten1{T}(a::Vector{Vector{T}})
+    result = Array(T, 0)
+    for xs in a
+        for x in xs
+            push!(result, x)
+        end
+    end
+    return result
+end
+
+
+function countdict{T}(a::AbstractArray{T})
+    counts = OrderedDict{T, Int}()
+    for x in a
+        if haskey(counts, x)
+            counts[x] += 1
+        else
+            counts[x] = 1
+        end
+    end
+    return counts
+end
+
+
+unzip(coll) = map(collect, zip(coll...))
 
 
 ## package-specific stuff
@@ -127,3 +154,54 @@ type_ansestors{T}(t::Type{Vector{T}}) =
     [t, Vector, DenseVector, AbstractVector, AbstractArray, Any]
 type_ansestors{T}(t::Type{Matrix{T}}) =
     [t, Matrix, DenseMatrix, AbstractMatrix, AbstractArray, Any]
+
+
+# guards
+
+"""create cross-reference dict of cliques"""
+function cliqueset{T}(pairs::Vector{Tuple{T,T}})
+    cliques = Dict{T, Set{T}}()
+    for (x1, x2) in pairs
+        has_x1 = haskey(cliques, x1)
+        has_x2 = haskey(cliques, x2)
+        if !has_x1 && !has_x2
+            set = Set([x1, x2])
+            cliques[x1] = set
+            cliques[x2] = set
+        elseif has_x1 && !has_x2
+            push!(cliques[x1], x2)
+            cliques[x2] = cliques[x1]
+        elseif !has_x1 && has_x2
+            push!(cliques[x2], x1)
+            cliques[x1] = cliques[x2]
+        end
+    end
+    return cliques
+end
+
+
+function reduce_equalities{T}(pairs::Vector{Tuple{T,T}}, anchors::Set{T})
+    cliques = cliqueset(pairs)
+    st = Dict{T,T}()
+    new_pairs = Set{Tuple{T,T}}()
+    for (x, ys) in cliques
+        for y in ys
+            if x == y
+                continue
+            elseif in(x, anchors) && in(y, anchors)
+                # replace larger anchor with smaller one, keep pair
+                mn, mx = min(x, y), max(x, y)                
+                st[mx] = mn
+                push!(new_pairs, (mn, mx))
+            elseif in(x, anchors)
+                # replace non-anchor with anchor
+                st[y] = x
+            elseif !in(x, anchors) && !in(y, anchors)
+                # replace larger anchor with smaller one
+                mn, mx = min(x, y), max(x, y)                
+                st[mx] = mn
+            end
+        end        
+    end
+    return st, [p for p in new_pairs]
+end

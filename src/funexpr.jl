@@ -8,7 +8,14 @@
 sanitize(x) = x
 sanitize(ex::Expr) = sanitize(to_exh(ex))
 sanitize(ex::LineNumberNode) = nothing
+sanitize(ex::ExH{:line}) = nothing
 sanitize(ex::ExH{:return}) = ex.args[1]
+
+function sanitize(ex::ExH{:block})
+    sanitized_args = [sanitize(arg) for arg in ex.args]
+    new_args = filter(arg -> arg != nothing, sanitized_args)
+    return length(new_args) == 1 ? new_args[1] : Expr(ex.head, new_args...)
+end
 
 function sanitize{H}(ex::ExH{H})
     sanitized_args = [sanitize(arg) for arg in ex.args]
