@@ -171,6 +171,41 @@ end
 Perform one step of reverse pass. Add derivatives of output variable w.r.t.
 node's dependenices to adjoint dictionary.
 """
+function rev_step!(g::ExGraph, node::ExNode{:(=)}, adj::Dict{Symbol,Deriv})
+    y = node.name
+    x = deps(node)[1]
+    adj[x] = adj[y]
+end
+
+function rev_step!(g::ExGraph, node::ExNode{:constant}, adj::Dict{Symbol,Deriv})
+    adj[node.name] = 0.
+end
+
+function rev_step!(g::ExGraph, node::ExNode{:input}, adj::Dict{Symbol,Deriv})
+    # do nothing
+end
+
+function rev_step!(g::ExGraph, node::ExNode{:call}, adj::Dict{Symbol,Deriv})
+    y = node.name
+    types = [typeof(g.idx[x].val) for x in deps(node)]
+    for (i, x) in enumerate(deps(node))
+        x_node = g.idx[x]
+        op = opname(g.mod, node.ex.args[1])
+        maybe_rule = find_rule(op, types, i)
+        rule = !isnull(maybe_rule) ? get(maybe_rule) : register_rule(op, types, i)
+        dydx = apply_rule(rule, to_expr(node))
+        dzdy = adj[y]
+        a = simplify(dzdy * dydx)
+        if haskey(adj, x)
+            adj[x] += a
+        else
+            adj[x] = a
+        end
+    end
+end
+
+
+
 function rev_step!(g::ExGraph, nd::ExNode{:(=)}, adj::Dict{Symbol, TensorDeriv})
     # TODO: detect index permutation or inner contraction and handle it properly
     y = nd.var
@@ -328,13 +363,12 @@ end
 
 
 function main()
-    ex = quote
-        D[i,j] = A[i,k] * B[k,j] + C[i,j]
-    end
+    # ex = D[i,j] = A[i,k] * B[k,j] + C[i,j]
+    ex = :(y[i] = W[i,k] * x[k] + b[i])
     # ex = :(A[i,k] * B[k,j])
     # ex = :(B[i,j] = A[j,i])
-    A = rand(2, 3)
-    B = rand(3, 2)
-    C = rand(2, 2)
-    tds = rdiff(ex, A=A, B=B, C=C)
+    W = rand(2,3)
+    x = rand(3)
+    b = rand(2)
+    tds = rdiff(ex, W=W, x=x, b=b)
 end

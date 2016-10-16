@@ -17,6 +17,6 @@ export matchex,
        @simple_rule,
        is_indexed       
 
-include("core.jl")
+include("all.jl")
 
 end
