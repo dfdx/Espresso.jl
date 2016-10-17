@@ -4,36 +4,33 @@
 abstract AbstractDeriv
 
 immutable Deriv
-    dvar::Symbol
-    wrt::Symbol
     ex::Any
 end
 
 function *(d1::Deriv, d2::Deriv)
-    # assert chain rule (we might not need it, but let's try)
-    @assert d1.wrt == d2.dvar 
-    return Deriv(d1.dvar, d2.wrt, d1.ex * d2.ex)
+    return Deriv(simplify(d1.ex * d2.ex))
 end
 
 function +(d1::Deriv, d2::Deriv)
-    @assert d1.dvar == d2.dvar && d1.wrt == d2.wrt
-    return Deriv(d1.dvar, d1.wrt, d1.ex + d2.ex)
+    return Deriv(simplify(d1.ex + d2.ex))
 end
 
+expr(d::Deriv) = d.ex
+to_expr(d::Deriv) = d.ex
+Base.show(io::IO, d::Deriv) = print(io, expr(d))
 
 abstract AbstractDiffRule
 
 immutable DiffRule <: AbstractDiffRule
-    ex::Expr        # pattern of expression to differentiate
-    idx::Int        # index of argument to differentiate against
-    deriv::Deriv    # pattern of differentiation expression
+    pat::Expr        # pattern of expression to differentiate
+    deriv::Deriv     # pattern of differentiation expression
 end
 
 
 const DIFF_PHS = Set([:x, :y, :z, :a, :b, :c, :m, :n])
 
 @runonce const DIFF_RULES =
-        Dict{Tuple{OpName,Vector{Type}, Int}, Tuple{Symbolic,Any}}()
+        Dict{Tuple{OpName, Vector{Type}, Int}, DiffRule}()
 
 
 opname(mod, op) = canonical(mod, op)
@@ -49,12 +46,12 @@ Example:
 
     @diff_rule *(x::Number, y::Number) 1 y
 
-Which means: derivative of a product of 2 numbers w.r.t. 1st argument 
-is a second argument. 
+Which means: derivative of a product of 2 numbers w.r.t. 1st argument
+is a second argument.
 
 Note that rules are always defined as if arguments were ordinary variables
 and not functions of some other variables, because this case will be
-automatically handled by chain rule in the differentiation engine. 
+automatically handled by chain rule in the differentiation engine.
 
 """
 macro diff_rule(ex::Expr, idx::Int, dex::Any)
@@ -64,7 +61,7 @@ macro diff_rule(ex::Expr, idx::Int, dex::Any)
         types = [eval(exa.args[2]) for exa in ex.args[2:end]]
         new_args = Symbol[exa.args[1] for exa in ex.args[2:end]]
         ex_no_types = Expr(ex.head, ex.args[1], new_args...)
-        DIFF_RULES[(op, types, idx)] = (ex_no_types, dex)
+        DIFF_RULES[(op, types, idx)] = DiffRule(ex_no_types, Deriv(dex))
     else
         error("Can only define derivative on calls")
     end
@@ -98,10 +95,43 @@ function find_rule(op::OpName, types::Vector{DataType}, idx::Int)
 end
 
 """
-Apply rule retrieved using `find_rule()` to an expression. 
+Apply rule retrieved using `find_rule()` to an expression.
 """
-function apply_rule(rule::Tuple{Expr, Any}, ex::Expr)
-    return rewrite(ex, rule[1], rule[2]; phs=DIFF_PHS)
+function apply_rule(rule::DiffRule, ex::Expr)
+    deriv_ex = rewrite(ex, rule.pat, rule.deriv.ex; phs=DIFF_PHS)
+    return Deriv(deriv_ex)
 end
 
 
+## register rule
+
+"""
+Register new differentiation rule for function `fname` with arguments
+of `types` at index `idx`, return this new rule.
+"""
+function register_rule(fname::OpName, types::Vector{DataType}, idx::Int)
+    f = eval(fname)
+    args, ex = funexpr(f, types)
+    ex = sanitize(ex)
+    # TODO: replace `ones()` with `example_val()` that can handle arrays
+    xs = [(arg, ones(T)[1]) for (arg, T) in zip(args, types)]
+    derivs = rdiff(ex; xs...)
+    dex = derivs[idx]
+    fex = Expr(:call, fname, args...)
+    new_rule = DiffRule(fex, Deriv(dex))
+    DIFF_RULES[(fname, types, idx)] = new_rule
+    return new_rule
+end
+
+## derivative (for primitive expressions)
+
+function derivative(pex::Expr, types::Vector{DataType}, idx::Int;
+                    mod=current_module())
+    @assert pex.head == :call
+    op = canonical(mod, pex.args[1])
+    maybe_rule = find_rule(op, types, idx)
+    rule = !isnull(maybe_rule) ? get(maybe_rule) : register_rule(op, types, idx)
+    return apply_rule(rule, pex)
+end
+
+derivative(var::Symbol, types::Vector{DataType}, idx::Int) = Deriv(1)

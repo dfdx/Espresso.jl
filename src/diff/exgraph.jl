@@ -18,8 +18,8 @@ value(nd::ExNode) = nd.val
 expr(nd::ExNode) = nd.ex
 function iexpr(nd::ExNode)
     varex = Expr(:ref, nd.var, nd.idxs[1]...)
-    s2i = Dict(dep => idxs
-               for (dep, idxs) in zip(dependencies(nd), nd.idxs[2:end]))
+    s2i = Dict([(dep, idxs)
+                for (dep, idxs) in zip(dependencies(nd), nd.idxs[2:end])])
     depex = add_indices(nd.ex, s2i)
     return depex
 end
@@ -36,8 +36,8 @@ dependencies(nd::ExNode{:call}) = nd.ex.args[2:end]
 to_expr(nd::ExNode) = :($(nd.var) = $(nd.ex))
 function to_einsum_expr(nd::ExNode)
     varex = Expr(:ref, nd.var, nd.idxs[1]...)
-    s2i = Dict(dep => idxs
-               for (dep, idxs) in zip(dependencies(nd), nd.idxs[2:end]))
+    s2i = Dict([(dep, idxs)
+                for (dep, idxs) in zip(dependencies(nd), nd.idxs[2:end])])
     depex = add_indices(nd.ex, s2i)
     assign_ex = Expr(:(:=), varex, depex)
     return Expr(:macrocall, Symbol("@einsum"), assign_ex)
@@ -45,8 +45,8 @@ end
 
 function to_iexpr(nd::ExNode)
     varex = Expr(:ref, nd.var, nd.idxs[1]...)
-    s2i = Dict(dep => idxs
-               for (dep, idxs) in zip(dependencies(nd), nd.idxs[2:end]))
+    s2i = Dict([(dep, idxs)
+                for (dep, idxs) in zip(dependencies(nd), nd.idxs[2:end])])
     depex = add_indices(nd.ex, s2i)
     return Expr(:(=), varex, depex)
 end
@@ -115,7 +115,7 @@ end
 
 
 ## special expressions
-
+    
 ## constant(val) = Expr(:constant, val)
 ## input(x, val) = Expr(:input, x, val)
 ## assign(x) = Expr(:(=), x)
@@ -145,7 +145,33 @@ end
 ##     return subs(new_ex, expanded)
 ## end
 
+expand_temp(g::ExGraph, nd::ExNode{:input}) = variable(nd)
+expand_temp(g::ExGraph, nd::ExNode{:constant}) = value(nd)
 
+function expand_temp(g::ExGraph, nd::ExNode{:call})
+    deps = dependencies(nd)
+    expanded = Dict([(x, expand_temp(g, g[x])) for x in deps])
+    return subs(expr(nd), expanded)
+end
+
+function expand_temp(g::ExGraph, x::Symbol)
+    if haskey(g.idx, x)
+        return expand_temp(g, g[x])
+    else
+        return x
+    end
+end
+
+function expand_temp(g::ExGraph, ex::Expr)
+    new_args = [expand_temp(g, arg) for arg in ex.args]
+    return Expr(ex.head, new_args...)
+end
+
+expand_temp(g::ExGraph, x) = x
+
+
+    
+    
 
 
 ## parse!

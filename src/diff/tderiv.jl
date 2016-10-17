@@ -1,8 +1,10 @@
 
 # tensor_deriv.jl - tensor derivative utils (using Einstein notation)
 
-const TDIFF_PHS = [:A, :B, :C, :X, :Y, :Z,
+const TDIFF_PHS = [:A, :B, :C, :V, :W, :X, :Y, :Z,
                    :i, :j, :k, :l, :m, :n, :p, :q, :r, :s, :t]
+
+const TDIFF_VAR_NAMES = [:V, :W, :X, :Y]
 
 
 ## tensor derivative type
@@ -21,9 +23,10 @@ function TensorDeriv(dex::Expr)
     return TensorDeriv(dvar, wrt, ex, guards)
 end
 
+
 function Base.show(io::IO, td::TensorDeriv)
     grds = (length(td.guards) > 0 ?
-            (" * " * join(["($g)" for g in td.guards], " * ")) : "")    
+            (" * " * join(["($g)" for g in td.guards], " * ")) : "")
     print(io, "$(td.dvar)/$(td.wrt) = $(td.ex) $grds")
 end
 
@@ -133,6 +136,43 @@ immutable TensorDiffRule <: AbstractDiffRule
     deriv::TensorDeriv    # pattern of differentiation expression
 end
 
+function Base.show(io::IO, rule::TensorDiffRule)
+    print(io, "TensorDiffRule($(rule.pat) ==> $(rule.deriv))")
+end
+
+
+# create elementwise tensor diff rule from ordinary diff rule
+function TensorDiffRule(ew_rule::DiffRule, diff_idx::Int, num_idxs::Int)
+    ew_pat = ew_rule.pat
+    op = ew_pat.args[1]
+    ew_ex = ew_rule.deriv.ex
+    # tensor var names and indices
+    tvar_names = TDIFF_VAR_NAMES[1:length(ew_pat.args)-1]
+    tvar_idxs = IDX_NAMES[1:num_idxs]
+    tvars = [Expr(:ref, tvar, tvar_idxs...) for tvar in tvar_names]
+    # dvar variable
+    odvar_name = :Z
+    dvar_name = dname(odvar_name)
+    dvar_idxs = tvar_idxs
+    dvar = Expr(:ref, dvar_name, dvar_idxs...)
+    odvar = Expr(:ref, odvar_name, dvar_idxs...)
+    # w.r.t. variable
+    owrt_name = tvar_names[diff_idx]
+    wrt_name = dname(owrt_name)
+    wrt_idxs = IDX_NAMES[num_idxs+1:2*num_idxs]
+    wrt = Expr(:ref, wrt_name, wrt_idxs...)
+    # new pattern
+    tpat = Expr(:call, op, tvars...)
+    full_tpat = :($odvar = $tpat)
+    # elementwise derivative expression
+    tex = rewrite(tpat, ew_pat, ew_ex; phs=DIFF_PHS)
+    # tex_lhs = :($dvar / $wrt)
+    # full_tex = :($tex_lhs = $tex)
+    # constructing tensor derivative
+    tguards = [:($i1 == $i2) for (i1, i2) in zip(dvar_idxs, wrt_idxs)]
+    tderiv = TensorDeriv(dvar, wrt, tex, tguards)
+    return TensorDiffRule(full_tpat, tderiv)
+end
 
 
 # read as: (operation name, [indices], diff var index)
@@ -141,6 +181,14 @@ end
 # const TENSOR_DIFF_RULES = Dict{TensorDiffKey, DiffRule}()
 
 const TENSOR_DIFF_RULES = Dict{Tuple{OpName, Int}, Vector{TensorDiffRule}}()
+
+
+function push_tdiff_rule!(op::OpName, deriv_idx::Int, rule::TensorDiffRule)
+    if !haskey(TENSOR_DIFF_RULES, (op, deriv_idx))
+        TENSOR_DIFF_RULES[(op, deriv_idx)] = TensorDiffRule[]
+    end
+    push!(TENSOR_DIFF_RULES[(op, deriv_idx)], rule)
+end
 
 function _tdiff_rule(ex, dex)
     op = canonical(current_module(), ex.args[2].args[1])
@@ -154,10 +202,7 @@ function _tdiff_rule(ex, dex)
     var_names = [iex.args[1] for iex in ex.args[2].args[2:end]]
     deriv_idx = find(var_names .== diff_var_name)[1]
     rule = TensorDiffRule(ex, deriv)
-    if !haskey(TENSOR_DIFF_RULES, (op, deriv_idx))
-        TENSOR_DIFF_RULES[(op, deriv_idx)] = TensorDiffRule[]
-    end
-    push!(TENSOR_DIFF_RULES[(op, deriv_idx)], rule)
+    push_tdiff_rule!(op, deriv_idx, rule)
 end
 
 
@@ -167,17 +212,15 @@ macro tdiff_rule(ex, dex)
 end
 
 
-
-
 function tfind_rule(fullex::Expr, idx::Int)
     @assert fullex.head == :(=) && fullex.args[2].head == :call
     op = fullex.args[2].args[1]
-    haskey(TENSOR_DIFF_RULES, (op, idx)) || error("Can't find rule for `$fullex`")
+    haskey(TENSOR_DIFF_RULES, (op, idx)) || return Nullable{TensorDiffRule}()
     rules = TENSOR_DIFF_RULES[(op, idx)]
     matching = findfirst(pat -> !isnull(matchex(pat, fullex; phs=TDIFF_PHS)),
                          [r.pat for r in rules])
-    matching != 0 || error("Can't find rule for `$fullex`")
-    return rules[matching]
+    matching != 0 || return Nullable{TensorDiffRule}()
+    return Nullable{TensorDiffRule}(rules[matching])
 end
 
 dname(var::Symbol) = Symbol("d$var")
@@ -199,58 +242,52 @@ function pack_deriv(ex::Expr)
     @assert ex.args[1].head == :call && ex.args[1].args[1] == :/
     var, wrt = [v.args[1] for v in ex.args[1].args[2:3]]
     dvar, dwrt = dname(var), dname(wrt)
-    return subs(ex, Dict(var => dvar, wrt => dwrt))
+    lhs = subs(ex.args[1], Dict(var => dvar, wrt => dwrt))
+    rhs = ex.args[2]
+    return Expr(:(=), lhs, rhs)
 end
 
 
-# TODO: if rule isn't found, treat it as elementwise function call
 function tderivative(fullex::Expr, idx::Int)
-    rule = tfind_rule(fullex, idx)
-    unpacked_dpat = unpack_deriv(to_expr(rule.deriv))
-    unpacked_dex = rewrite(fullex, rule.pat, unpacked_dpat; phs=TDIFF_PHS)
-    dex = pack_deriv(unpacked_dex)
-    return TensorDeriv(dex)
+    maybe_rule = tfind_rule(fullex, idx)
+    if !isnull(maybe_rule)
+        rule = get(maybe_rule)
+        unpacked_rule_dex = unpack_deriv(to_expr(rule.deriv))
+        unpacked_dex = rewrite(fullex, rule.pat, unpacked_rule_dex; phs=TDIFF_PHS)
+        dex = pack_deriv(unpacked_dex)
+        return TensorDeriv(dex)
+    else
+        # TODO: handle constants
+        
+        # infer and save elementwise tensor diff rule
+        error_msg = "Can't find tensor or elementwise rule for expression $fullex"
+        idxs = get_indices(fullex)
+        all([I == idxs[1] for I in idxs]) || error(error_msg)
+        op = opname(current_module(), fullex.args[2].args[1])
+        types = [Number for i=1:length(fullex.args[2].args)-1]
+        ew_maybe_rule = find_rule(op, types, idx)
+        !isnull(ew_maybe_rule) || error(error_msg)
+        ew_rule = get(ew_maybe_rule)
+        trule = TensorDiffRule(ew_rule, idx, length(idxs[1]))
+        push_tdiff_rule!(op, idx, trule)
+        # now rule is registered, recursively call itself
+        return tderivative(fullex, idx)
+    end
+
 end
 
 function tderivative(fullex::Expr, dvar::Symbol)
     dvars = [idvar.args[1] for idvar in indexed_vars(fullex.args[2])]
     matching = findfirst(dvars .== dvar)
     matching != 0 || error("Variable `$dvar` isn't present " *
-                           "in expression `$fullex`")    
+                           "in expression `$fullex`")
     return tderivative(fullex, matching[1])
 end
 
 
 function main_yahd()
     fullex = :(c[i,j] = a[i,k] * b[k,j])
-    deriv = tderivative(fullex, 1)
+    tderivative(fullex, 1)
+
+    tderivative(:(c[m, n] = a[m, n] / b[m, n]), :b)
 end
-
-
-
-
-# matrix-by-matrix product
-@tdiff_rule (Z[i,j] = X[i,k] * Y[k,j]) (dZ[i,j]/dX[m,n] = Y[n,j] * (i == m))
-@tdiff_rule (Z[i,j] = X[i,k] * Y[k,j]) (dZ[i,j]/dY[m,n] = X[i,m] * (n == j))
-
-# matrix-by-vector product
-@tdiff_rule (Z[i] = X[i,k] * Y[k]) (dZ[i]/dX[m,n] = Y[n] * (i == m))
-@tdiff_rule (Z[i] = X[i,k] * Y[k]) (dZ[i,j]/dY[m] = X[i,m])
-
-# inner product of 2 vectors
-@tdiff_rule (Z[] = X[i] * Y[i]) (dZ[]/dX[i] = Y[i])
-@tdiff_rule (Z[] = X[i] * Y[i]) (dZ[]/dY[i] = X[i])
-
-# outer product of 2 vectors
-@tdiff_rule (Z[i,j] = X[i] * Y[j]) (dZ[i,j]/dX[m] = Y[j] * (i == m))
-@tdiff_rule (Z[i,j] = X[i] * Y[j]) (dZ[i,j]/dY[m] = X[i] * (j == m))
-
-# index permutation (broken)
-# @tdiff_rule (Z[i,j] = X[j,i]) (dZ[i,j]/dX[m,n] = 1 * (i == n) * (j == m))
-
-# some element-wise functions
-@tdiff_rule (Z[i] = X[i] + Y[i]) (dZ[i]/dX[j] = 1 * (i == j))
-@tdiff_rule (Z[i] = X[i] + Y[i]) (dZ[i]/dY[j] = 1 * (i == j))
-@tdiff_rule (Z[i,j] = X[i,j] + Y[i,j]) (dZ[i,j]/dX[m,n] = 1 * (i == m) * (j == n))
-@tdiff_rule (Z[i,j] = X[i,j] + Y[i,j]) (dZ[i,j]/dY[m,n] = 1 * (i == m) * (j == n))
-

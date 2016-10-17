@@ -32,7 +32,7 @@
 
 # other arithmetic operations
 
-@diff_rule (x::Number ^ n::Int) 1 (n * x^(n-1))
+@diff_rule (x::Number ^ n::Number) 1 (n * x^(n-1))
 @diff_rule (a::Number ^ x::Number) 2 (log(a) * a^x)
 
 @diff_rule (x::Number / y::Number) 1 (x / y)

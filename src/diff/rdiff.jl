@@ -143,28 +143,6 @@ function forward_pass(g::ExGraph, ex::Any)
 end
 
 
-## register rule
-
-"""
-Register new differentiation rule for function `fname` with arguments
-of `types` at index `idx`, return this new rule.
-"""
-function register_rule(fname::OpName, types::Vector{DataType}, idx::Int)
-    f = eval(fname)
-    args, ex = funexpr(f, types)
-    ex = sanitize(ex)
-    # TODO: replace `ones()` with `example_val()` that can handle arrays
-    xs = [(arg, ones(T)[1]) for (arg, T) in zip(args, types)]
-    derivs = rdiff(ex; xs...)
-    dex = derivs[idx]
-    fex = Expr(:call, fname, args...)
-    # TODO: use @diff_rule instead for more flexibility
-    DIFF_RULES[(fname, types, idx)] = (fex, dex)
-    return (fex, dex)
-end
-
-
-
 ## reverse step
 
 """
@@ -172,30 +150,27 @@ Perform one step of reverse pass. Add derivatives of output variable w.r.t.
 node's dependenices to adjoint dictionary.
 """
 function rev_step!(g::ExGraph, node::ExNode{:(=)}, adj::Dict{Symbol,Deriv})
-    y = node.name
-    x = deps(node)[1]
+    y = nd.var
+    x = dependencies(nd)[1]
     adj[x] = adj[y]
 end
 
-function rev_step!(g::ExGraph, node::ExNode{:constant}, adj::Dict{Symbol,Deriv})
-    adj[node.name] = 0.
+function rev_step!(g::ExGraph, nd::ExNode{:constant}, adj::Dict{Symbol,Deriv})
+    adj[nd.var] = Deriv(0.)
 end
 
 function rev_step!(g::ExGraph, node::ExNode{:input}, adj::Dict{Symbol,Deriv})
     # do nothing
 end
 
-function rev_step!(g::ExGraph, node::ExNode{:call}, adj::Dict{Symbol,Deriv})
-    y = node.name
-    types = [typeof(g.idx[x].val) for x in deps(node)]
-    for (i, x) in enumerate(deps(node))
-        x_node = g.idx[x]
-        op = opname(g.mod, node.ex.args[1])
-        maybe_rule = find_rule(op, types, i)
-        rule = !isnull(maybe_rule) ? get(maybe_rule) : register_rule(op, types, i)
-        dydx = apply_rule(rule, to_expr(node))
+function rev_step!(g::ExGraph, nd::ExNode{:call}, adj::Dict{Symbol,Deriv})
+    y = nd.var
+    types = [typeof(g.idx[x].val) for x in dependencies(nd)]
+    for (i, x) in enumerate(dependencies(nd))
+        xnd = g[x]
+        dydx = derivative(expr(nd), types, i)
         dzdy = adj[y]
-        a = simplify(dzdy * dydx)
+        a = dzdy * dydx
         if haskey(adj, x)
             adj[x] += a
         else
@@ -205,112 +180,31 @@ function rev_step!(g::ExGraph, node::ExNode{:call}, adj::Dict{Symbol,Deriv})
 end
 
 
-
-function rev_step!(g::ExGraph, nd::ExNode{:(=)}, adj::Dict{Symbol, TensorDeriv})
-    # TODO: detect index permutation or inner contraction and handle it properly
-    y = nd.var
-    x = dependencies(nd)[1]
-    dzdx = copy(adj[y])
-    dzdx.wrt.args[1] = dname(x)
-    adj[x] = dzdx
-end
-
-function rev_step!(g::ExGraph, nd::ExNode{:constant},
-                   adj::Dict{Symbol, TensorDeriv})
-    adj[nd.var] = 0.
-end
-
-function rev_step!(g::ExGraph, node::ExNode{:input},
-                   adj::Dict{Symbol,TensorDeriv})
-    # do nothing ??
-end
-
-
-
-## function rev_step!(g::ExGraph, dg::ExGraph, nd::ExNode{:call})
-##     y = nd.var
-##     types = DataType[typeof(value(get(g, x))) for x in dependencies(nd)]
-##     for (i, x) in enumerate(dependencies(nd))
-##         xnd = g[x]
-##         op = opname(g.mod, nd.ex.args[1])
-##         if isindexed(nd)  # indexed expression
-##             elem_types = map(eltype, types)
-##             maybe_rule = find_rule(op, elem_types, i)
-##             if !isnull(maybe_rule)
-##                 rule = get(maybe_rule)
-##                 dydx = apply_rule(rule, expr(nd))
-##                 dzdy = expr(dg[dname(y)])
-##                 # TODO: add indices from original expression
-##                 if haskey(dg, x)
-##                     dzdx_nd = dg[x]
-##                     dzdx_nd.ex += dzdy * dydx  # FIXME: not simple expression!
-##                 else
-##                     addnode!(dg, :call, dname(x), dzdy * dydx)
-##                 end
-##             end  # TODO: otherwise try register or fail
-##         else # non-indexed expression
-##             maybe_rule = find_rule(op, types, i)
-##             if !isnull(maybe_rule)
-##                 rule = get(maybe_rule)
-##                 dydx = apply_rule(rule, expr(nd))
-##                 dzdy = expr(dg[dname(y)])
-##                 if haskey(dg, x)
-##                     dzdx_nd = dg[x]
-##                     dzdx_nd.ex += dzdy * dydx
-##                 else
-##                     addnode!(dg, :call, dname(x), dzdy * dydx)
-##                 end
-##             end
-##             # TODO: try to convert to indexed and find rule for components
-##             #       expression then stays vectorized,
-##             #       but derivative becomes indexed
-##             # TODO: if nothing works, try to register new rule
-##         end
-##     end
-## end
-
-
-function rev_step!(g::ExGraph, nd::ExNode{:call}, adj::Dict{Symbol, TensorDeriv})
-    y = nd.var
-    iex = to_iexpr(nd)
-    dzdy = adj[y]
-    for (i, x) in enumerate(dependencies(nd))
-        dydx = tderivative(iex, x)
-        dzdx = dzdy * dydx
-        if haskey(adj, x)
-            adj[x] += dzdx
-        else
-            adj[x] = dzdy * dydx
-        end
-    end
-end
-
-
-
 ## reverse pass
 
-## function reverse_recursive!(g::ExGraph, curr::Symbol, adj::Dict{Symbol, Any})
-##     node = g.idx[curr]
-##     rev_step!(g, node, adj)
-##     for dep in dependencies(node)
-##         reverse_recursive!(g, dep, adj)
-##     end
-## end
+function expand_adjoints(g::ExGraph, adj::Dict{Symbol, Deriv})
+    return Dict([(var, expand_temp(g, expr(d))) for (var, d) in adj])
+end
+
 
 """Reverse pass of differentiation"""
 function reverse_pass(g::ExGraph, z::Symbol)
-    num_indices = ndims(g[z].val)
-    dz = with_indices(dname(z), num_indices)
-    dzwrt = with_indices(dname(z), num_indices+1, num_indices)
-    guards = [:($ivar == $iwrt)
-              for (ivar, iwrt) in zip(dz.args[2:end], dzwrt.args[2:end])]
-    # later: check if g has indexed expressions and if not,
-    # use Dict{Symbol, Deriv} instead to call other rev_step! methods
-    adj = Dict(z => TensorDeriv(dz, dzwrt, 1, guards))
+    if any(isindexed, g.tape)
+        num_indices = ndims(g[z].val)
+        dz = with_indices(dname(z), num_indices)
+        dzwrt = with_indices(dname(z), num_indices+1, num_indices)
+        guards = [:($ivar == $iwrt)
+                  for (ivar, iwrt) in zip(dz.args[2:end], dzwrt.args[2:end])]
+        # later: check if g has indexed expressions and if not,
+        # use Dict{Symbol, Deriv} instead to call other rev_step! methods
+        adj = Dict(z => TensorDeriv(dz, dzwrt, 1., guards))
+    else
+        adj = Dict(z => Deriv(1.))
+    end
     for nd in reverse(g.tape)
         rev_step!(g, nd, adj)
     end
-    return adj
+    return expand_adjoints(g, adj)
 end
 
 
@@ -358,17 +252,11 @@ function rdiff(f::Function; xs...)
 end
 
 
-
-# TODO: elementwise functions
-
-
 function main()
-    # ex = D[i,j] = A[i,k] * B[k,j] + C[i,j]
-    ex = :(y[i] = W[i,k] * x[k] + b[i])
-    # ex = :(A[i,k] * B[k,j])
-    # ex = :(B[i,j] = A[j,i])
-    W = rand(2,3)
-    x = rand(3)
-    b = rand(2)
-    tds = rdiff(ex, W=W, x=x, b=b)
+    # TODO: expand temporary variables
+    ex = :(2a + a * b + 42)
+    rdiff(ex, a=1, b=2)
+    g = ExGraph(; a=1, b=1, c=1)
+    forward_pass(g, ex)
+    g, adj = _rdiff(ex, a=1, b=1)
 end
