@@ -56,7 +56,7 @@ function Base.show{C}(io::IO, nd::ExNode{C})
     print(io, "ExNode{$C}($(to_expr(nd)) | $val)")
 end
 
-isindexed(nd::ExNode) = !isempty(nd.idxs) && !isempty(nd.idxs[1])
+isindexed(nd::ExNode) = !isempty(nd.idxs) && any(isempty, nd.idxs)
 
 
 # exgraph
