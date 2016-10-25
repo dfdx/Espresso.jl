@@ -56,7 +56,7 @@ function Base.show{C}(io::IO, nd::ExNode{C})
     print(io, "ExNode{$C}($(to_expr(nd)) | $val)")
 end
 
-isindexed(nd::ExNode) = !isempty(nd.idxs) && any(isempty, nd.idxs)
+isindexed(nd::ExNode) = !isempty(nd.idxs) && any(x -> !isempty(x), nd.idxs)
 
 
 # exgraph
@@ -89,6 +89,7 @@ Base.haskey(g::ExGraph, var::Symbol) = haskey(g.idx, var)
 Base.get(g::ExGraph, var::Symbol) = g.idx[var]
 Base.getindex(g::ExGraph, var::Symbol) = g.idx[var]
 Base.getindex(g::ExGraph, i::Integer) = g.tape[i]
+Base.endof(g::ExGraph) = endof(g.tape)
 
 """Generate new unique name for intermediate variable in graph"""
 function genname(g::ExGraph)
@@ -167,11 +168,7 @@ function expand_temp(g::ExGraph, ex::Expr)
     return Expr(ex.head, new_args...)
 end
 
-expand_temp(g::ExGraph, x) = x
-
-
-    
-    
+expand_temp(g::ExGraph, x) = x    
 
 
 ## parse!

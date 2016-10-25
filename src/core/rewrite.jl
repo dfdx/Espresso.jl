@@ -143,3 +143,13 @@ function rewrite(ex::Symbolic, pat::Symbolic, subex::Any; phs=DEFAULT_PHS[1])
         return subs(subex, get(st))
     end
 end
+
+
+function tryrewrite(ex::Symbolic, pat::Symbolic, subex::Any; phs=DEFAULT_PHS[1])
+    st = matchex(pat, ex; phs=phs)
+    if isnull(st)
+        return Nullable{Expr}()
+    else
+        return Nullable(subs(subex, get(st)))
+    end
+end

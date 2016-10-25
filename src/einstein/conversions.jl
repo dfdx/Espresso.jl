@@ -95,10 +95,3 @@ end
 # x[i] + y[i] ==> x .+ y
 # exp(x[i]) ==> exp.(x)
 
-
-
-# NEXT:
-# 1. Implement from_einstein using rule engine
-# 2. Restore ordinary derivative workflow
-# 3. Implement element-wise operations for tensor derivatives
-# 4. Check derivative for logistic regression
