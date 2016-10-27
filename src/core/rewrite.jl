@@ -1,6 +1,6 @@
 
 # rewrite.jl - expression pattern matching and rewriting.
-# 
+#
 # The general idea behind functions in this file is to provide easy means
 # of finding specific pieces of expressions and using them elsewhere.
 # At the time of writing it is used in 2 parts of this package:
@@ -26,8 +26,13 @@ isplaceholder(x::Symbol, phs) = (startswith(string(x), "_")
 
 function matchex!(m::Dict{Symbol,Any}, p, x; phs=DEFAULT_PHS[1])
     if isplaceholder(p, phs)
-        m[p] = x
-        return true
+        if haskey(m, p) && m[p] != x
+            # different bindings to the same pattern, treat as no match
+            return false
+        else
+            m[p] = x
+            return true
+        end
     elseif isa(p, Expr) && isa(x, Expr)
         result = (matchex!(m, p.head, x.head)
                   && length(p.args) == length(x.args)
@@ -63,7 +68,7 @@ matchex(pat, ex; phs=Set([:x, :n]))
 ```
 
 """
-function matchex(pat::Symbolic, ex::Symbolic; phs = DEFAULT_PHS[1])
+function matchex(pat, ex; phs = DEFAULT_PHS[1])
     m = Dict{Symbol,Any}()
     res = matchex!(m, pat, ex; phs=phs)
     if res
@@ -101,6 +106,23 @@ end
 subs(ex; st...) = subs(ex, Dict(st))
 
 
+## remove subexpression
+
+function without(ex::Expr, pat; phs=DEFAULT_PHS[1])
+    new_args_without = [without(arg, pat; phs=phs) for arg in ex.args]
+    new_args = filter(arg -> isnull(matchex(pat, arg; phs=phs)), new_args_without)
+    if ex.head == :call && length(new_args) == 2 &&
+        (ex.args[1] == :+ || ex.args[1] == :*)        
+        # pop argument of now-single-valued operation
+        # TODO: make more general, e.g. handle (x - y) with x removed
+        return new_args[2]
+    else
+        return Expr(ex.head, new_args...)
+    end
+end
+
+without(x, pat; phs=DEFAULT_PHS[1]) = x
+
 ## rewriting
 
 """
@@ -119,5 +141,15 @@ function rewrite(ex::Symbolic, pat::Symbolic, subex::Any; phs=DEFAULT_PHS[1])
         error("Expression $ex doesn't match pattern $pat")
     else
         return subs(subex, get(st))
+    end
+end
+
+
+function tryrewrite(ex::Symbolic, pat::Symbolic, subex::Any; phs=DEFAULT_PHS[1])
+    st = matchex(pat, ex; phs=phs)
+    if isnull(st)
+        return Nullable{Expr}()
+    else
+        return Nullable(subs(subex, get(st)))
     end
 end

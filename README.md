@@ -77,11 +77,9 @@ logistic(x) = 1 / (1 + exp(-x))
 rdiff(logistic, x=1)
 # ==> :(exp(-x) * (1 + exp(-x)) ^ -2)
 
-rdiff(:(x + Main.logistic(x)), x=1)
+rdiff(:(x + logistic(x)), x=1)
 # ==> [:(1.0 + exp(-x) * (1 + exp(-x)) ^ -2)]
 ```
-
-Note, that in second example you have to specify module `Main` since code is executed inside module `Espresso` that can't resolve symbol `logistic`, but can handle qualified `Main.logistic`.
 
 
 [1]: https://github.com/JuliaDiff/ReverseDiffSource.jl
