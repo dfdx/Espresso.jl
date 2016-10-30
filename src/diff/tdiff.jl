@@ -51,11 +51,18 @@ function expand_adjoints(g::ExGraph, adj::Dict{Symbol, TensorDeriv})
 end
 
 
+function tdiff(ex::Expr; xs...)
+    tex = to_einstein(ex; xs...)
+    g, adj = _rdiff(tex; xs...)
+    names = [name for (name, val) in xs]
+    derivs = [adj[name] for name in names]
+    return derivs
+end
+
+
 
 function main2()
-    rdiff(:(c[i] = a[i] + 1), a=ones(1))
-    
-    g = ExGraph(; a=rand(3,2))
-    forward_pass(g, :(c[i,j] = a[j,i]))
-    
+    ex = :(logistic(W * x + b))
+    to_einstein(ex, W=rand(3,4), x=rand(4), b=rand(3))
+    tdiff(ex, W=rand(3,4), x=rand(4), b=rand(3))
 end

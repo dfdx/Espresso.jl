@@ -11,6 +11,12 @@ end
 isvectorized(ex) = exprlike(ex) && !isindexed(ex)
 
 
+function add_indices(ex, s2i::Dict)
+    st = [(k => Expr(:ref, k, v...)) for (k, v) in s2i]
+    return subs(ex, st)
+end
+
+
 function with_indices(x::Symbol, start_idx::Int, num_idxs::Int)
     return Expr(:ref, x, IDX_NAMES[start_idx:start_idx+num_idxs-1]...)
 end

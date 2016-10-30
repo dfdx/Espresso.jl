@@ -257,8 +257,7 @@ function tderivative(fullex::Expr, idx::Int)
         dex = pack_deriv(unpacked_dex)
         return TensorDeriv(dex)
     else
-        # TODO: handle constants
-        
+        # TODO: handle scalars        
         # infer and save elementwise tensor diff rule
         error_msg = "Can't find tensor or elementwise rule for expression $fullex"
         idxs = get_indices(fullex)
@@ -266,8 +265,8 @@ function tderivative(fullex::Expr, idx::Int)
         op = opname(current_module(), fullex.args[2].args[1])
         types = [Number for i=1:length(fullex.args[2].args)-1]
         ew_maybe_rule = find_rule(op, types, idx)
-        !isnull(ew_maybe_rule) || error(error_msg)
-        ew_rule = get(ew_maybe_rule)
+        ew_rule = (!isnull(ew_maybe_rule) ? get(ew_maybe_rule) :
+                   register_rule(op, types, idx))
         trule = TensorDiffRule(ew_rule, idx, length(idxs[1]))
         push_tdiff_rule!(op, idx, trule)
         # now rule is registered, recursively call itself

@@ -1,97 +1,110 @@
 
-## to Einstein notation
+# from vectorized to Einstein notation
 
-"""Transform expression into Einstein notation, infer types from vals"""
-to_einstein(ex::Expr, vals...) = to_einstein(to_excall(ex), vals...)
+const TO_EINSTEIN_RULES =
+    OrderedDict((:sum, [0]) => (:(sum(X)), :(X[i] * I[i])),
+                (:*, [0, 0]) => (:(X * Y), :(X[] * Y[])),
+                (:*, [1, 1]) => (:(X * Y), :(X[i] * Y[i])),
+                (:*, [2, 1]) => (:(X * Y), :(X[i,k] * Y[k])),
+                (:*, [1, 2]) => (:(X * Y), :(X[k] * Y[k,j])),
+                (:*, [2, 2]) => (:(X * Y), :(X[i,j] * Y[k,j])))
 
-function add_indices(ex, s2i::Dict)
-    st = [(k => Expr(:ref, k, v...)) for (k, v) in s2i]
-    return subs(ex, st)
-end
-
-function to_einstein(exc::ExCall{:*}, ::AbstractMatrix, ::AbstractMatrix)
-    ex = to_expr(exc)
-    A, B = ex.args[2:3]
-    return add_indices(ex, Dict(A => [:i, :k], B => [:k, :j]))
-end
-
-function to_einstein(exc::ExCall{:*}, ::AbstractMatrix, ::AbstractVector)
-    ex = to_expr(exc)
-    A, B = ex.args[2:3]
-    return add_indices(ex, Dict(A => [:i, :k], B => [:j]))
-end
-
-function to_einstein(exc::ExCall{:*}, ::AbstractVector, BM::AbstractMatrix)
-    @assert(size(BM, 1) == 1,
-            "Can only multiplicate vector by matrix of size 1 x n, " *
-            "got matrix of size $(size(BM))")
-    ex = to_expr(exc)
-    A, B = ex.args[2:3]
-    return add_indices(ex, Dict(A => [:i], B => [:i]))
-end
-
-function to_einstein(exc::ExCall{:*}, ::AbstractVector, ::AbstractVector)
-    ex = to_expr(exc)
-    A, B = ex.args[2:3]
-    return add_indices(ex, Dict(A => [:i], B => [:i]))
-end
-
-function to_einstein(exc::ExCall{:*}, AA::AbstractArray, BA::AbstractArray)
-    error("Multiplication of arrays of size $(size(AA)) and $(size(BA))) " *
-          "is undefined")
-end
-
-Base.getindex{T}(::UniformScaling{T}, ::Int64) = one(T)
-Base.getindex{T}(::UniformScaling{T}, I...) = ones(T, length(I))
-
-function to_einstein{T}(ex::ExCall{:sum}, ::AbstractArray{T,1})
-    A = ex.args[2]
-    return :($(A)[:i] * I[:i])
-end
-
-
-function to_einstein{T,N}(exc::ExCall, ::AbstractArray{T,N})
-    ex = to_expr(exc)
-    A = ex.args[2]
-    if N > length(IDX_NAMES)
-        error("Ran out of index names for this tensor!")
+function to_einstein(ex::Expr; xs...)
+    g = ExGraph(ex; xs...)
+    forward_pass(g, ex)
+    res = :(begin end)
+    for nd in g.tape
+        if !isa(nd, ExNode{:input})
+            push!(res.args, to_einstein(g, nd))
+        end
     end
-    return add_indices(ex, Dict(A => IDX_NAMES[1:N]))
+    return res
 end
 
-function to_einstein{T,N}(exc::ExCall, ::AbstractArray{T,N}, ::AbstractArray{T,N})
-    ex = to_expr(exc)
-    A, B = ex.args[2:3]
-    if N > length(IDX_NAMES)
-        error("Ran out of index names for this tensor!")
+
+function to_einstein(g::ExGraph, nd::ExNode{:call})
+    ex = expr(nd)
+    op = ex.args[1]
+    dep_dims = [ndims(g[dep].val) for dep in dependencies(nd)]
+    if haskey(TO_EINSTEIN_RULES, (op, dep_dims))
+        pat, subex = TO_EINSTEIN_RULES[(op, dep_dims)]
+        matched = tryrewrite(ex, pat, subex; phs=TDIFF_PHS)
+        if !isnull(matched)
+            new_ex = get(matched)
+            varidxs = forall_indices(new_ex)
+            return Expr(:(=), Expr(:ref, nd.var, varidxs...), new_ex)
+        else
+            error("Don't know how to convert expression $(to_expr(nd)) to " *
+                  "Einstein notation")
+        end
+    elseif all(dep_dims .== dep_dims[1])
+        # treat as elementwise
+        idxs = IDX_NAMES[1:length(dep_dims[1])]
+        ivar = Expr(:ref, nd.var, idxs...)
+        ideps = [Expr(:ref, dep, idxs...) for dep in dependencies(nd)]
+        icall = Expr(:call, op, ideps...)
+        return Expr(:(=), ivar, icall)
+    else
+        error("Don't know how to convert expression $(to_expr(nd)) to " *
+              "Einstein notation")
     end
-    return add_indices(ex, Dict(A => IDX_NAMES[1:N], B => IDX_NAMES[1:N]))
 end
 
-function to_einstein{T,N}(exc::ExCall, ::AbstractArray{T,N},
-                          ::AbstractArray{T,N}, ::AbstractArray{T, N})
-    ex = to_expr(exc)
-    A, B, C = ex.args[2:4]
-    if N > length(IDX_NAMES)
-        error("Ran out of index names for this tensor!")
+
+
+logistic(x) = 1 ./ (1. + exp(-x))
+
+function main_iuye()
+    ex = :(logistic(W*x + b))
+    xs = collect(Dict(:W => rand(4, 3), :x => rand(3), :b => rand(4)))
+    xs = collect(Dict(:A => rand(4, 3), :B => rand(4, 3), :C => rand(4, 3)))
+end
+
+
+# from Einstein to vectorized notation
+
+FROM_EINSTEIN_RULES =
+    OrderedDict(
+                :(X[i] * I[i]) => :(sum(X)),
+                :(I[i] * X[i]) => :(sum(X)),
+                :(X[i,k] * Y[k,j]) => :(X * Y),
+                :(X[i] * Y[i]) => :(X'Y),
+                :(X[i] * Y[j]) => :(X * Y'))
+
+function from_einstein(ex::Expr)
+    g = ExGraph()
+    parse!(g, ex)
+    res = :(begin end)
+    for nd in g.tape
+        if !isa(nd, ExNode{:input})
+            push!(res.args, from_einstein(nd))
+        end
     end
-    return add_indices(ex, Dict(A => IDX_NAMES[1:N],
-                                B => IDX_NAMES[1:N],
-                                C => IDX_NAMES[1:N]))
+    return res
+end
+
+from_einstein(nd::ExNode{:(=)}) = to_expr(nd)
+from_einstein(nd::ExNode{:input}) = expr(nd)
+from_einstein(nd::ExNode{:constant}) = value(nd)
+
+function from_einstein(nd::ExNode{:call})
+    ex = iexpr(nd)
+    if ex.args[1]  == :*
+        for (pat, rpat) in FROM_EINSTEIN_RULES
+            if !isnull(matchex(pat, ex; phs=TDIFF_PHS))   # consider tryrewrite
+                rex = rewrite(ex, pat, rpat; phs=TDIFF_PHS)
+                return :($(nd.var) = $rex)
+            end
+        end
+        error("No pattern to transform from Einstein notation, expression: $ex")
+    else
+        return to_expr(nd)
+    end
 end
 
 
-## from Einstein notation
 
-## function from_einstein(ex::ExCall{})
-    
-    ## end
-
-# multiplication
-# x[i] * y[j] ==> x * y'
-# x[i] * I[i] ==> sum(x)
-
-# element-wise functions:
-# x[i] + y[i] ==> x .+ y
-# exp(x[i]) ==> exp.(x)
-
+function main_poid()
+    ex = :(X[i,k] * Y[k,j] + Z[i,j])
+    xs = [(:X, rand(3,2)), (:Y, rand(2,3)), (:Z, rand(3,3))]
+end

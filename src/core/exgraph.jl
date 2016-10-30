@@ -66,12 +66,21 @@ isindexed(nd::ExNode) = !isempty(nd.idxs) && any(x -> !isempty(x), nd.idxs)
     idx::Dict{Symbol, ExNode}      # map from var name to its node in the graph
     input::Dict{Symbol,Any}        # input variables and their initializers
     mod::Module                    # module to evaluate expressions in
-    last_id::Int                   # helper, index of last generated var name
+    ctx::Dict{Any,Any}             # settings and caches
 end
 
-function ExGraph(;mod=nothing, input...)
+## function ExGraph(;mod=nothing, input...)
+##     mod = mod == nothing ? current_module() : mod
+##     g = ExGraph(ExNode[], Dict(), Dict(), mod, Dict{Any,Any}())
+##     for (var, val) in input
+##         addnode!(g, :input, var, var; val=val)
+##     end
+##     return g
+## end
+
+function ExGraph(ex::Expr; mod=nothing, input...)
     mod = mod == nothing ? current_module() : mod
-    g = ExGraph(ExNode[], Dict(), Dict(), mod, 0)
+    g = ExGraph(ExNode[], Dict(), Dict(), mod, Dict{Any,Any}(:orig_expr => ex))
     for (var, val) in input
         addnode!(g, :input, var, var; val=val)
     end
@@ -91,11 +100,30 @@ Base.getindex(g::ExGraph, var::Symbol) = g.idx[var]
 Base.getindex(g::ExGraph, i::Integer) = g.tape[i]
 Base.endof(g::ExGraph) = endof(g.tape)
 
+## """Extract symbols that may make conflicts with temporary names in ExGraph"""
+function possible_temp_names(ex::Expr)
+    names = unique(flatten(map(possible_temp_names, ex.args)))
+    return convert(Vector{Symbol}, names)
+end
+
+possible_temp_names(name::Symbol) = (startswith(string(name), "tmp") ?
+                                     [name] :
+                                     Symbol[])
+possible_temp_names(x) = Symbol[]
+
+
 """Generate new unique name for intermediate variable in graph"""
-function genname(g::ExGraph)
-    # TODO: check that it doesn't have collisions with input variables
-    g.last_id += 1
-    return Symbol("tmp$(g.last_id)")
+function genname(ctx::Dict{Any,Any})
+    last_id = @get_or_create(ctx, :last_id, 1)
+    possible_names = @get_or_create(ctx, :possible_names,
+                           possible_temp_names(ctx[:orig_expr]))
+    name = Symbol("tmp$(last_id)")
+    while in(name, possible_names)
+        last_id += 1
+        name = Symbol("tmp$(last_id)")
+    end
+    ctx[:last_id] = last_id + 1
+    return name
 end
 
 
@@ -178,18 +206,19 @@ Parse Julia expression and build ExGraph in-place.
 Return the name of the output variable.
 """
 parse!(g::ExGraph, ex::Expr) = parse!(g, to_exh(ex))
+parse!(g::ExGraph, ex::Expr) = parse!(g, to_exh(ex))
 parse!(g::ExGraph, ::LineNumberNode) = (:nil, Symbol[])
 parse!(g::ExGraph, ::ExH{:line}) = (:nil, Symbol[])
 parse!(g::ExGraph, s::Symbol) = (s, Symbol[])
 parse!(g::ExGraph, gr::GlobalRef) = (gr, Symbol[])
 
 function parse!(g::ExGraph, x::Number)
-    var = addnode!(g, :constant, genname(g), x; val=x)
+    var = addnode!(g, :constant, genname(g.ctx), x; val=x)
     return var, Symbol[]
 end
 
 function parse!(g::ExGraph, x::AbstractArray)
-    name = addnode!(g, :constant, genname(g), x; val=x)
+    name = addnode!(g, :constant, genname(g.ctx), x; val=x)
     return name, Symbol[]
 end
 
@@ -218,17 +247,17 @@ function parse!(g::ExGraph, ex::ExH{:call})
     sex = Expr(:call, op, deps...)
     varidxs = forall_indices(op, depidxs)
     idxs = insert!(copy(depidxs), 1, varidxs)
-    var = addnode!(g, :call, genname(g), sex; idxs=idxs)
+    var = addnode!(g, :call, genname(g.ctx), sex; idxs=idxs)
     return var, varidxs
 end
 
 function parse!(g::ExGraph, ex::ExH{:block})
-    name_idxs = [parse!(g, subex) for subex in ex.args]
+    name_idxs = [parse!(g, arg) for arg in ex.args]
     return name_idxs[end]
 end
 
 function parse!(g::ExGraph, ex::ExH{:body})
-    name_idxs = [parse!(g, subex) for subex in ex.args]
+    name_idxs = [parse!(g, arg) for arg in ex.args]
     return name_idxs[end]
 end
 

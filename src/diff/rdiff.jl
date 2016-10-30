@@ -136,7 +136,7 @@
 ## forward pass
 
 """Forward pass of differentiation"""
-function forward_pass(g::ExGraph, ex::Any)
+function forward_pass(g::ExGraph, ex::Any)    
     parse!(g, ex)
     evaluate!(g, g.tape[end].var)
     return g
@@ -210,7 +210,7 @@ end
 
 function _rdiff(ex::Expr; xs...)
     mod = current_module()
-    g = ExGraph(;mod=mod, xs...)
+    g = ExGraph(ex; mod=mod, xs...)
     forward_pass(g, ex)
     z = g.tape[end].var
     adj = reverse_pass(g, z)
@@ -253,10 +253,9 @@ end
 
 
 function main()
-    # TODO: expand temporary variables
-    ex = :(2a + a * b + 42)
-    rdiff(ex, a=1, b=2)
-    g = ExGraph(; a=1, b=1, c=1)
+    ex = to_einstein(:(logistic(W * x + b)), W=rand(4,3), x=rand(3), b=rand(4))
+    g = ExGraph(ex; W=rand(4,3), x=rand(3), b=rand(4))
+    parse!(g, ex)
     forward_pass(g, ex)
     g, adj = _rdiff(ex, a=1, b=1)
 end
