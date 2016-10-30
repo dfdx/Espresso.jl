@@ -269,3 +269,8 @@ function reduce_equalities{T}(pairs::Vector{Tuple{T,T}}, anchors::Set{T})
     end
     return st, [p for p in new_pairs]
 end
+
+
+# ML-related functions (for tests)
+
+relu(x) = max(0, x)

@@ -136,8 +136,7 @@
 ## forward pass
 
 """Forward pass of differentiation"""
-function forward_pass(g::ExGraph, ex::Any)    
-    parse!(g, ex)
+function forward_pass(g::ExGraph, ex::Any)
     evaluate!(g, g.tape[end].var)
     return g
 end
@@ -149,7 +148,7 @@ end
 Perform one step of reverse pass. Add derivatives of output variable w.r.t.
 node's dependenices to adjoint dictionary.
 """
-function rev_step!(g::ExGraph, node::ExNode{:(=)}, adj::Dict{Symbol,Deriv})
+function rev_step!(g::ExGraph, nd::ExNode{:(=)}, adj::Dict{Symbol,Deriv})
     y = nd.var
     x = dependencies(nd)[1]
     adj[x] = adj[y]
@@ -159,7 +158,7 @@ function rev_step!(g::ExGraph, nd::ExNode{:constant}, adj::Dict{Symbol,Deriv})
     adj[nd.var] = Deriv(0.)
 end
 
-function rev_step!(g::ExGraph, node::ExNode{:input}, adj::Dict{Symbol,Deriv})
+function rev_step!(g::ExGraph, nd::ExNode{:input}, adj::Dict{Symbol,Deriv})
     # do nothing
 end
 
@@ -168,7 +167,7 @@ function rev_step!(g::ExGraph, nd::ExNode{:call}, adj::Dict{Symbol,Deriv})
     types = [typeof(g.idx[x].val) for x in dependencies(nd)]
     for (i, x) in enumerate(dependencies(nd))
         xnd = g[x]
-        dydx = derivative(expr(nd), types, i)
+        dydx = derivative(expr(nd), types, i, mod=g.ctx[:mod])
         dzdy = adj[y]
         a = dzdy * dydx
         if haskey(adj, x)
@@ -183,7 +182,7 @@ end
 ## reverse pass
 
 function expand_adjoints(g::ExGraph, adj::Dict{Symbol, Deriv})
-    return Dict([(var, expand_temp(g, expr(d))) for (var, d) in adj])
+    return Dict([(var, simplify(expand_temp(g, expr(d)))) for (var, d) in adj])
 end
 
 
@@ -208,9 +207,8 @@ function reverse_pass(g::ExGraph, z::Symbol)
 end
 
 
-function _rdiff(ex::Expr; xs...)
-    mod = current_module()
-    g = ExGraph(ex; mod=mod, xs...)
+function _rdiff(ex::Expr; ctx...)
+    g = ExGraph(ex; ctx...)
     forward_pass(g, ex)
     z = g.tape[end].var
     adj = reverse_pass(g, z)
@@ -230,11 +228,13 @@ variabels. Example:
     # ==> [:(n * x ^ (n - 1))  -- derivative w.r.t. :x
     #      :(log(x) * x ^ n)]  -- derivative w.r.t. :n
 """
-function rdiff(ex::Expr; xs...)
-    g, adj = _rdiff(ex; xs...)
-    names = [name for (name, val) in xs]
-    derivs = [adj[name] for name in names]
-    return derivs
+function rdiff(ex::Expr; ctx...)
+    ctx = Dict{Any,Any}(ctx)
+    g, adj = _rdiff(ex; ctx...)
+    vars = Set(keys(get(ctx, :inputs, [])))
+    # println([(var, expr(deriv)) for (var, deriv) in adj if in(var, vars)])
+    dexs = Dict((var, dex) for (var, dex) in adj if in(var, vars))
+    return dexs
 end
 
 """
@@ -243,18 +243,18 @@ rdiff(f::Function, xs...)
 Differentiate function `f` w.r.t. its argument. See `rdiff(ex::Expr, xs...)`
 for more details.
 """
-function rdiff(f::Function; xs...)
-    types = [typeof(x[2]) for x in xs]
+function rdiff(f::Function; ctx...)
+    ctx = Dict{Any,Any}(ctx)
+    types = [typeof(x[2]) for x in get(ctx, :inputs, [])]
     args, ex = funexpr(f, types)
     ex = sanitize(ex)
-    # TODO: map xs to args
-    derivs = rdiff(ex; xs...)
+    return rdiff(ex; ctx...)
 end
 
 
 function main()
     ex = to_einstein(:(logistic(W * x + b)), W=rand(4,3), x=rand(3), b=rand(4))
-    g = ExGraph(ex; W=rand(4,3), x=rand(3), b=rand(4))
+    g = ExGraph(ex; inputs=Dict(:W=>rand(4,3), :x=>rand(3), :b=>rand(4)))
     parse!(g, ex)
     forward_pass(g, ex)
     g, adj = _rdiff(ex, a=1, b=1)

@@ -86,7 +86,7 @@ Substitute symbols in `ex` according to substitute table `st`.
 Example:
 
     ex = :(x ^ n)
-    subs(ex, x=2)  # gives :(2 ^ n)
+    subs(ex, x=2)  # ==> :(2 ^ n)
 """
 function subs(ex::Expr, st::Dict)
     new_args = [isa(arg, Expr) ? subs(arg, st) : get(st, arg, arg)
@@ -108,6 +108,14 @@ subs(ex; st...) = subs(ex, Dict(st))
 
 ## remove subexpression
 
+"""
+Remove subexpression conforming to a pattern.
+Example:
+
+    ex = :(x * (m == n))
+    pat = :(_i == _j)
+    ex = without(ex, pat)  # ==> :x
+"""
 function without(ex::Expr, pat; phs=DEFAULT_PHS[1])
     new_args_without = [without(arg, pat; phs=phs) for arg in ex.args]
     new_args = filter(arg -> isnull(matchex(pat, arg; phs=phs)), new_args_without)
@@ -144,7 +152,10 @@ function rewrite(ex::Symbolic, pat::Symbolic, subex::Any; phs=DEFAULT_PHS[1])
     end
 end
 
-
+"""
+Same as rewrite, but returns Nullable{Expr} and doesn't throw an error
+when expression doesn't match pattern
+"""
 function tryrewrite(ex::Symbolic, pat::Symbolic, subex::Any; phs=DEFAULT_PHS[1])
     st = matchex(pat, ex; phs=phs)
     if isnull(st)

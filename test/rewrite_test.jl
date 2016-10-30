@@ -11,3 +11,8 @@ phs = Set([:x, :y])
 set_default_placeholders(Set([:x, :y]))
 @test rewrite(:(a + 2b), :(x + 2y), :(x * y)) == :(a * b)
 set_default_placeholders(Set(Symbol[]))
+
+@test get(tryrewrite(:(a + 2b), :(x + 2y), :(x * y); phs=[:x, :y])) == :(a * b)
+@test isnull(tryrewrite(:(a + 2b), :(x + 3y), :(x * y); phs=[:x, :y]))
+
+@test without(:(x * (m == n)), :(_i == _j)) == :x

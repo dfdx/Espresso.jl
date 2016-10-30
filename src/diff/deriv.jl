@@ -109,14 +109,15 @@ end
 Register new differentiation rule for function `fname` with arguments
 of `types` at index `idx`, return this new rule.
 """
-function register_rule(fname::OpName, types::Vector{DataType}, idx::Int)
+function register_rule(fname::OpName, types::Vector{DataType}, idx::Int)    
+    # TODO: check module
     f = eval(fname)
     args, ex = funexpr(f, types)
     ex = sanitize(ex)
     # TODO: replace `ones()` with `example_val()` that can handle arrays
     xs = [(arg, ones(T)[1]) for (arg, T) in zip(args, types)]
-    derivs = rdiff(ex; xs...)
-    dex = derivs[idx]
+    dexs = rdiff(ex; inputs=Dict(xs))
+    dex = dexs[args[idx]]
     fex = Expr(:call, fname, args...)
     new_rule = DiffRule(fex, Deriv(dex))
     DIFF_RULES[(fname, types, idx)] = new_rule

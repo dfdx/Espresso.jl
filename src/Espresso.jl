@@ -6,6 +6,8 @@ module Espresso
 export matchex,
        subs,
        rewrite,
+       tryrewrite,
+       without,
        set_default_placeholders,
        ExH,
        to_exh,
@@ -13,9 +15,12 @@ export matchex,
        simplify,
        _rdiff,
        rdiff,
+       tdiff,
        @diff_rule,
        @simple_rule,
-       is_indexed       
+       isindexed,
+       forall_indices,
+       sum_indices
 
 include("all.jl")
 

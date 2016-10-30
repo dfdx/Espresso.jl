@@ -136,3 +136,7 @@
 @diff_rule size(x::Any) 1 0.
 @diff_rule size(x::Any, y::Any) 1 0.
 @diff_rule size(x::Any, y::Any) 2 0.
+
+# relu
+
+@diff_rule relu(x::Number) 1 relu(x) # TODO: should reference concrete module?

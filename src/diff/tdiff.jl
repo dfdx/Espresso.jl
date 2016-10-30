@@ -62,7 +62,7 @@ end
 
 
 function main2()
-    ex = :(logistic(W * x + b))
+    ex = :(relu(W * x + b))
     to_einstein(ex, W=rand(3,4), x=rand(4), b=rand(3))
     tdiff(ex, W=rand(3,4), x=rand(4), b=rand(3))
 end

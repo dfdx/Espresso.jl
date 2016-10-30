@@ -84,7 +84,7 @@ end
 
 
 
-function reindex_with_guards(td::TensorDeriv)
+function reindex_with_guards(td::TensorDeriv)    
     DI = union(Set{Symbol}(td.dvar.args[2:end]), Set{Symbol}(td.wrt.args[2:end]))
     pairs = Tuple{Symbol,Symbol}[(grd.args[2], grd.args[3]) for grd in td.guards]
     st, new_pairs = reduce_equalities(pairs, DI)
@@ -214,13 +214,16 @@ end
 
 function tfind_rule(fullex::Expr, idx::Int)
     @assert fullex.head == :(=) && fullex.args[2].head == :call
-    op = fullex.args[2].args[1]
+    op = fullex.args[2].args[1]  # TODO: opname(current_module(), op)?
     haskey(TENSOR_DIFF_RULES, (op, idx)) || return Nullable{TensorDiffRule}()
     rules = TENSOR_DIFF_RULES[(op, idx)]
     matching = findfirst(pat -> !isnull(matchex(pat, fullex; phs=TDIFF_PHS)),
                          [r.pat for r in rules])
     matching != 0 || return Nullable{TensorDiffRule}()
     return Nullable{TensorDiffRule}(rules[matching])
+    
+    # TODO: TensorDiffRule(ew_diff_rule) should take into account qualified names
+    
 end
 
 dname(var::Symbol) = Symbol("d$var")
@@ -263,7 +266,7 @@ function tderivative(fullex::Expr, idx::Int)
         idxs = get_indices(fullex)
         all([I == idxs[1] for I in idxs]) || error(error_msg)
         op = opname(current_module(), fullex.args[2].args[1])
-        types = [Number for i=1:length(fullex.args[2].args)-1]
+        types = [Number for i=1:length(fullex.args[2].args)-1]        
         ew_maybe_rule = find_rule(op, types, idx)
         ew_rule = (!isnull(ew_maybe_rule) ? get(ew_maybe_rule) :
                    register_rule(op, types, idx))

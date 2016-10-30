@@ -64,26 +64,21 @@ isindexed(nd::ExNode) = !isempty(nd.idxs) && any(x -> !isempty(x), nd.idxs)
 @runonce type ExGraph
     tape::Vector{ExNode}           # list of ExNode's
     idx::Dict{Symbol, ExNode}      # map from var name to its node in the graph
-    input::Dict{Symbol,Any}        # input variables and their initializers
-    mod::Module                    # module to evaluate expressions in
     ctx::Dict{Any,Any}             # settings and caches
 end
 
-## function ExGraph(;mod=nothing, input...)
-##     mod = mod == nothing ? current_module() : mod
-##     g = ExGraph(ExNode[], Dict(), Dict(), mod, Dict{Any,Any}())
-##     for (var, val) in input
-##         addnode!(g, :input, var, var; val=val)
-##     end
-##     return g
-## end
-
-function ExGraph(ex::Expr; mod=nothing, input...)
-    mod = mod == nothing ? current_module() : mod
-    g = ExGraph(ExNode[], Dict(), Dict(), mod, Dict{Any,Any}(:orig_expr => ex))
-    for (var, val) in input
+function ExGraph(ex::Expr; mod=nothing, ctx...)
+    ctx = Dict{Any,Any}(ctx)
+    ctx[:mod] = mod == nothing ? current_module() : mod
+    ctx[:ex] = ex
+    g = ExGraph(ExNode[], Dict(), ctx)
+    for (var, val) in get(ctx, :inputs, [])
         addnode!(g, :input, var, var; val=val)
     end
+    for (var, val) in get(ctx, :constants, [])
+        addnode!(g, :constant, var, var; val=val)
+    end
+    parse!(g, ex)
     return g
 end
 
@@ -116,7 +111,7 @@ possible_temp_names(x) = Symbol[]
 function genname(ctx::Dict{Any,Any})
     last_id = @get_or_create(ctx, :last_id, 1)
     possible_names = @get_or_create(ctx, :possible_names,
-                           possible_temp_names(ctx[:orig_expr]))
+                                    possible_temp_names(ctx[:ex]))
     name = Symbol("tmp$(last_id)")
     while in(name, possible_names)
         last_id += 1
@@ -144,7 +139,7 @@ end
 
 
 ## special expressions
-    
+
 ## constant(val) = Expr(:constant, val)
 ## input(x, val) = Expr(:input, x, val)
 ## assign(x) = Expr(:(=), x)
@@ -176,6 +171,7 @@ end
 
 expand_temp(g::ExGraph, nd::ExNode{:input}) = variable(nd)
 expand_temp(g::ExGraph, nd::ExNode{:constant}) = value(nd)
+expand_temp(g::ExGraph, nd::ExNode{:(=)}) = expand_temp(g, expr(nd))
 
 function expand_temp(g::ExGraph, nd::ExNode{:call})
     deps = dependencies(nd)
@@ -196,7 +192,7 @@ function expand_temp(g::ExGraph, ex::Expr)
     return Expr(ex.head, new_args...)
 end
 
-expand_temp(g::ExGraph, x) = x    
+expand_temp(g::ExGraph, x) = x
 
 
 ## parse!
@@ -205,7 +201,6 @@ expand_temp(g::ExGraph, x) = x
 Parse Julia expression and build ExGraph in-place.
 Return the name of the output variable.
 """
-parse!(g::ExGraph, ex::Expr) = parse!(g, to_exh(ex))
 parse!(g::ExGraph, ex::Expr) = parse!(g, to_exh(ex))
 parse!(g::ExGraph, ::LineNumberNode) = (:nil, Symbol[])
 parse!(g::ExGraph, ::ExH{:line}) = (:nil, Symbol[])
@@ -242,7 +237,7 @@ end
 
 
 function parse!(g::ExGraph, ex::ExH{:call})
-    op = canonical(g.mod, ex.args[1])
+    op = canonical(g.ctx[:mod], ex.args[1])
     deps, depidxs = unzip([parse!(g, arg) for arg in ex.args[2:end]])
     sex = Expr(:call, op, deps...)
     varidxs = forall_indices(op, depidxs)

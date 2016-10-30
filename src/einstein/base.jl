@@ -163,16 +163,18 @@ sum_indices(x) = Symbol[]
 
 # guards
 
-if VERSION < v"0.5-"
-    is_comparison(ex) = isa(ex, Expr) && ex.head == :comparison
-else
-    const COMPARISON_SYMBOLS = Set([:(==), :(!=), :(>), :(>=), :(<), :(<=)])
-    is_comparison(ex) = (isa(ex, Expr) && ex.head == :call &&
-                         in(ex.args[1], COMPARISON_SYMBOLS))
-end
+## if VERSION < v"0.5-"
+##     is_comparison(ex) = isa(ex, Expr) && ex.head == :comparison
+## else
+##     const COMPARISON_SYMBOLS = Set([:(==), :(!=), :(>), :(>=), :(<), :(<=)])
+##     is_comparison(ex) = (isa(ex, Expr) && ex.head == :call &&
+##                          in(ex.args[1], COMPARISON_SYMBOLS))
+## end
+
+isequality(ex) = isa(ex, Expr) && ex.head == :call && ex.args[1] == :(==)
 
 function get_guards!(guards::Vector{Expr}, ex::Expr)
-    if is_comparison(ex)
+    if isequality(ex)
         push!(guards, ex)
     else
         for arg in ex.args
