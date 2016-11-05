@@ -12,7 +12,7 @@ isvectorized(ex) = exprlike(ex) && !isindexed(ex)
 
 
 function add_indices(ex, s2i::Dict)
-    st = [(k => Expr(:ref, k, v...)) for (k, v) in s2i]
+    st = Dict([(k, Expr(:ref, k, v...)) for (k, v) in s2i])
     return subs(ex, st)
 end
 

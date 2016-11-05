@@ -116,7 +116,7 @@ function register_rule(fname::OpName, types::Vector{DataType}, idx::Int)
     ex = sanitize(ex)
     # TODO: replace `ones()` with `example_val()` that can handle arrays
     xs = [(arg, ones(T)[1]) for (arg, T) in zip(args, types)]
-    dexs = rdiff(ex; inputs=Dict(xs))
+    dexs = rdiff(ex; xs...)
     dex = dexs[args[idx]]
     fex = Expr(:call, fname, args...)
     new_rule = DiffRule(fex, Deriv(dex))

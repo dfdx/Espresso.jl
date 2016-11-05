@@ -67,12 +67,12 @@ isindexed(nd::ExNode) = !isempty(nd.idxs) && any(x -> !isempty(x), nd.idxs)
     ctx::Dict{Any,Any}             # settings and caches
 end
 
-function ExGraph(ex::Expr; mod=nothing, ctx...)
-    ctx = Dict{Any,Any}(ctx)
-    ctx[:mod] = mod == nothing ? current_module() : mod
+function ExGraph(ex::Expr; ctx=Dict(), inputs...)
+    ctx = to_context(ctx)
+    @get_or_create(ctx, :mod, current_module())
     ctx[:ex] = ex
     g = ExGraph(ExNode[], Dict(), ctx)
-    for (var, val) in get(ctx, :inputs, [])
+    for (var, val) in inputs
         addnode!(g, :input, var, var; val=val)
     end
     for (var, val) in get(ctx, :constants, [])

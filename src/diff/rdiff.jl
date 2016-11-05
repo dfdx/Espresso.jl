@@ -207,8 +207,9 @@ function reverse_pass(g::ExGraph, z::Symbol)
 end
 
 
-function _rdiff(ex::Expr; ctx...)
-    g = ExGraph(ex; ctx...)
+function _rdiff(ex::Expr; ctx=Dict(), inputs...)
+    ctx = to_context(ctx)
+    g = ExGraph(ex; ctx=ctx, inputs...)
     forward_pass(g, ex)
     z = g.tape[end].var
     adj = reverse_pass(g, z)
@@ -228,11 +229,10 @@ variabels. Example:
     # ==> [:(n * x ^ (n - 1))  -- derivative w.r.t. :x
     #      :(log(x) * x ^ n)]  -- derivative w.r.t. :n
 """
-function rdiff(ex::Expr; ctx...)
-    ctx = Dict{Any,Any}(ctx)
-    g, adj = _rdiff(ex; ctx...)
-    vars = Set(keys(get(ctx, :inputs, [])))
-    # println([(var, expr(deriv)) for (var, deriv) in adj if in(var, vars)])
+function rdiff(ex::Expr; ctx=Dict(), inputs...)
+    ctx = to_context(ctx)
+    g, adj = _rdiff(ex; ctx=ctx, inputs...)
+    vars = Set(var for (var, val) in inputs)
     dexs = Dict((var, dex) for (var, dex) in adj if in(var, vars))
     return dexs
 end
@@ -243,18 +243,18 @@ rdiff(f::Function, xs...)
 Differentiate function `f` w.r.t. its argument. See `rdiff(ex::Expr, xs...)`
 for more details.
 """
-function rdiff(f::Function; ctx...)
-    ctx = Dict{Any,Any}(ctx)
-    types = [typeof(x[2]) for x in get(ctx, :inputs, [])]
+function rdiff(f::Function; ctx=Dict(), inputs...)
+    ctx = to_context(ctx)
+    types = [typeof(x[2]) for x in inputs]
     args, ex = funexpr(f, types)
     ex = sanitize(ex)
-    return rdiff(ex; ctx...)
+    return rdiff(ex; ctx=ctx, inputs...)
 end
 
 
 function main()
     ex = to_einstein(:(logistic(W * x + b)), W=rand(4,3), x=rand(3), b=rand(4))
-    g = ExGraph(ex; inputs=Dict(:W=>rand(4,3), :x=>rand(3), :b=>rand(4)))
+    g = ExGraph(ex; W=rand(4,3), x=rand(3), b=rand(4))
     parse!(g, ex)
     forward_pass(g, ex)
     g, adj = _rdiff(ex, a=1, b=1)

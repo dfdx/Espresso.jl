@@ -220,6 +220,18 @@ type_ansestors{T}(t::Type{Matrix{T}}) =
     [t, Matrix, DenseMatrix, AbstractMatrix, AbstractArray, Any]
 
 
+# context
+
+function to_context{K,V}(d::Union{Dict, Vector{Pair{K,V}}})
+    ctx = Dict{Any,Any}()
+    for (k, v) in d
+        ctx[k] = to_context(v)
+    end
+    return ctx
+end
+
+to_context(x) = x
+
 # guards
 
 """create cross-reference dict of cliques"""
