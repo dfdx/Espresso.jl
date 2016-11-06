@@ -140,3 +140,4 @@
 # relu
 
 @diff_rule relu(x::Number) 1 relu(x) # TODO: should reference concrete module?
+# TODO: use qualified names when adding diff rules!

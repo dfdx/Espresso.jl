@@ -195,6 +195,20 @@ function canonical(mod::Module, qname)
     end
 end
 
+function canonical_calls(mod::Module, ex::Expr)
+    if ex.head == :call
+        new_args = [canonical_calls(mod, arg) for arg in ex.args[2:end]]
+        return Expr(:call, canonical(mod, ex.args[1]), new_args...)
+    else
+        new_args = [canonical_calls(mod, arg) for arg in ex.args]
+        return Expr(ex.head, new_args...)
+    end
+end
+
+canonical_calls(mod::Module, x) = x
+
+
+
 """
 Find all types that may be considered ansestors of this type.
 For number types it is the same as Julia type hierarchy.
@@ -266,7 +280,7 @@ function reduce_equalities{T}(pairs::Vector{Tuple{T,T}}, anchors::Set{T})
                 continue
             elseif in(x, anchors) && in(y, anchors)
                 # replace larger anchor with smaller one, keep pair
-                mn, mx = min(x, y), max(x, y)                
+                mn, mx = min(x, y), max(x, y)
                 st[mx] = mn
                 push!(new_pairs, (mn, mx))
             elseif in(x, anchors)
@@ -274,10 +288,10 @@ function reduce_equalities{T}(pairs::Vector{Tuple{T,T}}, anchors::Set{T})
                 st[y] = x
             elseif !in(x, anchors) && !in(y, anchors)
                 # replace larger anchor with smaller one
-                mn, mx = min(x, y), max(x, y)                
+                mn, mx = min(x, y), max(x, y)
                 st[mx] = mn
             end
-        end        
+        end
     end
     return st, [p for p in new_pairs]
 end

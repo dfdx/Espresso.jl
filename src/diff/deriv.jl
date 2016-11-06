@@ -55,13 +55,15 @@ automatically handled by chain rule in the differentiation engine.
 
 """
 macro diff_rule(ex::Expr, idx::Int, dex::Any)
-    if ex.head == :call
-        # TODO: check this particular use of `current_module()`
+    if ex.head == :call        
         op = opname(current_module(), ex.args[1])
         types = [eval(exa.args[2]) for exa in ex.args[2:end]]
         new_args = Symbol[exa.args[1] for exa in ex.args[2:end]]
-        ex_no_types = Expr(ex.head, ex.args[1], new_args...)
-        DIFF_RULES[(op, types, idx)] = DiffRule(ex_no_types, Deriv(dex))
+        canonical_ex = Expr(:call, op, new_args...)
+        # canonical_ex = canonical_calls(current_module(), ex)
+        canonical_dex = canonical_calls(current_module(), dex)
+        DIFF_RULES[(op, types, idx)] = DiffRule(canonical_ex,
+                                                Deriv(canonical_dex))
     else
         error("Can only define derivative on calls")
     end

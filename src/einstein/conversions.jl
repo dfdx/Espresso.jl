@@ -50,15 +50,23 @@ function to_einstein(g::ExGraph, nd::ExNode{:call})
     end
 end
 
-
-
-logistic(x) = 1 ./ (1. + exp(-x))
-
-function main_iuye()
-    ex = :(logistic(W*x + b))
-    xs = collect(Dict(:W => rand(4, 3), :x => rand(3), :b => rand(4)))
-    xs = collect(Dict(:A => rand(4, 3), :B => rand(4, 3), :C => rand(4, 3)))
+function to_einstein(g::ExGraph, nd::ExNode{:(=)})
+    dep = dependencies(nd)[1]
+    varidxs = g[dep].idxs[1]
+    lhs = Expr(:ref, nd.var, varidxs...)
+    rhs = Expr(:ref, dep, varidxs...)
+    return Expr(:(=), lhs, rhs)
 end
+
+
+
+## logistic(x) = 1 ./ (1. + exp(-x))
+
+## function main_iuye()
+##     ex = :(logistic(W*x + b))
+##     xs = collect(Dict(:W => rand(4, 3), :x => rand(3), :b => rand(4)))
+##     xs = collect(Dict(:A => rand(4, 3), :B => rand(4, 3), :C => rand(4, 3)))
+## end
 
 
 # from Einstein to vectorized notation

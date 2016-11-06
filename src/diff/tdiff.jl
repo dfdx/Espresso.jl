@@ -11,7 +11,6 @@ function rev_step!(g::ExGraph, nd::ExNode{:(=)}, adj::Dict{Symbol, TensorDeriv})
     x = dependencies(nd)[1]
     dzdx = copy(adj[y])
     dzdx.wrt.args[1] = dname(x)
-    # TODO: check next line
     wrtidxs = convert(Vector{Symbol}, dzdx.wrt.args[2:end])
     dzdx.wrt.args[2:end] = permute_indices(wrtidxs, nd.idxs[2], nd.idxs[1])
     adj[x] = dzdx
@@ -51,18 +50,23 @@ function expand_adjoints(g::ExGraph, adj::Dict{Symbol, TensorDeriv})
 end
 
 
-function tdiff(ex::Expr; xs...)
-    tex = to_einstein(ex; xs...)
-    g, adj = _rdiff(tex; xs...)
-    names = [name for (name, val) in xs]
-    derivs = [adj[name] for name in names]
-    return derivs
+function tdiff(ex::Expr; ctx=Dict(), inputs...)
+    ctx = to_context(ctx)
+    tex = to_einstein(ex; inputs...)
+    g, adj = _rdiff(tex; ctx=ctx, inputs...)
+    vars = Set([var for (var, val) in inputs])
+    dexs = Dict([(var, dex) for (var, dex) in adj if in(var, vars)])
+    return dexs
 end
 
 
+# TODO: refactor rdiff to return single expression with
+# expression and derivatives like in 
+
 
 function main2()
-    ex = :(relu(W * x + b))
-    to_einstein(ex, W=rand(3,4), x=rand(4), b=rand(3))
-    tdiff(ex, W=rand(3,4), x=rand(4), b=rand(3))
+    ex = :(relu(W * x))
+    inputs = [:W=>rand(3,4), :x=>rand(4)] #, :b=>rand(3)]
+    ctx = Dict()
+    tdiff(ex; inputs...)
 end

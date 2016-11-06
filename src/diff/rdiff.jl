@@ -250,12 +250,3 @@ function rdiff(f::Function; ctx=Dict(), inputs...)
     ex = sanitize(ex)
     return rdiff(ex; ctx=ctx, inputs...)
 end
-
-
-function main()
-    ex = to_einstein(:(logistic(W * x + b)), W=rand(4,3), x=rand(3), b=rand(4))
-    g = ExGraph(ex; W=rand(4,3), x=rand(3), b=rand(4))
-    parse!(g, ex)
-    forward_pass(g, ex)
-    g, adj = _rdiff(ex, a=1, b=1)
-end
