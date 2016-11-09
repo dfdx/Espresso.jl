@@ -205,3 +205,33 @@ function with_lhs(ex::Expr; outvar=:_R)
     lhs = infer_lhs(ex; outvar=outvar)
     return Expr(:(=), lhs, ex)
 end
+
+
+# einsum
+
+"""
+Translates guarded expression, e.g. :(Y[i,j] = X[i] * (i == j)), into the unguarded one,
+e.g. :(Y[i, i] = X[i])
+"""
+function unguarded(ex::Expr)    
+    st = Dict([(grd.args[3], grd.args[2]) for grd in get_guards(ex)])
+    new_ex = without_guards(ex)
+    idxs = @view new_ex.args[1].args[2:end]
+    for i=1:length(idxs)        
+        if haskey(st, idxs[i])
+            idxs[i] = st[idxs[i]]
+        end
+    end
+    return new_ex
+end
+
+function to_einsum(ex::Expr)
+    if ex.head == :block
+        return to_block(map(to_einsum, ex.args))
+    else
+        @assert ex.head == :(=)
+        uex = unguarded(ex)
+        return :(@einsum $(uex.args[1]) := $(uex.args[2]))
+    end        
+end
+

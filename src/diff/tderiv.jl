@@ -49,6 +49,12 @@ function to_expr(td::TensorDeriv)
     return Expr(:(=), lhs, rhs)
 end
 
+function single_var(td::TensorDeriv)
+    new_name = Symbol("$(td.dvar.args[1])_$(td.wrt.args[1])")
+    new_idxs = vcat(td.dvar.args[2:end], td.wrt.args[2:end])
+    return Expr(:ref, new_name, new_idxs...)
+end
+
 
 
 """

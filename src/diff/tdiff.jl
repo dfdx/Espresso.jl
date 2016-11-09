@@ -45,8 +45,23 @@ end
 
 # other utils
 
+function to_expanded_expr(g::ExGraph, td::TensorDeriv)
+    ex = to_expr(td).args[2]
+    depv = dep_vars(g, ex)
+    dep_exs = Expr[]
+    for nd in g.tape
+        if !isa(nd, ExNode{:input}) && nd.var in depv
+            push!(dep_exs, to_iexpr(nd))
+        end
+    end
+    result_var = single_var(td)
+    result_ex = :($result_var = $ex)
+    return to_block(dep_exs..., result_ex)
+end
+
+
 function expand_adjoints(g::ExGraph, adj::Dict{Symbol, TensorDeriv})
-    return Dict([(var, to_expr(td)) for (var, td) in adj])
+    return Dict([(var, to_expanded_expr(g, td)) for (var, td) in adj])
 end
 
 
@@ -60,13 +75,15 @@ function tdiff(ex::Expr; ctx=Dict(), inputs...)
 end
 
 
-# TODO: refactor rdiff to return single expression with
-# expression and derivatives like in 
-
-
 function main2()
     ex = :(relu(W * x))
     inputs = [:W=>rand(3,4), :x=>rand(4)] #, :b=>rand(3)]
-    ctx = Dict()
-    tdiff(ex; inputs...)
+    ds = tdiff(ex; inputs...)
+
+    g, adj = _rdiff(to_einstein(ex; inputs...); inputs...)
+end
+
+
+function einsum_main()
+    @einsum dtmp2_dW[i,m,n] := Main.relu(tmp1[i]) * x[n]  * (i == m)
 end
