@@ -35,10 +35,12 @@ dependencies(nd::ExNode{:call}) = nd.ex.args[2:end]
 
 to_expr(nd::ExNode) = :($(nd.var) = $(nd.ex))
 function to_einsum_expr(nd::ExNode)
-    varex = Expr(:ref, nd.var, nd.idxs[1]...)
+    varidxs = nd.idxs[1]
+    varex = length(varidxs) > 0 ? Expr(:ref, nd.var, varidxs...) : nd.var     
     s2i = Dict([(dep, idxs)
                 for (dep, idxs) in zip(dependencies(nd), nd.idxs[2:end])])
-    depex = add_indices(nd.ex, s2i)
+    ex_without_I = without(nd.ex, :I)
+    depex = add_indices(ex_without_I, s2i)
     assign_ex = Expr(:(:=), varex, depex)
     return Expr(:macrocall, Symbol("@einsum"), assign_ex)
 end
@@ -79,6 +81,7 @@ function ExGraph(ex::Expr; ctx=Dict(), inputs...)
         addnode!(g, :constant, var, var; val=val)
     end
     parse!(g, ex)
+    collapse_assignments!(g)
     return g
 end
 
@@ -223,8 +226,7 @@ function dep_vars!(g::ExGraph, var::Symbol, result::Set{Symbol})
     end
 end
 
-"""
-Recursively collect all variables that this one depends on"""
+"""Recursively collect all variables that this one depends on"""
 function dep_vars(g::ExGraph, var::Symbol)
     result = Set{Symbol}()
     dep_vars!(g, var, result)
@@ -249,6 +251,7 @@ function dep_vars(g::ExGraph, ex::Expr)
     return result
 end
 
+dep_vars(g::ExGraph, x) = Set{Symbol}()
 
 ## parse!
 
@@ -274,7 +277,6 @@ end
 
 split_indexed(name::Symbol) = (name, Symbol[])
 split_indexed(ex::Expr) = (ex.args[1], convert(Vector{Symbol}, ex.args[2:end]))
-
 
 function parse!(g::ExGraph, ex::ExH{:(=)})
     lhs, rhs = ex.args
@@ -322,10 +324,8 @@ evaluate!(g::ExGraph, node::ExNode{:constant}) = node.val
 evaluate!(g::ExGraph, node::ExNode{:input}) = node.val
 
 
-
-
 function mk_eval_expr(g::ExGraph, nd::ExNode)
-    dep_nodes = [g.idx[dep] for dep in dependencies(nd)]
+    dep_nodes = [g.idx[dep] for dep in dependencies(nd) if haskey(g, dep)]
     deps_vals = [(nd.var, nd.val) for nd in dep_nodes]
     block = Expr(:block)
     for (dep, val) in deps_vals
@@ -348,10 +348,12 @@ end
 
 function evaluate!(g::ExGraph, nd::ExNode{:call})
     if (nd.val != nothing) return nd.val end
-    # TODO: dep may be a global constant (like π)
-    dep_nodes = [g.idx[dep] for dep in dependencies(nd)]
-    for depnd in dep_nodes
-        evaluate!(g, depnd)
+    deps = dependencies(nd)
+    for dep in deps
+        # if dep is not in graph, consider it a global constant (like π)
+        if haskey(g.idx, dep)            
+            evaluate!(g, g[dep])
+        end
     end
     evex = mk_eval_expr(g, nd)
     nd.val = eval(evex)
@@ -359,3 +361,26 @@ function evaluate!(g::ExGraph, nd::ExNode{:call})
 end
 
 evaluate!(g::ExGraph, name::Symbol) = evaluate!(g, g.idx[name])
+
+
+# graph simlification
+
+function collapse_assignments!(g::ExGraph)
+    st = Dict{Symbol, Symbol}()
+    for nd in g.tape
+        nd.ex = subs(nd.ex, st)
+        if isa(nd, ExNode{:(=)})
+            st[nd.var] = dependencies(nd)[1]
+        end
+    end
+    new_tape = Vector{ExNode}()
+    new_idx = Dict{Symbol, ExNode}()
+    for nd in g.tape
+        if !haskey(st, nd.var)
+            push!(new_tape, nd)
+            new_idx[nd.var] = nd
+        end
+    end
+    g.tape = new_tape
+    g.idx = new_idx
+end

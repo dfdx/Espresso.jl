@@ -2,19 +2,23 @@
 # from vectorized to Einstein notation
 
 const TO_EINSTEIN_RULES =
-    OrderedDict((:sum, [0]) => (:(sum(X)), :(X[i] * I[i])),
-                (:*, [0, 0]) => (:(X * Y), :(X[] * Y[])),
-                (:*, [1, 1]) => (:(X * Y), :(X[i] * Y[i])),
-                (:*, [2, 1]) => (:(X * Y), :(X[i,k] * Y[k])),
-                (:*, [1, 2]) => (:(X * Y), :(X[k] * Y[k,j])),
-                (:*, [2, 2]) => (:(X * Y), :(X[i,j] * Y[k,j])))
+    OrderedDict((:sum, [0]) => [(:(sum(X)), :(X[] * I[]))],
+                (:sum, [1]) => [(:(sum(X)), :(X[i] * I[i]))],
+                (:sum, [2]) => [(:(sum(X)), :(X[i,j] * I[i,j]))],
+                (:sum, [2, 0]) => [(:(sum(X, 1)), :(I[i] * X[i,j])),
+                                   (:(sum(X, 2)), :(X[i,j] * I[j]))],
+                (:*, [0, 0]) => [(:(X * Y), :(X[] * Y[]))],
+                (:*, [1, 1]) => [(:(X * Y), :(X[i] * Y[i]))],
+                (:*, [2, 1]) => [(:(X * Y), :(X[i,k] * Y[k]))],
+                (:*, [1, 2]) => [(:(X * Y), :(X[k] * Y[k,j]))],
+                (:*, [2, 2]) => [(:(X * Y), :(X[i,j] * Y[k,j]))])
 
 function to_einstein(ex::Expr; xs...)
     g = ExGraph(ex; xs...)
     forward_pass(g, ex)
     res = :(begin end)
     for nd in g.tape
-        if !isa(nd, ExNode{:input})
+        if !isa(nd, ExNode{:input}) && !isa(nd, ExNode{:constant})
             push!(res.args, to_einstein(g, nd))
         end
     end
@@ -22,21 +26,34 @@ function to_einstein(ex::Expr; xs...)
 end
 
 
-function to_einstein(g::ExGraph, nd::ExNode{:call})
-    ex = expr(nd)
-    op = ex.args[1]
-    dep_dims = [ndims(g[dep].val) for dep in dependencies(nd)]
-    if haskey(TO_EINSTEIN_RULES, (op, dep_dims))
-        pat, subex = TO_EINSTEIN_RULES[(op, dep_dims)]
-        matched = tryrewrite(ex, pat, subex; phs=TDIFF_PHS)
-        if !isnull(matched)
-            new_ex = get(matched)
-            varidxs = forall_indices(new_ex)
-            return Expr(:(=), Expr(:ref, nd.var, varidxs...), new_ex)
-        else
-            error("Don't know how to convert expression $(to_expr(nd)) to " *
-                  "Einstein notation")
+function expand_const_1(g::ExGraph, nd::ExNode{:call})
+    st = Dict()
+    for dep in dependencies(nd)
+        if haskey(g, dep) && isa(g[dep], ExNode{:constant})
+            st[dep] = g[dep].val
         end
+    end
+    return subs(expr(nd), st)
+end
+
+
+function to_einstein(g::ExGraph, nd::ExNode{:call})
+    ex = expand_const_1(g, nd)
+    op = ex.args[1]
+    dep_dims = [ndims(g[dep].val) for dep in dependencies(nd) if haskey(g, dep)]
+    if haskey(TO_EINSTEIN_RULES, (op, dep_dims))
+        rules = TO_EINSTEIN_RULES[(op, dep_dims)]
+        for (pat, subex) in rules
+            matched = tryrewrite(ex, pat, subex; phs=TDIFF_PHS)
+            if !isnull(matched)
+                new_ex = get(matched)
+                varidxs = forall_indices(new_ex)
+                return Expr(:(=), Expr(:ref, nd.var, varidxs...), new_ex)
+            end
+        end
+        # if nothing matched, throw an error
+        error("Don't know how to convert expression $(to_expr(nd)) to " *
+              "Einstein notation")
     elseif all(dep_dims .== dep_dims[1])
         # treat as elementwise
         idxs = IDX_NAMES[1:length(dep_dims[1])]
@@ -59,29 +76,32 @@ function to_einstein(g::ExGraph, nd::ExNode{:(=)})
 end
 
 
-
-## logistic(x) = 1 ./ (1. + exp(-x))
-
-## function main_iuye()
-##     ex = :(logistic(W*x + b))
-##     xs = collect(Dict(:W => rand(4, 3), :x => rand(3), :b => rand(4)))
-##     xs = collect(Dict(:A => rand(4, 3), :B => rand(4, 3), :C => rand(4, 3)))
-## end
-
-
 # from Einstein to vectorized notation
 
-FROM_EINSTEIN_RULES =
-    OrderedDict(
-                :(X[i] * I[i]) => :(sum(X)),
+const FROM_EINSTEIN_RULES =
+    OrderedDict(:(X[i] * I[i]) => :(sum(X)),
                 :(I[i] * X[i]) => :(sum(X)),
+                :(X[i,j] * I[i,j]) => :(sum(X)),
+                :(I[i,j] * X[i,j]) => :(sum(X)),
+                :(I[i] * X[i,j]) => :(sum(X,1)'),
+                :(I[j] * X[i,j]) => :(sum(X,2)),
+                :(X[i,j] * I[j]) => :(sum(X,2)),
+                :(X[i,j] * I[i]) => :(sum(X,1)'),
+                # inner and outer product
+                :(X[i] * Y[i]) => :(X'Y),   # or sum(X[i] * Y[i])?
+                :(X[i] * Y[j]) => :(X * Y'),
+                # matrix-by-vector
+                :(X[i] * Y[i,j]) => :(Y' * X),
+                :(X[j] * Y[i,j]) => :(Y * X),
+                :(X[i,j] * Y[j]) => :(X * Y),
+                :(X[i,j] * Y[i]) => :(X' * Y),
+                # matrix-by-matrix
                 :(X[i,k] * Y[k,j]) => :(X * Y),
-                :(X[i] * Y[i]) => :(X'Y),
-                :(X[i] * Y[j]) => :(X * Y'))
+                :(Y[k,j] * X[i,k]) => :(X * Y))
 
-function from_einstein(ex::Expr)
-    g = ExGraph()
-    parse!(g, ex)
+
+function from_einstein(ex::Expr; inputs...)
+    g = ExGraph(ex; inputs...)    
     res = :(begin end)
     for nd in g.tape
         if !isa(nd, ExNode{:input})
@@ -110,9 +130,3 @@ function from_einstein(nd::ExNode{:call})
     end
 end
 
-
-
-function main_poid()
-    ex = :(X[i,k] * Y[k,j] + Z[i,j])
-    xs = [(:X, rand(3,2)), (:Y, rand(2,3)), (:Z, rand(3,3))]
-end

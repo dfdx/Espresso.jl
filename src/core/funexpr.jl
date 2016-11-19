@@ -24,8 +24,9 @@ function sanitize{H}(ex::ExH{H})
 end
 
 function sanitize(ref::GlobalRef)
-    mod = Main # module doesn't actually matter since GlobalRef contains it anyway
-    return canonical(mod, ref)
+    # mod = Main # module doesn't actually matter since GlobalRef contains it anyway
+    # return canonical(mod, ref)
+    return Expr(:., ref.mod, QuoteNode(ref.name))
 end
 
 
@@ -63,7 +64,7 @@ else
     """Extract arguments and (sanitized) expression of a function body"""
     function funexpr(f::Function, types::Vector{DataType})
         ms = methods(f, types).ms
-        length(ms) != 1 && error("Found $(length(fs)) methods for function $f " *
+        length(ms) != 1 && error("Found $(length(ms)) methods for function $f " *
                                  "with types $types, expected exactly 1 method")
         lambda = ms[1].lambda_template
         slot_ex_arr = Base.uncompressed_ast(lambda)

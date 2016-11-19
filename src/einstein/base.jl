@@ -23,6 +23,13 @@ end
 
 with_indices(x::Symbol, num_idxs::Int) = with_indices(x, 1, num_idxs)
 
+# special variable
+
+Base.getindex{T}(::UniformScaling{T}, ::Int64) = one(T)
+Base.getindex{T}(::UniformScaling{T}, I...) = ones(T, length(I))
+# Base.size{T}(::UniformScaling{T}) = ()
+
+
 ## """Collect index names used in expression"""
 ## function collect_indexes!(idxs::Vector{Symbol}, ex)
 ##     if isa(ex, Expr)  # otherwise ignore

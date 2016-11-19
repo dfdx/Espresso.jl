@@ -203,7 +203,7 @@ function reverse_pass(g::ExGraph, z::Symbol)
     for nd in reverse(g.tape)
         rev_step!(g, nd, adj)
     end
-    return expand_adjoints(g, adj)
+    return adj
 end
 
 
@@ -213,11 +213,12 @@ function _rdiff(ex::Expr; ctx=Dict(), inputs...)
     forward_pass(g, ex)
     z = g.tape[end].var
     adj = reverse_pass(g, z)
-    return g, adj
+    return g, expand_adjoints(g, adj)
 end
 
+
 """
-rdiff(ex::Expr; xs...)
+rdiff(ex::Expr; ctx=Dict(), xs...)
 
 Differentiate expression `ex` w.r.t. variables `xs`. `xs` should be a list
 of key-value pairs with keys representing variables in expression and values
@@ -226,16 +227,40 @@ of symbolic expressions representing derivatives of ex w.r.t. each of passed
 variabels. Example:
 
     rdiff(:(x^n), x=1, n=1)
-    # ==> [:(n * x ^ (n - 1))  -- derivative w.r.t. :x
-    #      :(log(x) * x ^ n)]  -- derivative w.r.t. :n
+    # ==> Dict(:x => :(n * x ^ (n - 1)),  -- derivative w.r.t. :x
+    #          :n => :(log(x) * x ^ n))   -- derivative w.r.t. :n
+
+Options (passed via `ctx`):
+
+  * :method - method to differentiate with (:vec or :ein)
+  * :outfmt - output format (:vec or :ein)
 """
 function rdiff(ex::Expr; ctx=Dict(), inputs...)
     ctx = to_context(ctx)
-    g, adj = _rdiff(ex; ctx=ctx, inputs...)
-    vars = Set(var for (var, val) in inputs)
-    dexs = Dict((var, dex) for (var, dex) in adj if in(var, vars))
-    return dexs
+    meth = @get(ctx, :method, any(x -> !isa(x[2], Number), inputs) ? :ein : :vec)
+    ex_ = meth == :ein ? to_einstein(ex; inputs...) : ex
+    g, adj = _rdiff(ex_; ctx=ctx, inputs...)
+    vars = Set([var for (var, val) in inputs])
+    dexs = Dict([(var, dex) for (var, dex) in adj if in(var, vars)])
+    outfmt = @get(ctx, :outfmt, :vec)
+    outdexs = (outfmt == :vec && meth == :ein ?
+               Dict([(var, from_einstein(dex; inputs...))
+                     for (var, dex) in dexs]) :
+               dexs)
+    return outdexs
 end
+
+
+function example_val{T}(::Type{T})
+    if T <: Number
+        return one(T)
+    elseif T <: Array
+        return ones(eltype(T), [1 for i=1:ndims(T)]...)
+    else
+        error("Don't know how to create example value for type $T")
+    end
+end
+
 
 """
 rdiff(f::Function, xs...)
@@ -243,10 +268,17 @@ rdiff(f::Function, xs...)
 Differentiate function `f` w.r.t. its argument. See `rdiff(ex::Expr, xs...)`
 for more details.
 """
-function rdiff(f::Function; ctx=Dict(), inputs...)
+function rdiff(f::Function, types::Vector{DataType}; ctx=Dict())
     ctx = to_context(ctx)
-    types = [typeof(x[2]) for x in inputs]
     args, ex = funexpr(f, types)
+    vals = map(example_val, types)
+    inputs = collect(zip(args, vals))
     ex = sanitize(ex)
     return rdiff(ex; ctx=ctx, inputs...)
+end
+
+
+function fdiff(f::Function, types::Vector{DataType}; ctx=Dict())
+
+
 end

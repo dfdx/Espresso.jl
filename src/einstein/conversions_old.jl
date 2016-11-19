@@ -41,8 +41,6 @@ function to_einstein(exc::ExCall{:*}, AA::AbstractArray, BA::AbstractArray)
           "is undefined")
 end
 
-Base.getindex{T}(::UniformScaling{T}, ::Int64) = one(T)
-Base.getindex{T}(::UniformScaling{T}, I...) = ones(T, length(I))
 
 function to_einstein{T}(ex::ExCall{:sum}, ::AbstractArray{T,1})
     A = ex.args[2]

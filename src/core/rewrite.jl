@@ -68,7 +68,7 @@ matchex(pat, ex; phs=Set([:x, :n]))
 ```
 
 """
-function matchex(pat, ex; phs = DEFAULT_PHS[1])
+function matchex(pat, ex; phs=DEFAULT_PHS[1])
     m = Dict{Symbol,Any}()
     res = matchex!(m, pat, ex; phs=phs)
     if res
@@ -78,6 +78,12 @@ function matchex(pat, ex; phs = DEFAULT_PHS[1])
     end
 end
 
+"""
+Check if expression matches pattern. See `matchex()` for details.
+"""
+function matchingex(pat, ex; phs=DEFAULT_PHS[1])
+    return !isnull(matchex(pat, ex; phs=phs))    
+end
 
 ## substitution
 

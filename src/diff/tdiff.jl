@@ -75,15 +75,21 @@ function tdiff(ex::Expr; ctx=Dict(), inputs...)
 end
 
 
+#--------------------------------------------------------------------
+
+logistic(x) = 1 ./ (1 + exp(-x))
+
 function main2()
-    ex = :(relu(W * x))
-    inputs = [:W=>rand(3,4), :x=>rand(4)] #, :b=>rand(3)]
+    ex = :(sum(relu(W * x + b)))
+    inputs = [:W=>rand(3,4), :x=>rand(4), :b=>rand(3)]
     ds = tdiff(ex; inputs...)
+    from_einstein(ds[:W])
 
-    g, adj = _rdiff(to_einstein(ex; inputs...); inputs...)
+    ex = :(sum(logistic(W * x)))
+    ds = rdiff(ex; inputs...)
+    
+    vex = :(sum(W))
+    tex = to_einstein(vex; inputs...)
+    g, adj = _rdiff(tex; inputs...)
 end
 
-
-function einsum_main()
-    @einsum dtmp2_dW[i,m,n] := Main.relu(tmp1[i]) * x[n]  * (i == m)
-end

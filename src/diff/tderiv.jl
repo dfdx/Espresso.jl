@@ -89,7 +89,6 @@ function index_replacements(existing::Set{Symbol}, maybedups::Vector{Symbol})
 end
 
 
-
 function reindex_with_guards(td::TensorDeriv)
     DI = union(Set{Symbol}(td.dvar.args[2:end]), Set{Symbol}(td.wrt.args[2:end]))
     pairs = Tuple{Symbol,Symbol}[(grd.args[2], grd.args[3]) for grd in td.guards]
@@ -97,6 +96,49 @@ function reindex_with_guards(td::TensorDeriv)
     new_guards = [:($i1 == $i2) for (i1, i2) in new_pairs]
     new_ex = subs(td.ex, st)
     return copy(td; ex=new_ex, guards=new_guards)
+end
+
+
+# make recursive?
+## function _simplify_pseudoone(ex::Expr, idxs::Vector{Symbol})
+##     mtn = matchex(:(I[$(idxs...)] * _X), ex)
+##     if !isnull(mtn)
+##         mt = get(mtn)
+##         if sum_indices(mt[:_X]) == [mt[idx] for idx in idxs]
+##             ex = mt[:_X]
+##         end
+##     end
+##     mtn = matchex(:(_X * I[$(idxs...)]), ex)
+##     if !isnull(mtn)
+##         mt = get(mtn)
+##         if sum_indices(mt[:_X]) == [mt[idx] for idx in idxs]
+##             ex = mt[:_X]
+##         end
+##     end
+##     return ex
+## end
+
+## function simplify_pseudoone(ex::Expr)    
+##     ex = _simplify_pseudoone(ex, [:_i])
+##     ex = _simplify_pseudoone(ex, [:_i, :_j])
+##     ex = _simplify_pseudoone(ex, [:_i, :_j, :_k])
+##     ex = _simplify_pseudoone(ex, [:_i, :_j, :_k, :m])
+##     return ex
+## end
+
+function remove_extra_sum(ex::Expr)
+    new_ex = without(ex, :(I[_i]))
+    if sum_indices(new_ex) == sum_indices(ex)
+        ex = new_ex
+    end
+    new_ex = without(ex, :(I[_i, _j]))
+    if sum_indices(new_ex) == sum_indices(ex)
+        ex = new_ex
+    end
+    new_ex = without(ex, :(I[_i, _j, _k]))
+    if sum_indices(new_ex) == sum_indices(ex)
+        ex = new_ex
+    end
 end
 
 
@@ -110,7 +152,8 @@ function *(td1::TensorDeriv, td2::TensorDeriv)
     wrt2_reindexed = subs(td2.wrt, st)
     ex2_reindexed = subs(expr(td2), st)
     guards2_reindexed = Expr[subs(g, st) for g in td2.guards]
-    new_ex = simplify(expr(td1) * ex2_reindexed)
+    new_ex_ = simplify(expr(td1) * ex2_reindexed)
+    new_ex = remove_extra_sum(new_ex_)
     new_guards = vcat(td1.guards, guards2_reindexed)
     new_td = TensorDeriv(td1.dvar, wrt2_reindexed, new_ex, new_guards)
     return reindex_with_guards(new_td)
