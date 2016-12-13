@@ -11,6 +11,11 @@ end
 isvectorized(ex) = exprlike(ex) && !isindexed(ex)
 
 
+function maybe_indexed(var::Symbol, idxs::Vector)
+    return length(idxs) > 0 ? Expr(:ref, var, idxs...) : var
+end
+
+
 function add_indices(ex, s2i::Dict)
     st = Dict([(k, Expr(:ref, k, v...)) for (k, v) in s2i])
     return subs(ex, st)

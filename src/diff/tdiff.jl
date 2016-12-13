@@ -74,22 +74,3 @@ function tdiff(ex::Expr; ctx=Dict(), inputs...)
     return dexs
 end
 
-
-#--------------------------------------------------------------------
-
-logistic(x) = 1 ./ (1 + exp(-x))
-
-function main2()
-    ex = :(sum(relu(W * x + b)))
-    inputs = [:W=>rand(3,4), :x=>rand(4), :b=>rand(3)]
-    ds = tdiff(ex; inputs...)
-    from_einstein(ds[:W])
-
-    ex = :(sum(logistic(W * x)))
-    ds = rdiff(ex; inputs...)
-    
-    vex = :(sum(W))
-    tex = to_einstein(vex; inputs...)
-    g, adj = _rdiff(tex; inputs...)
-end
-

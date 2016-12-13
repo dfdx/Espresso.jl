@@ -46,7 +46,7 @@ function to_einsum_expr(nd::ExNode)
 end
 
 function to_iexpr(nd::ExNode)
-    varex = Expr(:ref, nd.var, nd.idxs[1]...)
+    varex = maybe_indexed(nd.var, nd.idxs[1])
     s2i = Dict([(dep, idxs)
                 for (dep, idxs) in zip(dependencies(nd), nd.idxs[2:end])])
     depex = add_indices(nd.ex, s2i)
@@ -369,7 +369,8 @@ function collapse_assignments!(g::ExGraph)
     st = Dict{Symbol, Symbol}()
     for nd in g.tape
         nd.ex = subs(nd.ex, st)
-        if isa(nd, ExNode{:(=)})
+        if isa(nd, ExNode{:(=)}) &&
+            (length(nd.idxs) == 0 || nd.idxs[1] == nd.idxs[2])
             st[nd.var] = dependencies(nd)[1]
         end
     end

@@ -312,6 +312,7 @@ function tderivative(fullex::Expr, idx::Int)
         # TODO: handle scalars
         # infer and save elementwise tensor diff rule
         error_msg = "Can't find tensor or elementwise rule for expression $fullex"
+        # TODO: instead check all vars (including lhs) and extract their indices
         idxs = get_indices(fullex)
         all([I == idxs[1] for I in idxs]) || error(error_msg)
         op = opname(current_module(), fullex.args[2].args[1])
