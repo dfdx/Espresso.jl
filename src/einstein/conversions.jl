@@ -15,10 +15,10 @@ const TO_EINSTEIN_RULES =
 
 function to_einstein(ex::Expr; xs...)
     g = ExGraph(ex; xs...)
-    forward_pass(g, ex)
+    forward_pass(g)
     res = :(begin end)
     for nd in g.tape
-        if !isa(nd, ExNode{:input}) && !isa(nd, ExNode{:constant})
+        if !isa(nd, ExNode{:input})
             push!(res.args, to_einstein(g, nd))
         end
     end
@@ -34,6 +34,11 @@ function expand_const_1(g::ExGraph, nd::ExNode{:call})
         end
     end
     return subs(expr(nd), st)
+end
+
+
+function to_einstein(g::ExGraph, nd::ExNode{:constant})
+    return to_expr(nd)
 end
 
 
@@ -105,11 +110,16 @@ const FROM_EINSTEIN_RULES =
                 :(Z[i,j] = Y[k,j] * X[i,k]) => :(Z = X * Y),
                 # repmat
                 :(Z[i,j] = X[j]) => :(Z = repmat(X', size(Z, 1))),
-                :(Z[i,j] = X[i]) => :(Z = repmat(X, 1, size(Z, 2))))
+                :(Z[i,j] = X[i]) => :(Z = repmat(X, 1, size(Z, 2))),
+                # assignment
+                :(Z = X) => :(Z = X),
+                :(Z[i] = X[i]) => :(Z = X),
+                :(Z[i,j] = X[i,j]) => :(Z = X),
+                :(Z[i,j,k] = X[i,j,k]) => :(Z = X))
 
 
-function from_einstein(ex::Expr; inputs...)
-    g = ExGraph(ex; inputs...)
+function from_einstein(ex::Expr)
+    g = ExGraph(ex)
     res = :(begin end)
     for nd in g.tape
         if !isa(nd, ExNode{:input})

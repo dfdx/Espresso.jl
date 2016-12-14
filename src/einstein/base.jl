@@ -11,13 +11,44 @@ end
 isvectorized(ex) = exprlike(ex) && !isindexed(ex)
 
 
+function indexed(ex::Expr, idxs::Vector)
+    @assert (ex.head == :ref) "Argument is not a symbol and not indexed already"
+    return ex
+end
+
+function indexed(var::Symbol, idxs::Vector)
+    return Expr(:ref, var, idxs...)
+end
+
+
 function maybe_indexed(var::Symbol, idxs::Vector)
     return length(idxs) > 0 ? Expr(:ref, var, idxs...) : var
 end
 
 
+parse_indexed(var) = (var, Symbol[])
+
+function parse_indexed(ex::Expr)
+    @assert ex.head == :ref
+    return convert(Symbol, ex.args[1]), convert(Vector{Symbol}, ex.args[2:end])    
+end
+
+
+function call_indices(ex::Expr)
+    if ex.head == :call     # e.g. :(x[i] + 1)
+        return [parse_indexed(arg)[2] for arg in ex.args[2:end]]
+    elseif ex.head == :(=)  # e.g. :(y[i] = x[i] + 1)
+        lhs_idxs = parse_indexed(ex.args[1])[2]
+        rhs_idxs = call_indices(ex.args[2])
+        return vcat([lhs_idxs], rhs_idxs)
+    else
+        error("Don't know how to extract indices from expression $ex")
+    end
+end
+
+
 function add_indices(ex, s2i::Dict)
-    st = Dict([(k, Expr(:ref, k, v...)) for (k, v) in s2i])
+    st = Dict([(k, maybe_indexed(k, v)) for (k, v) in s2i])
     return subs(ex, st)
 end
 

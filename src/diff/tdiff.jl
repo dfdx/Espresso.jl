@@ -18,7 +18,8 @@ end
 
 function rev_step!(g::ExGraph, nd::ExNode{:constant},
                    adj::Dict{Symbol, TensorDeriv})
-    adj[nd.var] = TensorDeriv(0.)
+    # adj[nd.var] = TensorDeriv(0.)
+    # do nothing
 end
 
 function rev_step!(g::ExGraph, nd::ExNode{:input},

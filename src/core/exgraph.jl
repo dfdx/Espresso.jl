@@ -45,6 +45,8 @@ function to_einsum_expr(nd::ExNode)
     return Expr(:macrocall, Symbol("@einsum"), assign_ex)
 end
 
+to_iexpr(nd::ExNode{:constant}) = to_expr(nd)
+
 function to_iexpr(nd::ExNode)
     varex = maybe_indexed(nd.var, nd.idxs[1])
     s2i = Dict([(dep, idxs)
@@ -98,7 +100,7 @@ Base.getindex(g::ExGraph, var::Symbol) = g.idx[var]
 Base.getindex(g::ExGraph, i::Integer) = g.tape[i]
 Base.endof(g::ExGraph) = endof(g.tape)
 
-## """Extract symbols that may make conflicts with temporary names in ExGraph"""
+"""Extract symbols that may make conflicts with temporary names in ExGraph"""
 function possible_temp_names(ex::Expr)
     names = unique(flatten(map(possible_temp_names, ex.args)))
     return convert(Vector{Symbol}, names)
@@ -365,21 +367,50 @@ evaluate!(g::ExGraph, name::Symbol) = evaluate!(g, g.idx[name])
 
 # graph simlification
 
+istemp(var::Symbol) = startswith(string(var), "tmp")
+
+
+"""
+Collapse unnecessary assignment nodes, rewriting all affected nodes. Example:
+
+    tmp1 = x * y
+    z = tmp1
+
+will be rewritten to
+
+    z = x * y
+"""
 function collapse_assignments!(g::ExGraph)
     st = Dict{Symbol, Symbol}()
+    delvars = Set{Symbol}()
     for nd in g.tape
-        nd.ex = subs(nd.ex, st)
+        nd.ex = subs(nd.ex, st)        
         if isa(nd, ExNode{:(=)}) &&
             (length(nd.idxs) == 0 || nd.idxs[1] == nd.idxs[2])
-            st[nd.var] = dependencies(nd)[1]
+            dep = dependencies(nd)[1]
+            # st[dep] = nd.var
+            if istemp(dep) && !istemp(nd.var)
+                st[dep] = nd.var
+            else
+                st[nd.var] = dep                
+            end
+            push!(delvars, nd.var)
         end
     end
     new_tape = Vector{ExNode}()
     new_idx = Dict{Symbol, ExNode}()
     for nd in g.tape
-        if !haskey(st, nd.var)
-            push!(new_tape, nd)
-            new_idx[nd.var] = nd
+        if !in(nd.var, delvars)
+            if haskey(st, nd.var)
+                new_nd = deepcopy(nd)
+                new_nd.var = st[nd.var]
+                new_nd.ex = subs(nd.ex, st)
+                push!(new_tape, new_nd)
+                new_idx[new_nd.var] = new_nd
+            else
+                push!(new_tape, nd)
+                new_idx[nd.var] = nd
+            end
         end
     end
     g.tape = new_tape
