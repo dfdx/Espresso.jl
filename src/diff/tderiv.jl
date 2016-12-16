@@ -1,7 +1,7 @@
 
 # tensor_deriv.jl - tensor derivative utils (using Einstein notation)
 
-const TDIFF_PHS = [:A, :B, :C, :V, :W, :X, :Y, :Z,
+const TDIFF_PHS = [:A, :B, :C, :X, :Y, :V, :W, :Z,
                    :i, :j, :k, :l, :m, :n, :p, :q, :r, :s, :t]
 
 const TDIFF_VAR_NAMES = [:V, :W, :X, :Y]
@@ -73,6 +73,16 @@ function next_index(existing::Set{Symbol}, pos::Int)
 end
 
 
+function next_indices(existing::Set{Symbol}, pos::Int, count::Int)
+    new_indices = Array(Symbol,0)
+    for i=1:count
+        new_idx, pos = next_index(existing, pos)
+        push!(new_indices, new_idx)
+    end
+    return new_indices
+end
+
+
 """
 Given a set of existing indicies and possibly duplicates, find for each duplicate
 a replacement - index from IDX_NAMES that is not used yet.
@@ -118,7 +128,7 @@ end
 ##     return ex
 ## end
 
-## function simplify_pseudoone(ex::Expr)    
+## function simplify_pseudoone(ex::Expr)
 ##     ex = _simplify_pseudoone(ex, [:_i])
 ##     ex = _simplify_pseudoone(ex, [:_i, :_j])
 ##     ex = _simplify_pseudoone(ex, [:_i, :_j, :_k])
@@ -140,6 +150,8 @@ function remove_extra_sum(ex::Expr)
         ex = new_ex
     end
 end
+
+remove_extra_sum(x) = x
 
 
 function *(td1::TensorDeriv, td2::TensorDeriv)
@@ -191,7 +203,7 @@ end
 
 
 # create elementwise tensor diff rule from ordinary diff rule
-function TensorDiffRule(ew_rule::DiffRule, diff_idx::Int, num_idxs::Int)
+function ew_to_tensor_rule(ew_rule::DiffRule, diff_idx::Int, num_idxs::Int)
     ew_pat = ew_rule.pat
     op = ew_pat.args[1]
     ew_ex = ew_rule.deriv.ex
@@ -224,10 +236,46 @@ function TensorDiffRule(ew_rule::DiffRule, diff_idx::Int, num_idxs::Int)
 end
 
 
-# read as: (operation name, [indices], diff var index)
-# typealias TensorDiffKey Tuple{Symbolic, Vector{Vector{Symbol}}, Int}
 
-# const TENSOR_DIFF_RULES = Dict{TensorDiffKey, DiffRule}()
+function to_tensor_rule(ew_rule::DiffRule, orig_idxs::Vector{Vector{Symbol}}, idx::Int)
+    ew_pat = ew_rule.pat
+    op = ew_pat.args[1]
+    ew_ex = ew_rule.deriv.ex
+    # tensor var names and indices
+    tvar_names = TDIFF_VAR_NAMES[1:length(ew_pat.args)-1]
+    # tvar_idxs = IDX_NAMES[1:length(orig_idxs[1])]
+    tvars = [maybe_indexed(name, I) for (name, I) in zip(tvar_names, orig_idxs[2:end])]
+    tvar_idxs = IDX_NAMES[1:length(orig_idxs[1])]
+    # tvars = [Expr(:ref, tvar, tvar_idxs...) for tvar in tvar_names]
+    # dvar variable
+    var_name = :Z
+    dvar_name = dname(var_name)
+    var = maybe_indexed(var_name, orig_idxs[1])
+    dvar = maybe_indexed(dvar_name, orig_idxs[1])
+    # w.r.t. variable
+    wrt_name = tvar_names[idx]
+    dwrt_name = dname(wrt_name)
+    wrt_idxs = next_indices(Set(flatten(Symbol, orig_idxs)), 1, length(orig_idxs[idx + 1]))
+    dwrt = maybe_indexed(dwrt_name, wrt_idxs)
+    # new pattern
+    tpat = Expr(:call, op, tvars...)
+    full_tpat = :($var = $tpat)
+    # new tensor derivative expression
+    tex = rewrite(tpat, ew_pat, ew_ex; phs=DIFF_PHS)
+    # tex_lhs = :($dvar / $wrt)
+    # full_tex = :($tex_lhs = $tex)
+    # constructing tensor derivative
+    if length(orig_idxs[idx + 1]) > 0
+        tguards = [:($i1 == $i2) for (i1, i2) in zip(orig_idxs[1], wrt_idxs)]
+    else
+        tguards = Expr[]
+    end
+    tderiv = TensorDeriv(indexed(dvar, orig_idxs[1]),
+                         indexed(dwrt, wrt_idxs), tex, tguards)
+    return TensorDiffRule(full_tpat, tderiv)
+end
+
+
 
 const TENSOR_DIFF_RULES = Dict{Tuple{OpName, Int}, Vector{TensorDiffRule}}()
 
@@ -309,36 +357,31 @@ function tderivative(fullex::Expr, idx::Int)
         dex = pack_deriv(unpacked_dex)
         return TensorDeriv(dex)
     else
-        # TODO: handle scalars
-        # infer and save elementwise tensor diff rule
-        error_msg = "Can't find tensor or elementwise rule for expression $fullex"
-        idxs = get_indices(fullex)
-        all([I == idxs[1] for I in idxs]) || error(error_msg)
-        op = opname(current_module(), fullex.args[2].args[1])
-        types = [Number for i=1:length(fullex.args[2].args)-1]
-        # TODO: relu != Main.relu
-        ew_maybe_rule = find_rule(op, types, idx)
-        ew_rule = (!isnull(ew_maybe_rule) ? get(ew_maybe_rule) :
-                   register_rule(op, types, idx))
-        trule = TensorDiffRule(ew_rule, idx, length(idxs[1]))
-        push_tdiff_rule!(op, idx, trule)
-        # now rule is registered, recursively call itself
-        return tderivative(fullex, idx)
+        idxs = call_indices(fullex)
+        if all([I == idxs[1] || isempty(I) for I in idxs])
+            # elementwise or broadcasting function
+            op = opname(current_module(), fullex.args[2].args[1])
+            types = [Number for i=1:length(fullex.args[2].args)-1]
+            ew_maybe_rule = find_rule(op, types, idx)
+            ew_rule = (!isnull(ew_maybe_rule) ? get(ew_maybe_rule) :
+                       register_rule(op, types, idx))
+            trule = to_tensor_rule(ew_rule, idxs, idx)
+            push_tdiff_rule!(op, idx, trule)
+            # now rule is registered, recursively call itself
+            return tderivative(fullex, idx)
+        else
+            error("Can't find tensor or elementwise rule for expression $fullex")
+        end
     end
 end
 
-function tderivative(fullex::Expr, dvar::Symbol)
-    dvars = [idvar.args[1] for idvar in indexed_vars(fullex.args[2])]
-    matching = findfirst(dvars .== dvar)
+function tderivative(fullex::Expr, var::Symbol)
+    @assert fullex.head == :(=)
+    @assert fullex.args[2].head == :call
+    ivars = [var for var in fullex.args[2].args[2:end]]
+    vars = [isa(ivar, Expr) ? ivar.args[1] : ivar for ivar in ivars]
+    matching = findfirst(vars .== var)
     matching != 0 || error("Variable `$dvar` isn't present " *
                            "in expression `$fullex`")
     return tderivative(fullex, matching[1])
-end
-
-
-function main_yahd()
-    fullex = :(c[i,j] = a[i,k] * b[k,j])
-    tderivative(fullex, 1)
-
-    tderivative(:(c[m, n] = a[m, n] / b[m, n]), :b)
 end

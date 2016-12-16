@@ -18,7 +18,8 @@ end
 
 function rev_step!(g::ExGraph, nd::ExNode{:constant},
                    adj::Dict{Symbol, TensorDeriv})
-    adj[nd.var] = TensorDeriv(0.)
+    # adj[nd.var] = TensorDeriv(0.)
+    # do nothing
 end
 
 function rev_step!(g::ExGraph, nd::ExNode{:input},
@@ -72,24 +73,5 @@ function tdiff(ex::Expr; ctx=Dict(), inputs...)
     vars = Set([var for (var, val) in inputs])
     dexs = Dict([(var, dex) for (var, dex) in adj if in(var, vars)])
     return dexs
-end
-
-
-#--------------------------------------------------------------------
-
-logistic(x) = 1 ./ (1 + exp(-x))
-
-function main2()
-    ex = :(sum(relu(W * x + b)))
-    inputs = [:W=>rand(3,4), :x=>rand(4), :b=>rand(3)]
-    ds = tdiff(ex; inputs...)
-    from_einstein(ds[:W])
-
-    ex = :(sum(logistic(W * x)))
-    ds = rdiff(ex; inputs...)
-    
-    vex = :(sum(W))
-    tex = to_einstein(vex; inputs...)
-    g, adj = _rdiff(tex; inputs...)
 end
 

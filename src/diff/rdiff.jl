@@ -69,8 +69,8 @@
 # We can build an `ExGraph` and perform forward pass on it like this (which is
 # not necessary for high-level usage, but helpful for debugging):
 #
-#     g = ExGraph(;x1=1, x2=1)  # give it an example of possible values
-#     forward_pass(g, ex)
+#     g = ExGraph(ex; x1=1, x2=1)  # give it an example of possible values
+#     forward_pass(g)
 #
 # After this our graph looks like:
 #
@@ -136,7 +136,7 @@
 ## forward pass
 
 """Forward pass of differentiation"""
-function forward_pass(g::ExGraph, ex::Any)
+function forward_pass(g::ExGraph)
     evaluate!(g, g.tape[end].var)
     return g
 end
@@ -210,7 +210,7 @@ end
 function _rdiff(ex::Expr; ctx=Dict(), inputs...)
     ctx = to_context(ctx)
     g = ExGraph(ex; ctx=ctx, inputs...)
-    forward_pass(g, ex)
+    forward_pass(g)
     z = g.tape[end].var
     adj = reverse_pass(g, z)
     return g, expand_adjoints(g, adj)
@@ -244,9 +244,7 @@ function rdiff(ex::Expr; ctx=Dict(), inputs...)
     dexs = Dict([(var, dex) for (var, dex) in adj if in(var, vars)])
     outfmt = @get(ctx, :outfmt, :vec)
     outdexs = (outfmt == :vec && meth == :ein ?
-               Dict([(var, from_einstein(dex; inputs...))
-                     for (var, dex) in dexs]) :
-               dexs)
+               Dict([(var, from_einstein(dex)) for (var, dex) in dexs]) : dexs)
     return outdexs
 end
 
@@ -279,6 +277,33 @@ end
 
 
 function fdiff(f::Function, types::Vector{DataType}; ctx=Dict())
-
-
+    # TODO
 end
+
+
+#-----------------------------------------------------------------
+
+
+logistic(x) = 1 ./ (1 + exp(-x))
+
+function main2()
+    ex = :(sum(W * x + b))
+    ctx = Dict()
+    inputs = [:W=>rand(3,4), :x=>rand(4), :b=>rand(3)]
+    ds = rdiff(ex; inputs...)
+
+    ex = :(sum(logistic(W * x)))
+    ds = rdiff(ex; inputs...)
+    
+    vex = :(sum(W))
+    tex = to_einstein(vex; inputs...)
+    g, adj = _rdiff(tex; inputs...)
+
+    ctx = Dict()
+    inputs = [:x => rand(3)]
+    ex = to_einstein(:(z = 2x); inputs...)
+    
+    
+    
+end
+
