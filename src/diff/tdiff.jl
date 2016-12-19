@@ -34,15 +34,29 @@ function rev_step!(g::ExGraph, nd::ExNode{:call}, adj::Dict{Symbol, TensorDeriv}
     dzdy = adj[y]
     for (i, x) in enumerate(dependencies(nd))
         dydx = tderivative(iex, x)
-        dzdx = dzdy * dydx
+        dzdx = dzdy .* dydx
         if haskey(adj, x)
             adj[x] += dzdx
         else
-            adj[x] = dzdy * dydx
+            adj[x] = dzdx
+        end
+        if x != :I
+            sizes = g.ctx[:sizes]
+            dzdx_name = single_var(dzdx).args[1]
+            sizes[dzdx_name] = deriv_size(sizes[g.ctx[:z_var]], sizes[x])
         end
     end
 end
 
+
+function deriv_size(z_size::Expr, x_size::Expr)
+    if z_size == :(())
+        return x_size
+    else
+        # TODO: find nice form of (z_size..., x_size...)
+        error("Oh, hell, how did we get here?")
+    end
+end
 
 # other utils
 
@@ -52,6 +66,7 @@ function to_expanded_expr(g::ExGraph, td::TensorDeriv)
     dep_exs = Expr[]
     for nd in g.tape
         if !isa(nd, ExNode{:input}) && nd.var in depv
+            # TODO: use expand_const_1(g, nd) ?
             push!(dep_exs, to_iexpr(nd))
         end
     end
@@ -74,4 +89,3 @@ function tdiff(ex::Expr; ctx=Dict(), inputs...)
     dexs = Dict([(var, dex) for (var, dex) in adj if in(var, vars)])
     return dexs
 end
-

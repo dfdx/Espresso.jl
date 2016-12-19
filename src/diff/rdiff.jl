@@ -127,9 +127,7 @@
 #
 #     dz/dx1 == x2 + cos(x1)
 #
-# (NOTE: if you have any reference why these "parts" of derivative should be
-# summed, who introduced this rule or how it is inferred, please open an
-# issue or PR in this repository on GitHub).
+
 
 
 
@@ -138,6 +136,7 @@
 """Forward pass of differentiation"""
 function forward_pass(g::ExGraph)
     evaluate!(g, g.tape[end].var)
+    propagate_size!(g)
     return g
 end
 
@@ -194,9 +193,8 @@ function reverse_pass(g::ExGraph, z::Symbol)
         dzwrt = with_indices(dname(z), num_indices+1, num_indices)
         guards = [:($ivar == $iwrt)
                   for (ivar, iwrt) in zip(dz.args[2:end], dzwrt.args[2:end])]
-        # later: check if g has indexed expressions and if not,
-        # use Dict{Symbol, Deriv} instead to call other rev_step! methods
-        adj = Dict(z => TensorDeriv(dz, dzwrt, 1., guards))
+        g.ctx[:z_var] = z
+        adj = Dict(z => TensorDeriv(dz, dzwrt, 1., guards))        
     else
         adj = Dict(z => Deriv(1.))
     end
@@ -207,13 +205,26 @@ function reverse_pass(g::ExGraph, z::Symbol)
 end
 
 
-function _rdiff(ex::Expr; ctx=Dict(), inputs...)
+function _rdiff(ex::Expr; ctx=Dict(), inputs...)    
     ctx = to_context(ctx)
     g = ExGraph(ex; ctx=ctx, inputs...)
     forward_pass(g)
-    z = g.tape[end].var
+    z = g.tape[end].var    
     adj = reverse_pass(g, z)
     return g, expand_adjoints(g, adj)
+end
+
+
+function format_output(meth, outfmt, dexs)
+    if outfmt == :vec && meth == :ein
+        res = Dict()
+        for (var, dex) in dexs
+            res[var] = from_einstein(dex; ctx=ctx, inputs...)
+        end
+        return res
+    else
+        dexs
+    end
 end
 
 
@@ -238,13 +249,14 @@ Options (passed via `ctx`):
 function rdiff(ex::Expr; ctx=Dict(), inputs...)
     ctx = to_context(ctx)
     meth = @get(ctx, :method, any(x -> !isa(x[2], Number), inputs) ? :ein : :vec)
-    ex_ = meth == :ein ? to_einstein(ex; inputs...) : ex
-    g, adj = _rdiff(ex_; ctx=ctx, inputs...)
+    if meth == :ein && !is_einstein(ex)
+        ex = to_einstein(ex; ctx=ctx, inputs...)
+    end
+    g, adj = _rdiff(ex; ctx=ctx, inputs...)
     vars = Set([var for (var, val) in inputs])
     dexs = Dict([(var, dex) for (var, dex) in adj if in(var, vars)])
     outfmt = @get(ctx, :outfmt, :vec)
-    outdexs = (outfmt == :vec && meth == :ein ?
-               Dict([(var, from_einstein(dex)) for (var, dex) in dexs]) : dexs)
+    outdexs = format_output(meth, outfmt, dexs)
     return outdexs
 end
 
@@ -286,24 +298,57 @@ end
 
 logistic(x) = 1 ./ (1 + exp(-x))
 
-function main2()
-    ex = :(sum(W * x + b))
-    ctx = Dict()
-    inputs = [:W=>rand(3,4), :x=>rand(4), :b=>rand(3)]
-    ds = rdiff(ex; inputs...)
+h(W, b, x) = W .* x + b
 
-    ex = :(sum(logistic(W * x)))
-    ds = rdiff(ex; inputs...)
-    
-    vex = :(sum(W))
-    tex = to_einstein(vex; inputs...)
-    g, adj = _rdiff(tex; inputs...)
+sigmoid(x) = 1 ./ (1 + exp(x))
 
-    ctx = Dict()
-    inputs = [:x => rand(3)]
-    ex = to_einstein(:(z = 2x); inputs...)
-    
-    
-    
+function autoencoder(We1, We2, Wd, b1, b2, input)
+    firstLayer = sigmoid(We1 * input + b1)
+    encodedInput = sigmoid(We2 * firstLayer + b2)
+    reconstructedInput = sigmoid(Wd * encodedInput)
+    return reconstructedInput
 end
 
+function main2()
+    ex = :(autoencoder(We1, We2, Wd, b1, b2, input))
+    ex = quote
+        firstLayer = sigmoid(We1 * input + b1)
+        encodedInput = sigmoid(We2 * firstLayer + b2)
+        reconstructedInput = sigmoid(Wd * encodedInput)
+        sum((input - reconstructedInput).^2)
+    end
+    inputs = [:input => rand(5),
+              :We1 => rand(4, 5), :b1 => rand(4),
+              :We2 => rand(3, 4), :b2 => rand(3),
+              :Wd => rand(5, 3)]
+    ctx = [:outfmt => :ein]
+    # ctx = Dict()
+    @time ds = rdiff(ex; ctx=ctx, inputs...)
+
+
+    ex = quote
+        encodedInput = relu(We * input)
+        sum((input - encodedInput).^2)
+    end
+    inputs = [:We => rand(5, 5), :input => rand(5)]
+    ctx = Dict(:outfmt => :ein)
+    @time ds = rdiff(ex; ctx=ctx, inputs...)
+
+
+    ex = quote
+        y[i] = W[i,k] * x[k]
+        v[i] = y[i] - x[i]
+        z = v[i] * I[i]
+    end
+    inputs = [:W => rand(2, 2), :x => rand(2)]
+    ctx = Dict(:outfmt => :ein)
+    @time ds = rdiff(ex; ctx=ctx, inputs...)
+
+
+    ex = :(sum((W * x + b - y).^2))
+    ctx = Dict(:outfmt => :ein)
+    inputs = [:W=>rand(3,4), :x=>rand(4), :b=>rand(3), :y=>rand(3)]
+    ds = rdiff(ex; ctx=ctx, inputs...)
+
+
+end

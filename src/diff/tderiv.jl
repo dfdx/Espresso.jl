@@ -154,7 +154,24 @@ end
 remove_extra_sum(x) = x
 
 
-function *(td1::TensorDeriv, td2::TensorDeriv)
+function remove_extra_sum_with_lhs(ex::Expr, lhs_idxs)
+    lhs_idxs = Set(lhs_idxs)
+    idxd_vars = indexed_vars(ex)
+    remove_list = Expr[]
+    for var in idxd_vars
+        if var.args[1] == :I && all(idx -> in(idx, lhs_idxs), var.args[2:end])
+            push!(remove_list, var)
+        end
+    end
+    ret = ex
+    for var in remove_list
+        ret = without(ret, var)
+    end
+    return ret
+end
+
+
+function .*(td1::TensorDeriv, td2::TensorDeriv)
     # can only multiply related derivatives, e.g. dz/dy * dy/dx
     @assert td1.wrt.args[1] == td2.dvar.args[1]
     common_idxs_st = Dict(zip(var_indices(td2), wrt_indices(td1)))
@@ -164,20 +181,61 @@ function *(td1::TensorDeriv, td2::TensorDeriv)
     wrt2_reindexed = subs(td2.wrt, st)
     ex2_reindexed = subs(expr(td2), st)
     guards2_reindexed = Expr[subs(g, st) for g in td2.guards]
-    new_ex_ = simplify(expr(td1) * ex2_reindexed)
-    new_ex = remove_extra_sum(new_ex_)
+    new_ex = simplify(expr(td1) .* ex2_reindexed)
+    # TODO: don't replace if new_ex_ == :(I[i]) or :(-(I[i]))
+    # new_ex = remove_extra_sum_with_lhs(new_ex_, collect(values(st)))
     new_guards = vcat(td1.guards, guards2_reindexed)
     new_td = TensorDeriv(td1.dvar, wrt2_reindexed, new_ex, new_guards)
     return reindex_with_guards(new_td)
 end
 
+function tderiv_var(td::TensorDeriv)
+    name = Symbol(string(td.dvar.args[1]) * "_" * string(td.wrt.args[1]))
+    idxs = vcat(td.dvar.args[2:end], td.wrt.args[2:end])
+    return maybe_indexed(name, idxs)
+end
+
+
+# function *(td1::TensorDeriv, td2::TensorDeriv)
+#     # can only multiply related derivatives, e.g. dz/dy * dy/dx
+#     @assert td1.wrt.args[1] == td2.dvar.args[1]
+#     common_idxs_st = Dict(zip(var_indices(td2), wrt_indices(td1)))
+#     other_idxs_st = index_replacements(Set(deriv_indices(td1)),
+#                                        wrt_indices(td2))
+#     st = merge(common_idxs_st, other_idxs_st)
+#     wrt2_reindexed = subs(td2.wrt, st)
+#     ex2_reindexed = subs(expr(td2), st)
+#     guards2_reindexed = Expr[subs(g, st) for g in td2.guards]
+#     new_ex_ = simplify(tderiv_var(td1) * ex2_reindexed)
+#     # TODO: don't replace if new_ex_ == :(I[i]) or :(-(I[i]))
+#     new_ex = remove_extra_sum_with_lhs(new_ex_, collect(values(st)))
+#     new_guards = vcat(td1.guards, guards2_reindexed)
+#     new_td = TensorDeriv(td1.dvar, wrt2_reindexed, new_ex, new_guards)
+#     return reindex_with_guards(new_td)
+# end
+
+"""Find indices on RHS of TensorDeriv which aren't present on LHS"""
+function free_indices(td::TensorDeriv)
+    lhs_idxs = vcat(td.dvar.args[2:end], td.wrt.args[2:end])
+    rhs_idxs = flatten(get_indices(expr(td)))
+    return setdiff(rhs_idxs, lhs_idxs)
+end
 
 function +(td1::TensorDeriv, td2::TensorDeriv)
     @assert td1.dvar.args[1] == td2.dvar.args[1]
     @assert td1.wrt.args[1] == td2.wrt.args[1]
     dvar_idxs_st = Dict(zip(var_indices(td2), var_indices(td1)))
-    wrt_idxs_st = Dict(zip(wrt_indices(td2), wrt_indices(td1)))
+    wrt_idxs_st = Dict(zip(wrt_indices(td2), wrt_indices(td1)))    
     st = merge(dvar_idxs_st, wrt_idxs_st)
+    free_idxs = free_indices(td2)
+    # TODO: should we also inclue all indicies of expr(td1)?
+    all_existing_idxs = Set{Symbol}(vcat(keys(st)..., values(st)..., free_idxs))
+    next_idx_pos = 1
+    for idx in free_idxs
+        if in(idx, values(st))
+            st[idx], next_idx_pos = next_index(all_existing_idxs, next_idx_pos)
+        end
+    end    
     wrt2_reindexed = subs(td2.wrt, st)
     ex2_reindexed = subs(expr(td2), st)
     guards2_reindexed = Expr[subs(g, st) for g in td2.guards]

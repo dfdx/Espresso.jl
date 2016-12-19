@@ -10,6 +10,8 @@ end
 
 isvectorized(ex) = exprlike(ex) && !isindexed(ex)
 
+is_einstein(ex) = !isempty(indexed_vars(ex))
+
 
 function indexed(ex::Expr, idxs::Vector)
     @assert (ex.head == :ref) "Argument is not a symbol and not indexed already"
@@ -206,14 +208,6 @@ sum_indices(x) = Symbol[]
 
 # guards
 
-## if VERSION < v"0.5-"
-##     is_comparison(ex) = isa(ex, Expr) && ex.head == :comparison
-## else
-##     const COMPARISON_SYMBOLS = Set([:(==), :(!=), :(>), :(>=), :(<), :(<=)])
-##     is_comparison(ex) = (isa(ex, Expr) && ex.head == :call &&
-##                          in(ex.args[1], COMPARISON_SYMBOLS))
-## end
-
 isequality(ex) = isa(ex, Expr) && ex.head == :call && ex.args[1] == :(==)
 
 function get_guards!(guards::Vector{Expr}, ex::Expr)
@@ -253,8 +247,8 @@ end
 # einsum
 
 """
-Translates guarded expression, e.g. :(Y[i,j] = X[i] * (i == j)), into the unguarded one,
-e.g. :(Y[i, i] = X[i])
+Translates guarded expression, e.g. :(Y[i,j] = X[i] * (i == j)),
+into the unguarded one, e.g. :(Y[i, i] = X[i])
 """
 function unguarded(ex::Expr)    
     st = Dict([(grd.args[3], grd.args[2]) for grd in get_guards(ex)])
