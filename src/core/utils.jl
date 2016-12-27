@@ -236,7 +236,7 @@ type_ansestors{T}(t::Type{Matrix{T}}) =
 
 # context
 
-function to_context{K,V}(d::Union{Dict, Vector{Pair{K,V}}})
+function to_context{K,V}(d::Union{Dict{K,V},Vector{Pair{K,V}}})
     ctx = Dict{Any,Any}()
     for (k, v) in d
         ctx[k] = to_context(v)
@@ -244,6 +244,7 @@ function to_context{K,V}(d::Union{Dict, Vector{Pair{K,V}}})
     return ctx
 end
 
+to_context(d::Dict{Any,Any}) = d
 to_context(x) = x
 
 # guards

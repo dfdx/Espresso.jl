@@ -120,11 +120,11 @@
 
 # min, max
 
-@diff_rule max(x::Number, y::Number) 1 (x > y) * x
-@diff_rule max(x::Number, y::Number) 2 (y > x) * y
+@diff_rule max(x::Number, y::Number) 1 (x > y)
+@diff_rule max(x::Number, y::Number) 2 (y > x)
 
-@diff_rule min(x::Number, y::Number) 1 (x < y) * x
-@diff_rule min(x::Number, y::Number) 2 (y < x) * y
+@diff_rule min(x::Number, y::Number) 1 (x < y)
+@diff_rule min(x::Number, y::Number) 2 (y < x)
 
 @diff_rule sign(x::Any) 1 0.
 
@@ -139,5 +139,5 @@
 
 # relu
 
-@diff_rule relu(x::Number) 1 relu(x) # TODO: should reference concrete module?
+@diff_rule relu(x::Number) 1 (x .> 0) # TODO: should reference concrete module?
 # TODO: use qualified names when adding diff rules!

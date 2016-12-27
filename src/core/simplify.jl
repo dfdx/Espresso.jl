@@ -85,9 +85,19 @@ end
 @simple_rule (x * 1) x
 @simple_rule (1 * x) x
 @simple_rule (x ^ 1) x
+@simple_rule (x .* 1) x
+@simple_rule (1 .* x) x
+@simple_rule (x .^ 1) x
 @simple_rule (a * (b * x)) ((a * b) * x)
-@simple_rule ((b * x) * a) ((a * b) * x)
+# @simple_rule ((b * x) * a) ((a * b) * x)
 
 @simple_rule (-1 * x) -x
 @simple_rule (x * -1) -x
 @simple_rule (-x * -y) (x * y)
+@simple_rule (-1 .* x) -x
+@simple_rule (x .* -1) -x
+@simple_rule (-x .* -y) (x .* y)
+
+
+@simple_rule size(x)[1] size(x, 1)
+@simple_rule size(x)[2] size(x, 2)

@@ -1,4 +1,10 @@
 
+# pseudo summation functions
+@tdiff_rule (Z = X[i] * I[i]) (dZ[]/dX[j] = 1)
+@tdiff_rule (Z = X[i] * I[i]) (dZ[]/dI[j] = X[j])
+@tdiff_rule (Z = X[i,j] * I[i,j]) (dZ[]/dX[m,n] = 1)
+@tdiff_rule (Z = X[i,j] * I[i,j]) (dZ[]/dI[m,n] = X[m,n])
+
 # matrix-by-matrix product
 @tdiff_rule (Z[i,j] = X[i,k] * Y[k,j]) (dZ[i,j]/dX[m,n] = Y[n,j] * (i == m))
 @tdiff_rule (Z[i,j] = X[i,k] * Y[k,j]) (dZ[i,j]/dY[m,n] = X[i,m] * (n == j))
@@ -6,12 +12,6 @@
 # matrix-by-vector product
 @tdiff_rule (Z[i] = X[i,k] * Y[k]) (dZ[i]/dX[m,n] = Y[n] * (i == m))
 @tdiff_rule (Z[i] = X[i,k] * Y[k]) (dZ[i]/dY[m] = X[i,m])
-
-# pseudo summation functions
-## @tdiff_rule (Z[] = X[i] * I[i]) (dZ[]/dX[j] = 1)
-## @tdiff_rule (Z[] = X[i] * I[i]) (dZ[]/dI[j] = X[j])
-## @tdiff_rule (Z[] = X[i,j] * I[i,j]) (dZ[]/dX[m,n] = 1)
-## @tdiff_rule (Z[] = X[i,j] * I[i,j]) (dZ[]/dI[m,n] = X[m,n])
 
 # inner product of 2 vectors
 @tdiff_rule (Z = X[i] * Y[i]) (dZ[]/dX[i] = Y[i])

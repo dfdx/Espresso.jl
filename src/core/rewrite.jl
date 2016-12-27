@@ -24,10 +24,13 @@ isplaceholder(x, phs) = false
 isplaceholder(x::Symbol, phs) = (startswith(string(x), "_")
                                  || in(x, phs))
 
-function matchex!(m::Dict{Symbol,Any}, p, x; phs=DEFAULT_PHS[1])
+function matchex!(m::Dict{Symbol,Any}, p, x; phs=DEFAULT_PHS[1], allow_ex=true)
     if isplaceholder(p, phs)
         if haskey(m, p) && m[p] != x
             # different bindings to the same pattern, treat as no match
+            return false
+        elseif !allow_ex && isa(x, Expr)
+            # x is expression, but matching to expression is not allowed, treat as no match
             return false
         else
             m[p] = x
@@ -36,7 +39,7 @@ function matchex!(m::Dict{Symbol,Any}, p, x; phs=DEFAULT_PHS[1])
     elseif isa(p, Expr) && isa(x, Expr)
         result = (matchex!(m, p.head, x.head)
                   && length(p.args) == length(x.args)
-                  && reduce(&, [matchex!(m, pa, xa; phs=phs)
+                  && reduce(&, [matchex!(m, pa, xa; phs=phs, allow_ex=allow_ex)
                              for (pa, xa) in zip(p.args, x.args)]))
     else
         return p == x
@@ -68,9 +71,9 @@ matchex(pat, ex; phs=Set([:x, :n]))
 ```
 
 """
-function matchex(pat, ex; phs=DEFAULT_PHS[1])
+function matchex(pat, ex; phs=DEFAULT_PHS[1], allow_ex=true)
     m = Dict{Symbol,Any}()
-    res = matchex!(m, pat, ex; phs=phs)
+    res = matchex!(m, pat, ex; phs=phs, allow_ex=allow_ex)
     if res
         return Nullable(m)
     else
@@ -81,8 +84,8 @@ end
 """
 Check if expression matches pattern. See `matchex()` for details.
 """
-function matchingex(pat, ex; phs=DEFAULT_PHS[1])
-    return !isnull(matchex(pat, ex; phs=phs))    
+function matchingex(pat, ex; phs=DEFAULT_PHS[1], allow_ex=true)
+    return !isnull(matchex(pat, ex; phs=phs, allow_ex=allow_ex))
 end
 
 ## substitution
@@ -95,10 +98,13 @@ Example:
     subs(ex, x=2)  # ==> :(2 ^ n)
 """
 function subs(ex::Expr, st::Dict)
-    new_args = [isa(arg, Expr) ? subs(arg, st) : get(st, arg, arg)
-                for arg in ex.args]
-    new_ex = Expr(ex.head, new_args...)
-    return new_ex
+    if haskey(st, ex)
+        return st[ex]
+    else
+        new_args = [isa(arg, Expr) ? subs(arg, st) : get(st, arg, arg)
+                    for arg in ex.args]
+        return Expr(ex.head, new_args...)
+    end
 end
 
 function subs(s::Symbol, st::Dict)
@@ -126,7 +132,7 @@ function without(ex::Expr, pat; phs=DEFAULT_PHS[1])
     new_args_without = [without(arg, pat; phs=phs) for arg in ex.args]
     new_args = filter(arg -> isnull(matchex(pat, arg; phs=phs)), new_args_without)
     if ex.head == :call && length(new_args) == 2 &&
-        (ex.args[1] == :+ || ex.args[1] == :*)        
+        (ex.args[1] == :+ || ex.args[1] == :*)
         # pop argument of now-single-valued operation
         # TODO: make more general, e.g. handle (x - y) with x removed
         return new_args[2]
@@ -169,4 +175,30 @@ function tryrewrite(ex::Symbolic, pat::Symbolic, subex::Any; phs=DEFAULT_PHS[1])
     else
         return Nullable(subs(subex, get(st)))
     end
+end
+
+
+"""
+Find sub-expressions matching a pattern. Example:
+
+    ex = :(a * f(x) + b * f(y))
+    pat = :(f(_))
+    findex(pat, ex)   # ==> [:(f(x)), :(f(y))]
+    
+"""
+function findex!(res::Vector, pat, ex; phs=DEFAULT_PHS[1])
+    if matchingex(pat, ex; phs=phs)
+        push!(res, ex)
+    elseif exprlike(ex)
+        for arg in ex.args
+            findex!(res, pat, arg)
+        end
+    end
+end
+
+
+function findex(pat, ex)
+    res = Any[]
+    findex!(res, pat, ex)
+    return res
 end

@@ -36,7 +36,7 @@ dependencies(nd::ExNode{:call}) = nd.ex.args[2:end]
 to_expr(nd::ExNode) = :($(nd.var) = $(nd.ex))
 function to_einsum_expr(nd::ExNode)
     varidxs = nd.idxs[1]
-    varex = length(varidxs) > 0 ? Expr(:ref, nd.var, varidxs...) : nd.var     
+    varex = length(varidxs) > 0 ? Expr(:ref, nd.var, varidxs...) : nd.var
     s2i = Dict([(dep, idxs)
                 for (dep, idxs) in zip(dependencies(nd), nd.idxs[2:end])])
     ex_without_I = without(nd.ex, :I)
@@ -66,7 +66,8 @@ isindexed(nd::ExNode) = !isempty(nd.idxs) && any(x -> !isempty(x), nd.idxs)
 # exgraph
 
 @runonce type ExGraph
-    tape::Vector{ExNode}           # list of ExNode's
+    ex::Expr                       # original expression used to build ExGraph
+    tape::Vector{ExNode}           # list of ExNode-s
     idx::Dict{Symbol, ExNode}      # map from var name to its node in the graph
     ctx::Dict{Any,Any}             # settings and caches
 end
@@ -74,14 +75,13 @@ end
 function ExGraph(ex::Expr; ctx=Dict(), inputs...)
     ctx = to_context(ctx)
     @get_or_create(ctx, :mod, current_module())
-    ctx[:ex] = ex
-    g = ExGraph(ExNode[], Dict(), ctx)
+    g = ExGraph(ex, ExNode[], Dict(), ctx)
     for (var, val) in inputs
         addnode!(g, :input, var, var; val=val)
     end
-    for (var, val) in get(ctx, :constants, [])
-        addnode!(g, :constant, var, var; val=val)
-    end
+    # for (var, val) in get(ctx, :constants, [])
+    #     addnode!(g, :constant, var, var; val=val)
+    # end
     parse!(g, ex)
     collapse_assignments!(g)
     return g
@@ -113,16 +113,16 @@ possible_temp_names(x) = Symbol[]
 
 
 """Generate new unique name for intermediate variable in graph"""
-function genname(ctx::Dict{Any,Any})
-    last_id = @get_or_create(ctx, :last_id, 1)
-    possible_names = @get_or_create(ctx, :possible_names,
-                                    possible_temp_names(ctx[:ex]))
+function genname(g::ExGraph)
+    last_id = @get_or_create(g.ctx, :last_id, 1)
+    possible_names = @get_or_create(g.ctx, :possible_names,
+                                    possible_temp_names(g.ex))
     name = Symbol("tmp$(last_id)")
     while in(name, possible_names)
         last_id += 1
         name = Symbol("tmp$(last_id)")
     end
-    ctx[:last_id] = last_id + 1
+    g.ctx[:last_id] = last_id + 1
     return name
 end
 
@@ -141,119 +141,6 @@ function addnode!(g::ExGraph, C::Symbol, var::Symbol, ex::Any;
     return var
 end
 
-expand_temp(g::ExGraph, nd::ExNode{:input}) = variable(nd)
-expand_temp(g::ExGraph, nd::ExNode{:constant}) = value(nd)
-expand_temp(g::ExGraph, nd::ExNode{:(=)}) = expand_temp(g, expr(nd))
-
-function expand_temp(g::ExGraph, nd::ExNode{:call})
-    deps = dependencies(nd)
-    expanded = Dict([(x, expand_temp(g, g[x])) for x in deps])
-    return subs(expr(nd), expanded)
-end
-
-function expand_temp(g::ExGraph, x::Symbol)
-    if haskey(g.idx, x)
-        return expand_temp(g, g[x])
-    else
-        return x
-    end
-end
-
-function expand_temp(g::ExGraph, ex::Expr)
-    new_args = [expand_temp(g, arg) for arg in ex.args]
-    return Expr(ex.head, new_args...)
-end
-
-expand_temp(g::ExGraph, x) = x
-
-
-# iexpand_temp
-
-
-function to_block(exs...)
-    new_exs = flatten([exprlike(ex) && ex.head == :block ? ex.args : [ex] for ex in exs])
-    return sanitize(Expr(:block, new_exs...))
-end
-
-iexpand_temp(g::ExGraph, nd::ExNode{:input}) = quote end
-iexpand_temp(g::ExGraph, nd::ExNode{:constant}) = to_iexpr(nd)
-iexpand_temp(g::ExGraph, nd::ExNode{:(=)}) =
-    to_block(iexpand_temp(g, dependencies(nd)[1]), to_iexpr(nd))
-
-function iexpand_temp(g::ExGraph, nd::ExNode{:call})
-    deps = dependencies(nd)
-    expanded = [iexpand_temp(g, g[x]) for x in deps]
-    this_ex = to_iexpr(nd)
-    return to_block(expanded..., this_ex)
-end
-
-function iexpand_temp(g::ExGraph, x::Symbol)
-    if haskey(g.idx, x)
-        return iexpand_temp(g, g[x])
-    else
-        return x
-    end
-end
-
-function iexpand_temp(g::ExGraph, ex::Expr)
-    new_args = [expand_temp(g, arg) for arg in ex.args]
-    return to_block(new_args...)
-end
-
-iexpand_temp(g::ExGraph, x) = x
-
-
-# dep vars
-
-dep_vars!(g::ExGraph, nd::ExNode{:input}, result::Set{Symbol}) = begin end
-dep_vars!(g::ExGraph, nd::ExNode{:constant}, result::Set{Symbol}) = begin end
-
-function dep_vars!(g::ExGraph, nd::ExNode{:(=)}, result::Set{Symbol})
-    dep = dependencies(nd)[1]
-    push!(result, dep)
-    dep_vars!(g, dep, result)
-end
-
-function dep_vars!(g::ExGraph, nd::ExNode{:call}, result::Set{Symbol})
-    for dep in dependencies(nd)
-        push!(result, dep)
-        dep_vars!(g, dep, result)
-    end
-end
-
-function dep_vars!(g::ExGraph, var::Symbol, result::Set{Symbol})
-    push!(result, var)
-    if haskey(g, var)
-        dep_vars!(g, g[var], result)
-    end
-end
-
-"""Recursively collect all variables that this one depends on"""
-function dep_vars(g::ExGraph, var::Symbol)
-    result = Set{Symbol}()
-    dep_vars!(g, var, result)
-    return result
-end
-
-function dep_vars!(g::ExGraph, ex::Expr, result::Set{Symbol})
-    if ex.head == :call
-        for arg in ex.args[2:end]
-            dep_vars!(g, arg, result)
-        end
-    elseif ex.head == :ref
-        dep_vars!(g, ex.args[1], result)
-    end
-end
-
-dep_vars!(g::ExGraph, x, result) = begin end
-
-function dep_vars(g::ExGraph, ex::Expr)
-    result = Set{Symbol}()
-    dep_vars!(g, ex, result)
-    return result
-end
-
-dep_vars(g::ExGraph, x) = Set{Symbol}()
 
 ## parse!
 
@@ -268,12 +155,12 @@ parse!(g::ExGraph, s::Symbol) = (s, Symbol[])
 parse!(g::ExGraph, gr::GlobalRef) = (gr, Symbol[])
 
 function parse!(g::ExGraph, x::Number)
-    var = addnode!(g, :constant, genname(g.ctx), x; val=x)
+    var = addnode!(g, :constant, genname(g), x; val=x)
     return var, Symbol[]
 end
 
 function parse!(g::ExGraph, x::AbstractArray)
-    name = addnode!(g, :constant, genname(g.ctx), x; val=x)
+    name = addnode!(g, :constant, genname(g), x; val=x)
     return name, Symbol[]
 end
 
@@ -301,7 +188,7 @@ function parse!(g::ExGraph, ex::ExH{:call})
     sex = Expr(:call, op, deps...)
     varidxs = forall_indices(op, depidxs)
     idxs = insert!(copy(depidxs), 1, varidxs)
-    var = addnode!(g, :call, genname(g.ctx), sex; idxs=idxs)
+    var = addnode!(g, :call, genname(g), sex; idxs=idxs)
     return var, varidxs
 end
 
@@ -341,8 +228,8 @@ end
 
 function evaluate!(g::ExGraph, nd::ExNode{:(=)})
     if (nd.val != nothing) return nd.val end
-    depnd = g.idx[dependencies(nd)[1]]
-    evaluate!(g, depnd)
+    dep = dependencies(nd)[1]
+    evaluate!(g, g.idx[dep])
     evex = mk_eval_expr(g, nd)
     nd.val = eval(evex)
     return nd.val
@@ -353,7 +240,7 @@ function evaluate!(g::ExGraph, nd::ExNode{:call})
     deps = dependencies(nd)
     for dep in deps
         # if dep is not in graph, consider it a global constant (like π)
-        if haskey(g.idx, dep)            
+        if haskey(g.idx, dep)
             evaluate!(g, g[dep])
         end
     end
@@ -363,9 +250,10 @@ function evaluate!(g::ExGraph, nd::ExNode{:call})
 end
 
 evaluate!(g::ExGraph, name::Symbol) = evaluate!(g, g.idx[name])
+evaluate!(g::ExGraph) = evaluate!(g, g[end])
 
 
-# graph simlification
+## graph simlification
 
 istemp(var::Symbol) = startswith(string(var), "tmp")
 
@@ -384,15 +272,15 @@ function collapse_assignments!(g::ExGraph)
     st = Dict{Symbol, Symbol}()
     delvars = Set{Symbol}()
     for nd in g.tape
-        nd.ex = subs(nd.ex, st)        
+        nd.ex = subs(nd.ex, st)
         if isa(nd, ExNode{:(=)}) &&
             (length(nd.idxs) == 0 || nd.idxs[1] == nd.idxs[2])
             dep = dependencies(nd)[1]
             # st[dep] = nd.var
-            if istemp(dep) && !istemp(nd.var)
+            if istemp(dep) # && !istemp(nd.var)
                 st[dep] = nd.var
             else
-                st[nd.var] = dep                
+                st[nd.var] = dep
             end
             push!(delvars, nd.var)
         end
@@ -416,3 +304,4 @@ function collapse_assignments!(g::ExGraph)
     g.tape = new_tape
     g.idx = new_idx
 end
+
