@@ -32,7 +32,7 @@ parse_indexed(var) = (var, Symbol[])
 
 function parse_indexed(ex::Expr)
     @assert ex.head == :ref
-    return convert(Symbol, ex.args[1]), convert(Vector{Symbol}, ex.args[2:end])    
+    return convert(Symbol, ex.args[1]), convert(Vector{Symbol}, ex.args[2:end])
 end
 
 
@@ -106,7 +106,6 @@ function indexed_vars(ex)
     return res
 end
 
-# all_indexes(ex) = [ref.args[2:end] for ref in indexed_vars(ex)]
 
 function get_indices(ex)
     idxs = [ref.args[2:end] for ref in indexed_vars(ex)]
@@ -114,96 +113,111 @@ function get_indices(ex)
 end
 
 
-## function sum_indexes(ex::Expr)
-##     @assert ex.head == :call
-##     # only product of 2 tensors implies that repeating indexes need to be summed
-##     # e.g. in `c[i] = a[i] + b[i]` index i means "for each", not "sum"
-##     if ex.args[1] == :*
-##         idxs = flatten([collect_indexes(arg) for arg in ex.args[2:end]])
-##         counts = countdict(idxs)
-##         repeated = filter((idx, c) -> c > 1, counts)
-##         return collect(Symbol, keys(repeated))
-##     else
-##         return Symbol[]
-##     end
-## end
+# forall & sum indices rules:
+# 1. If there's LHS, everything on LHS is forall, everything else is sum
+# 2. If expression is multiplication (*, not .*), use standard Einstein rules
+# 3. If all index tuples are equal or [], it's elementwise or broadcasting => all forall
+# 4. Otherwise, all repeating indices are sum, all others - forall
+
+function longest_index(idxs_list::Vector{Vector{Symbol}})
+    reduce((idx1, idx2) -> length(idx1) < length(idx2) ? idx2 : idx1, idxs_list)
+end
 
 
-## """Accepts single call expressions, e.g. :(A[i,k] * B[k,j]) or :(exp(C[i]))"""
-## function forall_and_sum_indexes(ex::Expr)
-##     @assert ex.head == :call
-##     @assert reduce(&, [isa(arg, Expr) && arg.head == :ref
-##                        for arg in ex.args[2:end]])
-##     all_idxs = unique(collect_indexes(ex))
-##     sum_idxs = sum_indexes(ex)
-##     forall_idxs = setdiff(all_idxs, sum_idxs)
-##     return forall_idxs, sum_idxs
-## end
+function repeated_non_repeated(depidxs::Vector)
+    counts = countdict(flatten(depidxs))
+    repeated = collect(Symbol, keys(filter((idx, c) -> c > 1, counts)))
+    non_repeated = collect(Symbol,
+                           keys(filter((idx, c) -> c == 1, counts)))
+    return repeated, non_repeated
+end
 
 
-## forall_indices(ex::Expr) = forall_and_sum_indices(ex)[1]
-
-
-
-function forall_indices{T}(op::Symbolic, depidxs::Vector{Vector{T}})
+function forall_sum_indices(op::Symbolic, depidxs::Vector)
+    longest_idx = longest_index(depidxs)
+    elem_wise = all(idx -> idx == longest_idx || isempty(idx), depidxs)
     if op == :*
-        counts = countdict(flatten(depidxs))
-        repeated = filter((idx, c) -> c == 1, counts)
-        return collect(Symbol, keys(repeated))
+        repeated, non_repeated = repeated_non_repeated(depidxs)
+        return non_repeated, repeated
+    elseif elem_wise
+        return longest_idx, Symbol[]
     else
-        return unique(flatten(Symbol, depidxs))
+        # broadcasting - pass on all indices, preserving order of longest index
+        all_idxs = vcat(longest_idx, flatten(Symbol, depidxs))
+        return unique(all_idxs), Symbol[]
     end
 end
 
-## function forall_indices(ex::Expr)
-##     # depidxs = flatten1(map(forall_indices, ex.args))
-##     if ex.head == :call
-##         depidxs = flatten1(map(forall_indices, ex.args))
-##         return forall_indices(ex.args[1], depidxs)
-##     else
-##         return depidxs
-##     end
-## end
 
-function forall_indices(ex::Expr)
-    if ex.head == :ref
-        # TODO: take only nonrepeating
-        return convert(Vector{Symbol}, ex.args[2:end])
-    elseif ex.head == :call
-        depidxs = [forall_indices(x) for x in ex.args[2:end]]
-        return forall_indices(ex.args[1], depidxs)
+function forall_sum_indices(ex::Expr)
+    if ex.head == :(=)
+        lhs_idxs_list = get_indices(ex.args[1])
+        lhs_idxs = !isempty(lhs_idxs_list) ? lhs_idxs_list[1] : Symbol[]
+        rhs_idxs = flatten(Symbol, get_indices(ex.args[2]))
+        sum_idxs = setdiff(rhs_idxs, lhs_idxs)
+        return unique(lhs_idxs), sum_idxs
     else
-        return unique(flatten([forall_indices(x) for x in ex.args[2:end]]))
+        @assert ex.head == :call
+        return forall_sum_indices(ex.args[1], get_indices(ex))
     end
 end
 
-forall_indices(x) = Symbol[]
+forall_sum_indices(x) = (Symbol[], Symbol[])
 
-function sum_indices{T}(op::Symbolic, depidxs::Vector{Vector{T}})
-    if op == :*
-        counts = countdict(flatten(depidxs))
-        repeated = filter((idx, c) -> c > 1, counts)
-        return collect(Symbol, keys(repeated))
-    else
-        return Symbol[]
-    end
-end
+forall_indices(op::Symbolic, depidxs::Vector) = forall_sum_indices(op, depidxs)[1]
+forall_indices(x) = forall_sum_indices(x)[1]
+sum_indices(op::Symbolic, depidxs::Vector) = forall_sum_indices(op, depidxs)[2]
+sum_indices(x) = forall_sum_indices(x)[2]
 
-function sum_indices(ex::Expr)
-    if ex.head == :ref
-        # TODO: take repeating indices
-        return Symbol[]
-    elseif ex.head == :call
-        sum_depidxs = unique(flatten([sum_indices(x) for x in ex.args[2:end]]))
-        forall_depidxs = [forall_indices(x) for x in ex.args[2:end]]
-        new_sum_idxs = sum_indices(ex.args[1], forall_depidxs)
-        return unique(flatten([sum_depidxs, new_sum_idxs]))
-    else
-        return Symbol[]
-    end
-end
+# function forall_indices{T}(op::Symbolic, depidxs::Vector{Vector{T}})
+#     if op == :* || op == :.*
+#         counts = countdict(flatten(depidxs))
+#         repeated = filter((idx, c) -> c == 1, counts)
+#         return collect(Symbol, keys(repeated))
+#     else
+#         return unique(flatten(Symbol, depidxs))
+#     end
+# end
 
-sum_indices(x) = Symbol[]
+# function forall_indices(ex::Expr)
+#     if ex.head == :ref
+#         # TODO: take only nonrepeating
+#         return convert(Vector{Symbol}, ex.args[2:end])
+#     elseif ex.head == :call
+#         depidxs = [forall_indices(x) for x in ex.args[2:end]]
+#         return forall_indices(ex.args[1], depidxs)
+#     else
+#         return unique(flatten([forall_indices(x) for x in ex.args[2:end]]))
+#     end
+# end
+
+# forall_indices(x) = Symbol[]
+
+# function sum_indices{T}(op::Symbolic, depidxs::Vector{Vector{T}})
+#     if op == :* || op == .*
+#         counts = countdict(flatten(depidxs))
+#         repeated = filter((idx, c) -> c > 1, counts)
+#         return collect(Symbol, keys(repeated))
+#     else
+#         return Symbol[]
+#     end
+# end
+
+# function sum_indices(ex::Expr)
+#     if ex.head == :ref
+#         # TODO: take repeating indices
+#         return Symbol[]
+#     elseif ex.head == :call
+#         sum_depidxs = unique(flatten([sum_indices(x) for x in ex.args[2:end]]))
+#         forall_depidxs = [forall_indices(x) for x in ex.args[2:end]]
+#         new_sum_idxs = sum_indices(ex.args[1], forall_depidxs)
+#         return unique(flatten([sum_depidxs, new_sum_idxs]))
+#     else
+#         return Symbol[]
+#     end
+# end
+
+# sum_indices(x) = Symbol[]
 
 
 # guards
@@ -250,11 +264,11 @@ end
 Translates guarded expression, e.g. :(Y[i,j] = X[i] * (i == j)),
 into the unguarded one, e.g. :(Y[i, i] = X[i])
 """
-function unguarded(ex::Expr)    
+function unguarded(ex::Expr)
     st = Dict([(grd.args[3], grd.args[2]) for grd in get_guards(ex)])
     new_ex = without_guards(ex)
     idxs = @view new_ex.args[1].args[2:end]
-    for i=1:length(idxs)        
+    for i=1:length(idxs)
         if haskey(st, idxs[i])
             idxs[i] = st[idxs[i]]
         end
@@ -269,6 +283,5 @@ function to_einsum(ex::Expr)
         @assert ex.head == :(=)
         uex = unguarded(ex)
         return :(@einsum $(uex.args[1]) := $(uex.args[2]))
-    end        
+    end
 end
-

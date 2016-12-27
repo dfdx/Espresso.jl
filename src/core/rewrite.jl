@@ -24,6 +24,13 @@ isplaceholder(x, phs) = false
 isplaceholder(x::Symbol, phs) = (startswith(string(x), "_")
                                  || in(x, phs))
 
+
+function matchex!(m::Dict{Symbol,Any}, p::QuoteNode, x::QuoteNode;
+                  phs=DEFAULT_PHS[1], allow_ex=true)
+    return matchex!(m, p.value, x.value)
+end
+
+
 function matchex!(m::Dict{Symbol,Any}, p, x; phs=DEFAULT_PHS[1], allow_ex=true)
     if isplaceholder(p, phs)
         if haskey(m, p) && m[p] != x

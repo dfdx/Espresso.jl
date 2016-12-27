@@ -194,7 +194,7 @@ function reverse_pass(g::ExGraph, z::Symbol)
         guards = [:($ivar == $iwrt)
                   for (ivar, iwrt) in zip(dz.args[2:end], dzwrt.args[2:end])]
         g.ctx[:z_var] = z
-        adj = Dict(z => TensorDeriv(dz, dzwrt, 1., guards))        
+        adj = Dict(z => TensorDeriv(dz, dzwrt, 1., guards))
     else
         adj = Dict(z => Deriv(1.))
     end
@@ -205,11 +205,11 @@ function reverse_pass(g::ExGraph, z::Symbol)
 end
 
 
-function _rdiff(ex::Expr; ctx=Dict(), inputs...)    
+function _rdiff(ex::Expr; ctx=Dict(), inputs...)
     ctx = to_context(ctx)
     g = ExGraph(ex; ctx=ctx, inputs...)
     forward_pass(g)
-    z = g.tape[end].var    
+    z = g.tape[end].var
     adj = reverse_pass(g, z)
     return g, expand_adjoints(g, adj)
 end
@@ -317,21 +317,27 @@ function main2()
         reconstructedInput = sigmoid(Wd * encodedInput)
         sum((input - reconstructedInput).^2)
     end
+    ex = quote
+        firstLayer = exp(We1 * input + b1)
+        encodedInput = exp(We2 * firstLayer + b2)
+        reconstructedInput = exp(Wd * encodedInput)
+        sum((input - reconstructedInput).^2)
+    end
     inputs = [:input => rand(5),
               :We1 => rand(4, 5), :b1 => rand(4),
               :We2 => rand(3, 4), :b2 => rand(3),
               :Wd => rand(5, 3)]
-    ctx = [:outfmt => :ein]
-    # ctx = Dict()
+    # ctx = [:outfmt => :ein]
+    ctx = Dict()
     @time ds = rdiff(ex; ctx=ctx, inputs...)
 
 
     ex = quote
-        encodedInput = relu(We * input)
-        sum((input - encodedInput).^2)
+        y = exp(W * x)
+        sum((x - y).^2)
     end
-    inputs = [:We => rand(5, 5), :input => rand(5)]
-    ctx = Dict(:outfmt => :ein)
+    inputs = [:W => rand(5, 5), :x => rand(5)]
+    ctx = Dict()
     @time ds = rdiff(ex; ctx=ctx, inputs...)
 
 
@@ -341,7 +347,7 @@ function main2()
         z = v[i] * I[i]
     end
     inputs = [:W => rand(2, 2), :x => rand(2)]
-    ctx = Dict(:outfmt => :ein)
+    ctx = Dict()
     @time ds = rdiff(ex; ctx=ctx, inputs...)
 
 
@@ -349,6 +355,7 @@ function main2()
     ctx = Dict(:outfmt => :ein)
     inputs = [:W=>rand(3,4), :x=>rand(4), :b=>rand(3), :y=>rand(3)]
     ds = rdiff(ex; ctx=ctx, inputs...)
+
 
 
 end

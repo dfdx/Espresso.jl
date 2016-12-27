@@ -139,7 +139,8 @@ end
 
 function propagate_size!(g::ExGraph, nd::ExNode{:constant})
     sizes = @get_or_create(g.ctx, :sizes, Dict())
-    sizes[nd.var] = :($(size((nd.val))))
+    sz = size(nd.val)
+    sizes[nd.var] = Expr(:tuple, sz...)
 end
 
 function propagate_size!(g::ExGraph, nd::ExNode{:(=)})

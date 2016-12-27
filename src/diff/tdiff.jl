@@ -32,6 +32,7 @@ function rev_step!(g::ExGraph, nd::ExNode{:call}, adj::Dict{Symbol, TensorDeriv}
     y = nd.var
     iex = to_iexpr(nd)
     dzdy = adj[y]
+    sizes = g.ctx[:sizes]
     for (i, x) in enumerate(dependencies(nd))
         dydx = tderivative(iex, x)
         dzdx = dzdy .* dydx
@@ -40,8 +41,7 @@ function rev_step!(g::ExGraph, nd::ExNode{:call}, adj::Dict{Symbol, TensorDeriv}
         else
             adj[x] = dzdx
         end
-        if x != :I
-            sizes = g.ctx[:sizes]
+        if x != :I            
             dzdx_name = single_var(dzdx).args[1]
             sizes[dzdx_name] = deriv_size(sizes[g.ctx[:z_var]], sizes[x])
         end

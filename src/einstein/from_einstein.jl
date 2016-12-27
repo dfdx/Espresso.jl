@@ -11,7 +11,7 @@ const FROM_EINSTEIN_RULES =
                 :(Z = I[i] * X[i]) => :(Z = sum(X)),
                 :(Z = X[i,j] * I[i,j]) => :(Z = sum(X)),
                 :(Z = I[i,j] * X[i,j]) => :(Z = sum(X)),
-                # no-pseudoone summation                
+                # no-pseudoone summation
                 :(Z[i] = X[i,j]) => :(Z = sum(X,1)'),
                 :(Z[j] = X[i,j]) => :(Z = sum(X,2)),
                 :(Z = X[i]) => :(Z = sum(X)),
@@ -24,25 +24,46 @@ const FROM_EINSTEIN_RULES =
                 :(Z[i,j,k] = X[i,j,k]) => :(Z = X),
                 # inner and outer product
                 :(Z[i,j] = X[i] * Y[j]) => :(Z = X * Y'),
-                :(Z = X[i] * Y[i]) => :(Z = X'Y),   # or sum(X[i] * Y[i])?                
+                :(Z = X[i] * Y[i]) => :(Z = X'Y),   # or sum(X[i] * Y[i])?
+                :(Z[i,j] = X[i] .* Y[j]) => :(Z = X * Y'),
+                :(Z = X[i] .* Y[i]) => :(Z = X'Y),   # or sum(X[i] * Y[i])?
                 # matrix-by-vector
                 :(Z[j] = X[i] * Y[i,j]) => :(Z = Y' * X),
                 :(Z[i] = X[j] * Y[i,j]) => :(Z = Y * X),
                 :(Z[i] = X[i,j] * Y[j]) => :(Z = X * Y),
                 :(Z[j] = X[i,j] * Y[i]) => :(Z = X' * Y),
+                :(Z[j] = X[i] .* Y[i,j]) => :(Z = Y' * X),
+                :(Z[i] = X[j] .* Y[i,j]) => :(Z = Y * X),
+                :(Z[i] = X[i,j] .* Y[j]) => :(Z = X * Y),
+                :(Z[j] = X[i,j] .* Y[i]) => :(Z = X' * Y),
                 # matrix-by-matrix
                 :(Z[i,j] = X[i,k] * Y[k,j]) => :(Z = X * Y),
                 :(Z[i,j] = Y[k,j] * X[i,k]) => :(Z = X * Y),
+                :(Z[i,j] = X[i,k] .* Y[k,j]) => :(Z = X * Y),
+                :(Z[i,j] = Y[k,j] .* X[i,k]) => :(Z = X * Y),
                 # repmat
                 :(Z[i,j] = X[j]) => :(Z = repmat(X', size__(Z)[1])),
-                :(Z[i,j] = X[i]) => :(Z = repmat(X, 1, size__(Z)[2])),                
+                :(Z[i,j] = X[i]) => :(Z = repmat(X, 1, size__(Z)[2])),
                 # broadcasting
                 :(Z[i] = _op(_a, X[i])) => :(Z = _op(_a, X)),
                 :(Z[i,j] = _op(_a, X[i,j])) => :(Z = _op(_a, X)),
                 :(Z[i,j,k] = _op(_a, X[i,j,k])) => :(Z = _op(_a, X)),
                 :(Z[i] = _op(X[i], _a)) => :(Z = _op(X, _a)),
                 :(Z[i,j] = _op(X[i,j], _a)) => :(Z = _op(X, _a)),
-                :(Z[i,j,k] = _op(X[i,j,k], _a)) => :(Z = _op(X, _a)))
+                :(Z[i,j,k] = _op(X[i,j,k], _a)) => :(Z = _op(X, _a)),
+                :(Z[i,j] = _op(X[i], Y[i,j])) => :(Z = _op(X, Y)),
+                :(Z[i,j] = _op(X[i,j], Y[i])) => :(Z = _op(X, Y)),
+                :(Z[i,j] = _op(X[j], Y[i,j])) => :(Z = _op(X', Y)),
+                :(Z[i,j] = _op(X[i,j], Y[j])) => :(Z = _op(X', Y)),
+                # elementwise operations (move to special case?)
+                :(Z = _op(X)) => :(Z = _op(X)),
+                :(Z[i] = _op(X[i])) => :(Z = _op(X)),
+                :(Z[i,j] = _op(X[i,j])) => :(Z = _op(X)),
+                :(Z[i,j,k] = _op(X[i,j,k])) => :(Z = _op(X)),
+                :(Z = _op(X,Y)) => :(Z = _op(X,Y)),
+                :(Z[i] = _op(X[i], Y[i])) => :(Z = _op(X,Y)),
+                :(Z[i,j] = _op(X[i,j], Y[i,j])) => :(Z = _op(X,Y)),
+                :(Z[i,j,k] = _op(X[i,j,k], Y[i,j,k])) => :(Z = _op(X,Y)))
 
 
 function subs_size(ex::Expr, sizes::Dict)
@@ -61,7 +82,7 @@ subs_size(x, sizes::Dict) = x
 
 
 function from_einstein(ex::Expr; ctx=Dict(), inputs...)
-    g = ExGraph(ex; ctx=ctx, inputs...)    
+    g = ExGraph(ex; ctx=ctx, inputs...)
     sizes = @get(g.ctx, :sizes, Dict())
     res = :(begin end)
     for nd in g.tape
