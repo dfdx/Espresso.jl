@@ -215,7 +215,7 @@ function _rdiff(ex::Expr; ctx=Dict(), inputs...)
 end
 
 
-function format_output(meth, outfmt, dexs)
+function format_output(meth, outfmt, ctx, dexs, inputs)
     if outfmt == :vec && meth == :ein
         res = Dict()
         for (var, dex) in dexs
@@ -256,7 +256,7 @@ function rdiff(ex::Expr; ctx=Dict(), inputs...)
     vars = Set([var for (var, val) in inputs])
     dexs = Dict([(var, dex) for (var, dex) in adj if in(var, vars)])
     outfmt = @get(ctx, :outfmt, :vec)
-    outdexs = format_output(meth, outfmt, dexs)
+    outdexs = format_output(meth, outfmt, ctx, dexs, inputs)
     return outdexs
 end
 
@@ -273,9 +273,9 @@ end
 
 
 """
-rdiff(f::Function, xs...)
+rdiff(f::Function; ctx=Dict(), xs...)
 
-Differentiate function `f` w.r.t. its argument. See `rdiff(ex::Expr, xs...)`
+Differentiate function `f` w.r.t. its arguments. See `rdiff(ex::Expr, xs...)`
 for more details.
 """
 function rdiff(f::Function, types::Vector{DataType}; ctx=Dict())
@@ -288,8 +288,27 @@ function rdiff(f::Function, types::Vector{DataType}; ctx=Dict())
 end
 
 
+"""
+fdiff(f::Function; ctx=Dict(), xs...)
+
+Differentiate function `f` w.r.t. its arguments and return tuple of derivative
+function, one per argument.
+
+See also `rdiff()`.
+"""
 function fdiff(f::Function, types::Vector{DataType}; ctx=Dict())
-    # TODO
+    args, _ = funexpr(f, types)
+    dexs = rdiff(f, types; ctx=ctx)
+    mod = ctx[:mod]
+    typed_args = [Expr(:(::), x, t) for (x, t) in zip(args, types)]
+    header = Expr(:tuple, typed_args...)
+    fns = Array(Any, 0)
+    for (var, dex) in dexs        
+        fn_ex = Expr(:->, header, dex)
+        fn = eval(mod, fn_ex)
+        push!(fns, fn)
+    end
+    return fns
 end
 
 
@@ -297,8 +316,6 @@ end
 
 
 logistic(x) = 1 ./ (1 + exp(-x))
-
-h(W, b, x) = W .* x + b
 
 sigmoid(x) = 1 ./ (1 + exp(x))
 
@@ -309,7 +326,18 @@ function autoencoder(We1, We2, Wd, b1, b2, input)
     return reconstructedInput
 end
 
+function autoencoder_cost(We1, We2, Wd, b1, b2, input)
+    firstLayer = sigmoid(We1 * input + b1)
+    encodedInput = sigmoid(We2 * firstLayer + b2)
+    reconstructedInput = sigmoid(Wd * encodedInput)
+    cost = sum((reconstructedInput - input) .^ 2)
+    return cost
+end
+
 function main2()
+
+    dfns = fdiff(autoencoder_cost, [Matrix{Float64}, Matrix{Float64}, Matrix{Float64}, Vector{Float64}, Vector{Float64}, Vector{Float64}])
+    
     ex = :(autoencoder(We1, We2, Wd, b1, b2, input))
     ex = quote
         firstLayer = sigmoid(We1 * input + b1)

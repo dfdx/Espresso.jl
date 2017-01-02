@@ -63,7 +63,10 @@ const FROM_EINSTEIN_RULES =
                 :(Z = _op(X,Y)) => :(Z = _op(X,Y)),
                 :(Z[i] = _op(X[i], Y[i])) => :(Z = _op(X,Y)),
                 :(Z[i,j] = _op(X[i,j], Y[i,j])) => :(Z = _op(X,Y)),
-                :(Z[i,j,k] = _op(X[i,j,k], Y[i,j,k])) => :(Z = _op(X,Y)))
+                :(Z[i,j,k] = _op(X[i,j,k], Y[i,j,k])) => :(Z = _op(X,Y)),
+                :(Z[i] = _mod._op(X[i])) => :(Z = _mod._op(X)),
+                :(Z[i,j] = _mod._op(X[i,j])) => :(Z = _mod._op(X)),
+                :(Z[i,j,k] = _mod._op(X[i,j,k])) => :(Z = _mod._op(X)))
 
 
 function subs_size(ex::Expr, sizes::Dict)

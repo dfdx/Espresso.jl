@@ -32,13 +32,15 @@
 
 # other arithmetic operations
 
-@diff_rule (x::Number ^ n::Number) 1 (n * x^(n-1))
-@diff_rule (a::Number ^ x::Number) 2 (log(a) * a^x)
+@diff_rule (x::Number ^ n::Number) 1 (n * x.^(n-1))
+@diff_rule (a::Number ^ x::Number) 2 (log(a) * a.^x)
+@diff_rule (x::Number .^ n::Number) 1 (n * x.^(n-1))
+@diff_rule (a::Number .^ x::Number) 2 (log(a) * a.^x)
 # @diff_rule (x::Number ^ 2::Number) 1 (2x)
 
 @diff_rule (x::Number / y::Number) 1 (x / y)
 @diff_rule (x::AbstractArray / y::Number) 1 x ./ y
-@diff_rule (n::Number / x::Real) 2 (-n * x ^ -2)
+@diff_rule (n::Number / x::Real) 2 (-n * x .^ -2.0)
 @diff_rule (x::AbstractArray / y::Real) 2 (sum(-x .* y) / (y * y))
 
 @diff_rule (x::Any + y::Any) 1 1
