@@ -1,5 +1,5 @@
 
-# __precompile__()
+__precompile__()
 
 module Espresso
 
@@ -15,7 +15,7 @@ export matchex,
        simplify,
        _rdiff,
        rdiff,
-       tdiff,
+       fdiff,
        @diff_rule,
        @simple_rule,
        isindexed,

@@ -314,10 +314,10 @@ end
 
 #-----------------------------------------------------------------
 
+# TODO: check autoencoder example, remove code below
+
 
 logistic(x) = 1 ./ (1 + exp(-x))
-
-sigmoid(x) = 1 ./ (1 + exp(x))
 
 function autoencoder(We1, We2, Wd, b1, b2, input)
     firstLayer = sigmoid(We1 * input + b1)
