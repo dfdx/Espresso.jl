@@ -72,6 +72,9 @@ isindexed(nd::ExNode) = !isempty(nd.idxs) && any(x -> !isempty(x), nd.idxs)
     ctx::Dict{Any,Any}             # settings and caches
 end
 
+# constructor for test purposes only
+ExGraph(ex::Expr) = ExGraph(ex, ExNode[], Dict(), Dict())
+
 function ExGraph(ex::Expr; ctx=Dict(), inputs...)
     ctx = to_context(ctx)
     @get_or_create(ctx, :mod, current_module())
@@ -193,12 +196,21 @@ function parse!(g::ExGraph, ex::ExH{:ref})
 end
 
 
-function parse!(g::ExGraph, ex::ExH{:call})   
+function parse!(g::ExGraph, ex::ExH{:call})
     op = canonical(g.ctx[:mod], ex.args[1])
     deps, depidxs = unzip([parse!(g, arg) for arg in ex.args[2:end]])
     pex = Expr(:call, op, deps...)
     varidxs = forall_indices(op, depidxs)
     idxs = insert!(copy(depidxs), 1, varidxs)
+    var = addnode!(g, :call, genname(g), pex; idxs=idxs)
+    return var, varidxs
+end
+
+function parse!(g::ExGraph, ex::ExH{Symbol("'")})
+    dep, depidxs = parse!(g, ex.args[1])
+    pex = :(transpose($dep))
+    varidxs = reverse(depidxs)
+    idxs = [varidxs, depidxs]
     var = addnode!(g, :call, genname(g), pex; idxs=idxs)
     return var, varidxs
 end
@@ -315,4 +327,3 @@ function collapse_assignments!(g::ExGraph)
     g.tape = new_tape
     g.idx = new_idx
 end
-

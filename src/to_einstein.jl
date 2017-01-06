@@ -15,7 +15,8 @@ const TO_EINSTEIN_RULES =
 
 function to_einstein(ex::Expr; ctx=Dict(), inputs...)
     g = ExGraph(ex; ctx=to_context(ctx), inputs...)
-    forward_pass(g)
+    evaluate!(g, g.tape[end].var)
+    propagate_size!(g)
     res = :(begin end)
     for nd in g.tape
         if !isa(nd, ExNode{:input})
@@ -38,7 +39,7 @@ function to_einstein(g::ExGraph, nd::ExNode{:call})
     if haskey(TO_EINSTEIN_RULES, (op, dep_dims))
         rules = TO_EINSTEIN_RULES[(op, dep_dims)]
         for (pat, subex) in rules
-            matched = tryrewrite(ex, pat, subex; phs=TDIFF_PHS)
+            matched = tryrewrite(ex, pat, subex; phs=FROM_EIN_PHS)
             if !isnull(matched)
                 new_ex = get(matched)
                 varidxs = forall_indices(new_ex)
