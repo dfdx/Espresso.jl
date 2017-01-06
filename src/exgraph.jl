@@ -208,8 +208,9 @@ end
 
 function parse!(g::ExGraph, ex::ExH{Symbol("'")})
     dep, depidxs = parse!(g, ex.args[1])
+    @assert isempty(depidxs) ":' is not allowed in Einstin notation"
     pex = :(transpose($dep))
-    varidxs = reverse(depidxs)
+    varidxs = Symbol[]
     idxs = [varidxs, depidxs]
     var = addnode!(g, :call, genname(g), pex; idxs=idxs)
     return var, varidxs
