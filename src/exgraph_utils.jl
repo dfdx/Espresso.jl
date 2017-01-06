@@ -6,7 +6,7 @@ function expand_const_1(g::ExGraph, nd::ExNode{:call})
             st[dep] = g[dep].val
         end
     end
-    return subs(expr(nd), st)
+    return subs(to_expr(nd), st)
 end
 
 

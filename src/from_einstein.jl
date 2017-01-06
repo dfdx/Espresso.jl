@@ -1,6 +1,9 @@
 
 # from Einstein to vectorized notation
 
+const FROM_EIN_PHS = [:A, :B, :C, :X, :Y, :V, :W, :Z,
+                   :i, :j, :k, :l, :m, :n, :p, :q, :r, :s, :t]
+
 const FROM_EINSTEIN_RULES =
     OrderedDict(:(Z[j] = I[i] * X[i,j]) => :(Z = sum(X,1)'),
                 :(Z[i] = I[j] * X[i,j]) => :(Z = sum(X,2)),
@@ -63,7 +66,10 @@ const FROM_EINSTEIN_RULES =
                 :(Z = _op(X,Y)) => :(Z = _op(X,Y)),
                 :(Z[i] = _op(X[i], Y[i])) => :(Z = _op(X,Y)),
                 :(Z[i,j] = _op(X[i,j], Y[i,j])) => :(Z = _op(X,Y)),
-                :(Z[i,j,k] = _op(X[i,j,k], Y[i,j,k])) => :(Z = _op(X,Y)))
+                :(Z[i,j,k] = _op(X[i,j,k], Y[i,j,k])) => :(Z = _op(X,Y)),
+                :(Z[i] = _mod._op(X[i])) => :(Z = _mod._op(X)),
+                :(Z[i,j] = _mod._op(X[i,j])) => :(Z = _mod._op(X)),
+                :(Z[i,j,k] = _mod._op(X[i,j,k])) => :(Z = _mod._op(X)))
 
 
 function subs_size(ex::Expr, sizes::Dict)
@@ -102,9 +108,9 @@ from_einstein(g::ExGraph, nd::ExNode{:constant}) = to_expr(nd)
 function from_einstein(g::ExGraph, nd::Union{ExNode{:call}, ExNode{:(=)}})
     ex = to_iexpr(nd)
     for (pat, rpat) in FROM_EINSTEIN_RULES
-        if !isnull(matchex(pat, ex; phs=TDIFF_PHS, allow_ex=false))   # consider tryrewrite
+        if !isnull(matchex(pat, ex; phs=FROM_EIN_PHS, allow_ex=false))   # consider tryrewrite
             # println("... expression $ex matched pattern $pat with replace pattern $rpat")
-            rex = rewrite(ex, pat, rpat; phs=TDIFF_PHS)
+            rex = rewrite(ex, pat, rpat; phs=FROM_EIN_PHS)
             return rex
         end
     end

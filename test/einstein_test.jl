@@ -13,3 +13,9 @@
 @test sum_indices(:(A[i,j] + B[i,j])) == Symbol[]
 @test forall_indices(:(exp(A[i]))) == [:i]
 @test sum_indices(:(exp(A[i]))) == []
+
+@test forall_indices(:(A[i] + B[i,j])) == [:i, :j]
+@test sum_indices(:(A[i] + B[i,j])) == Symbol[]
+
+@test forall_indices(:(C[i] = A[j] + B[j,k])) == [:i]
+@test sum_indices(:(C[i] = A[j] + B[j,k])) == [:j,:k]
