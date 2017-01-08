@@ -143,10 +143,42 @@ function propagate_size!(g::ExGraph, nd::ExNode{:constant})
     sizes[nd.var] = Expr(:tuple, sz...)
 end
 
-function propagate_size!(g::ExGraph, nd::ExNode{:(=)})
+function indexperm{I<:ExIndex}(lhs_idxs::Vector{I}, rhs_idxs::Vector{I})
+    perm = Int[]
+    for lhs_idx in lhs_idxs
+        rhs_pos = findfirst(rhs_idxs, lhs_idx)
+        if rhs_pos < 1
+            error("LHS index $lhs_idx doesn't happen on RHS")
+        end
+        push!(perm, rhs_pos)
+    end
+    return perm
+end
+
+function propagated_size(g::ExGraph, nd::ExNode{:(=)})
     dep = dependencies(nd)[1]
     sizes = @get_or_create(g.ctx, :sizes, Dict())
-    sizes[nd.var] = sizes[dep]
+    if length(nd.idxs) == 0 || (length(nd.idxs) == 2 && nd.idxs[1] == nd.idxs[2])
+        # not indexed or indices on LHS and RHS are equal
+        return sizes[dep]
+    elseif isempty(nd.idxs[1])
+        # special case for scalars (nicer expression then the following)
+        return Expr(:tuple)
+    else
+        perm = indexperm(nd.idxs[1], nd.idxs[2])
+        dep_sz = sizes[dep]
+        var_sz_maybe = tryrewrite(dep_sz, :(size(_V)), :(size(_V, $(perm...))))
+        if !isnull(var_sz_maybe)
+            return get(var_sz_maybe)
+        else
+            return :($(dep_sz)[[$(perm...)]])
+        end
+    end
+end
+
+function propagate_size!(g::ExGraph, nd::ExNode{:(=)})
+    sizes = @get_or_create(g.ctx, :sizes, Dict())
+    sizes[nd.var] = propagated_size(g, nd)
 end
 
 

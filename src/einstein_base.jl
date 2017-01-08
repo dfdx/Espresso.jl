@@ -120,7 +120,12 @@ end
 # 4. Otherwise, all repeating indices are sum, all others - forall
 
 function longest_index(idxs_list::Vector{Vector{Symbol}})
-    reduce((idx1, idx2) -> length(idx1) < length(idx2) ? idx2 : idx1, idxs_list)
+    if isempty(idxs_list)
+        return Symbol[]
+    else
+        reduce((idx1, idx2) -> length(idx1) < length(idx2) ? idx2 : idx1,
+               idxs_list)
+    end
 end
 
 

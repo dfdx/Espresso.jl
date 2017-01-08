@@ -72,9 +72,6 @@ isindexed(nd::ExNode) = !isempty(nd.idxs) && any(x -> !isempty(x), nd.idxs)
     ctx::Dict{Any,Any}             # settings and caches
 end
 
-# constructor for test purposes only
-ExGraph(ex::Expr) = ExGraph(ex, ExNode[], Dict(), Dict())
-
 function ExGraph(ex::Expr; ctx=Dict(), inputs...)
     ctx = to_context(ctx)
     @get_or_create(ctx, :mod, current_module())

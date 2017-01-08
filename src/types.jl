@@ -7,6 +7,7 @@ typealias Numeric Union{Number, Array}
 # name of operation in a :call node - either symbol or Module.symbol
 typealias OpName Union{Symbol, Expr}
 
+typealias ExIndex Union{Symbol, Int}
 
 # Wrapper around Expr adding `ex.head` to type parameters thus adding convenient
 # type dispatching
