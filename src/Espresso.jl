@@ -12,7 +12,6 @@ export # ExGraph
        evaluate!,
        propagate_size!,
        expand_temp,
-       expr,
        dependencies,
        dep_vars,
        # rewrite
