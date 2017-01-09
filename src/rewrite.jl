@@ -108,8 +108,9 @@ function subs(ex::Expr, st::Dict)
     if haskey(st, ex)
         return st[ex]
     else
-        new_args = [isa(arg, Expr) ? subs(arg, st) : get(st, arg, arg)
-                    for arg in ex.args]
+        # new_args = [isa(arg, Expr) ? subs(arg, st) : get(st, arg, arg)
+        #             for arg in ex.args]
+        new_args = [subs(arg, st) for arg in ex.args]
         return Expr(ex.head, new_args...)
     end
 end
@@ -118,10 +119,8 @@ function subs(s::Symbol, st::Dict)
     return haskey(st, s) ? st[s] : s
 end
 
-function subs(s::Any, st::Dict)
-    return s
-end
-
+subs(q::QuoteNode, st::Dict) = QuoteNode(subs(q.value, st))
+subs(x::Any, st::Dict) = x
 subs(ex; st...) = subs(ex, Dict(st))
 
 

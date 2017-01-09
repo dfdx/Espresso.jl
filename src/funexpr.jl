@@ -33,7 +33,7 @@ end
 if VERSION < v"0.5.0-"
 
     """Extract arguments and (sanitized) expression of a function body"""
-    function funexpr(f::Function, types::Vector{DataType})
+    function funexpr{N}(f::Function, types::NTuple{N,DataType})
         fs = methods(f, types)
         length(fs) != 1 && error("Found $(length(fs)) methods for function $f " *
                                  "with types $types, expected exactly 1 method")
@@ -62,7 +62,7 @@ else
     end
 
     """Extract arguments and (sanitized) expression of a function body"""
-    function funexpr(f::Function, types::Vector{DataType})
+    function funexpr{N}(f::Function, types::NTuple{N,DataType})
         ms = methods(f, types).ms
         length(ms) != 1 && error("Found $(length(ms)) methods for function $f " *
                                  "with types $types, expected exactly 1 method")

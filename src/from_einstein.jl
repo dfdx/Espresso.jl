@@ -108,8 +108,8 @@ from_einstein(g::ExGraph, nd::ExNode{:constant}) = to_expr(nd)
 function from_einstein(g::ExGraph, nd::Union{ExNode{:call}, ExNode{:(=)}})
     ex = to_iexpr(nd)
     for (pat, rpat) in FROM_EINSTEIN_RULES
-        if !isnull(matchex(pat, ex; phs=FROM_EIN_PHS, allow_ex=false))   # consider tryrewrite
-            # println("... expression $ex matched pattern $pat with replace pattern $rpat")
+        # consider tryrewrite
+        if !isnull(matchex(pat, ex; phs=FROM_EIN_PHS, allow_ex=false))
             rex = rewrite(ex, pat, rpat; phs=FROM_EIN_PHS)
             return rex
         end

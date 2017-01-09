@@ -57,7 +57,11 @@ end
 
 function Base.show{C}(io::IO, nd::ExNode{C})
     val = isa(nd.val, AbstractArray) ? "<$(typeof(nd.val))>" : nd.val
-    print(io, "ExNode{$C}($(to_expr(nd)) | $val)")
+    if isempty(nd.idxs)
+        print(io, "ExNode{$C}($(to_expr(nd)) | $val)")
+    else
+        print(io, "ExNode{$C}($(to_iexpr(nd)) | $val)")
+    end
 end
 
 isindexed(nd::ExNode) = !isempty(nd.idxs) && any(x -> !isempty(x), nd.idxs)
@@ -72,18 +76,17 @@ isindexed(nd::ExNode) = !isempty(nd.idxs) && any(x -> !isempty(x), nd.idxs)
     ctx::Dict{Any,Any}             # settings and caches
 end
 
-function ExGraph(ex::Expr; ctx=Dict(), inputs...)
+function ExGraph(ex::Expr, do_parse=true; ctx=Dict(), inputs...)
     ctx = to_context(ctx)
     @get_or_create(ctx, :mod, current_module())
     g = ExGraph(ex, ExNode[], Dict(), ctx)
-    for (var, val) in inputs
-        addnode!(g, :input, var, var; val=val)
+    if do_parse
+        for (var, val) in inputs
+            addnode!(g, :input, var, var; val=val)
+        end
+        parse!(g, ex)
+        collapse_assignments!(g)
     end
-    # for (var, val) in get(ctx, :constants, [])
-    #     addnode!(g, :constant, var, var; val=val)
-    # end
-    parse!(g, ex)
-    collapse_assignments!(g)
     return g
 end
 

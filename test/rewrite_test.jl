@@ -16,3 +16,7 @@ set_default_placeholders(Set(Symbol[]))
 @test isnull(tryrewrite(:(a + 2b), :(x + 3y), :(x * y); phs=[:x, :y]))
 
 @test without(:(x * (m == n)), :(_i == _j)) == :x
+
+@test subs(:(x^n); n=2) == :(x^2)
+@test subs(:(x^n), Dict(:n => 2)) == :(x^2)
+@test subs(:(_mod._op); _mod=:Main, _op=:inc) == :(Main.inc)
