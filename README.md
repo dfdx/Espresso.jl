@@ -2,7 +2,7 @@
 
 [![Build Status](https://travis-ci.org/dfdx/Espresso.jl.svg?branch=master)](https://travis-ci.org/dfdx/Espresso.jl)
 
-Expression transformation package.
+Expression transformation package. 
 
 ## Expression parsing and rewriting
 
@@ -90,12 +90,12 @@ On low-level many functions of Espresso.jl use `ExGraph` - expression graph, rep
 
 ```
 g = ExGraph(:(W*x + b); W=rand(3,4), x=rand(4), b=rand(3))
-ExGraph
-  ExNode{input}(W = W | <Array{Float64,2}>)
-  ExNode{input}(x = x | <Array{Float64,1}>)
-  ExNode{input}(b = b | <Array{Float64,1}>)
-  ExNode{call}(tmp1 = W * x | nothing)
-  ExNode{call}(tmp2 = tmp1 + b | nothing)
+## ==> ExGraph
+## ==>   ExNode{input}(W = W | <Array{Float64,2}>)
+## ==>   ExNode{input}(x = x | <Array{Float64,1}>)
+## ==>   ExNode{input}(b = b | <Array{Float64,1}>)
+## ==>   ExNode{call}(tmp1 = W * x | nothing)
+## ==>   ExNode{call}(tmp2 = tmp1 + b | nothing)
 ```
 
 The main advantage of using such representation is that each node represents exactly one simple enough expression such as assignment or function call. For example, `to_einstein` and `from_einstein` both use `ExGraph` to find rule for transforming between two notations.
