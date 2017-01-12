@@ -44,6 +44,7 @@ const FROM_EINSTEIN_RULES =
                 :(Z[i,j] = Y[k,j] * X[i,k]) => :(Z = X * Y),
                 :(Z[i,j] = X[i,k] .* Y[k,j]) => :(Z = X * Y),
                 :(Z[i,j] = Y[k,j] .* X[i,k]) => :(Z = X * Y),
+                :(Z[i,j] = Y[i,j] .* X[j,i]) => :(Z = X * Y'),
                 # repmat
                 :(Z[i,j] = X[j]) => :(Z = repmat(X', size__(Z)[1])),
                 :(Z[i,j] = X[i]) => :(Z = repmat(X, 1, size__(Z)[2])),

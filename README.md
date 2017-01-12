@@ -14,9 +14,9 @@ that start with '_' or any symbols passed in `phs` parameter.
 
 ```julia
 matchex(:(_x^2), :(u^2))
-# ==> Nullable(Dict{Symbol,Any}(:_x=>:u))
+# Nullable(Dict{Symbol,Any}(:_x=>:u))
 matchex(:(x^n), :(u^2); phs=Set([:x, :n]))
-# ==> Nullable(Dict{Symbol,Any}(:x=>:u,:n=>2))
+# Nullable(Dict{Symbol,Any}(:x=>:u,:n=>2))
 ```
 
 See also `matchingex`.  
@@ -29,7 +29,7 @@ See also `findex`.
 ```julia
 ex = :(x ^ n)
 subs(ex, x=2)
-# ==> :(2 ^ n)
+# :(2 ^ n)
 ```
 
 ### Expression rewriting
@@ -42,7 +42,7 @@ ex = :(u ^ v)
 pat = :(_x ^ _n)
 subex = :(_n * _x ^ (_n - 1))
 rewrite(ex, pat, subex)
-# ==> :(v * u ^ (v - 1))
+# :(v * u ^ (v - 1))
 ```
 
 See also `tryrewrite`.
@@ -78,8 +78,8 @@ Here `W=rand(3,4)`, `x=rand(4)` and `b=rand(3)` are _example values_ - anything 
 
 ```julia
 from_einstein(:(W[i,k] * x[k] + b[i]))
-# quote  # REPL[7], line 2:
-#     tmp1 = W * x # REPL[7], line 3:
+# quote
+#     tmp1 = W * x
 #     tmp2 = tmp1 + b
 # end
 ```

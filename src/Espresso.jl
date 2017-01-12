@@ -32,6 +32,7 @@ export # ExGraph
        simplify,
        @simple_rule,
        # einstein notation
+       ExIndex,
        isindexed,
        is_einstein,
        forall_indices,
@@ -46,6 +47,7 @@ export # ExGraph
        without_guards,
        from_einstein,
        to_einstein,
+       to_einsum,
        # funexpr
        funexpr,
        replace_slots
