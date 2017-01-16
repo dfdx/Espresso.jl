@@ -91,7 +91,7 @@ end
 # 2. If expression is multiplication (*, not .*), use standard Einstein rules
 # 3. Otherwise, all repeating indices are forall, all others - sum (reverse of Einstein rules)
 
-function longest_index(idxs_list::Vector{Vector{Symbol}})
+function longest_index{Idx}(idxs_list::Vector{Vector{Idx}})
     if isempty(idxs_list)
         return Symbol[]
     else
@@ -133,9 +133,14 @@ function forall_sum_indices(ex::Expr)
         rhs_idxs = flatten(Symbol, get_indices(ex.args[2]))
         sum_idxs = setdiff(rhs_idxs, lhs_idxs)
         return unique(lhs_idxs), sum_idxs
+    elseif ex.head == :ref
+        return convert(Vector{ExIndex}, ex.args[2:end]), Symbol[]
+    elseif ex.head == :call
+        depidxs = Vector{ExIndex}[forall_indices(arg) for arg in ex.args[2:end]]
+        # should we also add sum indices of dependencies?
+        return forall_sum_indices(ex.args[1], depidxs)
     else
-        @assert ex.head == :call
-        return forall_sum_indices(ex.args[1], get_indices(ex))
+        error("Don't know how to extract forall and sum indices from: $ex")
     end
 end
 
