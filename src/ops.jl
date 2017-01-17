@@ -6,7 +6,6 @@
 #    :x ⊕ :y      ==>  :(x + y)
 #    2 ⊗ :(x ⊕ y) ==>  :(2 * (x + y))
 
-using Compat
 # import Base: +, -, *, /, .+, .-, .*, ./
 
 # ⊕(ex::Symbolic, v::Numeric) = :($ex + $v)
