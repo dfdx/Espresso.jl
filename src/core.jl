@@ -6,7 +6,6 @@
 
 using DataStructures
 using Einsum
-using Compat
 
 include("utils.jl")
 include("types.jl")

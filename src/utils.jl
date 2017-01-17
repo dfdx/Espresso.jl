@@ -222,7 +222,7 @@ function type_ansestors{T<:Number}(t::Type{T})
     types = Type[]
     while t != Any
         push!(types, t)
-        t = @compat supertype(t)
+        t = supertype(t)
     end
     push!(types, Any)
     return types
