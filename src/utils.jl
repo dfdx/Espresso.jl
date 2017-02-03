@@ -37,13 +37,13 @@ end
 
 """Same as `get` function, but evaluates default_expr only if needed"""
 macro get(dict, key, default_expr)
-    return quote
+    return esc(quote
         if haskey($dict, $key)
             $dict[$key]
         else
             $default_expr
         end
-    end
+    end)
 end
 
 
@@ -150,7 +150,8 @@ if VERSION < v"0.5-"
     func_mod(f) = f.env.module
 else
     func_name(f) = Base.function_name(f)
-    func_mod(f) = Base.function_module(f)
+    # func_mod(f) = Base.function_module(f)
+    func_mod(f) = Base.datatype_module(typeof(f))
 end
 
 
@@ -206,32 +207,6 @@ function canonical_calls(mod::Module, ex::Expr)
 end
 
 canonical_calls(mod::Module, x) = x
-
-
-
-"""
-Find all types that may be considered ansestors of this type.
-For number types it is the same as Julia type hierarchy.
-For array types it includes unparametrized versions of types, i.e.:
-
-    type_ansestors(Vector{Float64})
-    # ==> [Array{Float64,1}, Array{T,1}, DenseArray{T,1},
-           AbstractArray{T,1}, AbstractArray{T,N}, Any]
-"""
-function type_ansestors{T<:Number}(t::Type{T})
-    types = Type[]
-    while t != Any
-        push!(types, t)
-        t = supertype(t)
-    end
-    push!(types, Any)
-    return types
-end
-
-type_ansestors{T}(t::Type{Vector{T}}) =
-    [t, Vector, DenseVector, AbstractVector, AbstractArray, Any]
-type_ansestors{T}(t::Type{Matrix{T}}) =
-    [t, Matrix, DenseMatrix, AbstractMatrix, AbstractArray, Any]
 
 
 # context
@@ -296,8 +271,3 @@ function reduce_equalities{T}(pairs::Vector{Tuple{T,T}}, anchors::Set{T})
     end
     return st, [p for p in new_pairs]
 end
-
-
-# ML-related functions (for tests)
-
-relu(x) = max(0, x)

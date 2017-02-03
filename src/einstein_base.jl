@@ -1,4 +1,5 @@
 
+
 # einstein.jl - utils for working with expressions in Einstein notation
 
 const IDX_NAMES = [:i, :j, :k, :l, :m, :n, :p, :q, :r, :s]
@@ -88,8 +89,8 @@ end
 
 # forall & sum indices rules:
 # 1. If there's LHS, everything on LHS is forall, everything else is sum
-# 2. If expression is multiplication (*, not .*), use standard Einstein rules
-# 3. Otherwise, all repeating indices are forall, all others - sum (reverse of Einstein rules)
+# 2. If expression is multiplication (*, not .*), summation is implied
+# 3. Otherwise (including element-wise operations and broadcasting), forall is implied
 
 function longest_index{Idx}(idxs_list::Vector{Vector{Idx}})
     if isempty(idxs_list)
