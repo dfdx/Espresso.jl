@@ -52,12 +52,12 @@ Same as `@get`, but creates new object from `default_expr` if
 it didn't exist before
 """
 macro get_or_create(dict, key, default_expr)
-    return quote
+    return esc(quote
         if !haskey($dict, $key)
             $dict[$key] = $default_expr
         end
         $dict[$key]
-    end
+    end)
 end
 
 
@@ -67,14 +67,14 @@ Same as `@get`, but immediately exits function and return `default_expr`
 if key doesn't exist.
 """
 macro get_or_return(dict, key, default_expr)
-    return quote
+    return esc(quote
         if haskey($dict, $key)
             $dict[$key]
         else
             return $default_expr
             nothing  # not reachable, but without it code won't compile
         end
-    end
+    end)
 end
 
 """
@@ -84,7 +84,7 @@ using `default_expr`. If element exists, but is not an error,
 throw ArgumentError.
 """
 macro get_array(dict, key, sz, default_expr)
-    return quote
+    return esc(quote
         if (haskey($dict, $key) && !isa($dict[$key], Array))
             local k = $key
             throw(ArgumentError("Key `$k` exists, but is not an array"))
@@ -94,7 +94,7 @@ macro get_array(dict, key, sz, default_expr)
             $dict[$key] = convert(Array, $default_expr)
         end
         $dict[$key]
-    end
+    end)
 end
 
 

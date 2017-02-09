@@ -75,7 +75,7 @@ function indexed_vars!(res::Vector{Expr}, ex)
 end
 
 function indexed_vars(ex)
-    res = Array(Expr, 0)
+    res = Array{Expr}(0)
     indexed_vars!(res, ex)
     return res
 end
