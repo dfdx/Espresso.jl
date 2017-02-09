@@ -186,7 +186,9 @@ function canonical(mod::Module, qname)
     f = eval(mod, qname)
     mod = func_mod(f)
     name = func_name(f)
-    if mod == Base || mod == Base.Math || mod == Base.LinAlg
+    if qname in [:.*, :./, :.+, :.-, :.^]
+        return qname  # for Julia 0.6 only
+    elseif mod == Base || mod == Base.Math || mod == Base.LinAlg
         return Symbol(name)
     else
         # there should be a smarter way to do it...
@@ -270,4 +272,12 @@ function reduce_equalities{T}(pairs::Vector{Tuple{T,T}}, anchors::Set{T})
         end
     end
     return st, [p for p in new_pairs]
+end
+
+
+# TODO: remove
+
+function test_fun(x::Int, y::Float64)
+    z = x + y
+    return exp(z)
 end

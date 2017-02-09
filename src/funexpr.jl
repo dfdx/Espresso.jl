@@ -44,7 +44,7 @@ if VERSION < v"0.5.0-"
         return fargs, sanitize(fcode)
     end
 
-else    
+elseif VERSION < v"0.6.0-"   
 
     function replace_slots(ex::Expr, slotnames::Vector)
         new_args = Array(Any, length(ex.args))
@@ -76,4 +76,19 @@ else
         return args, sanitize(ex)
     end
 
+else
+
+    function arg_names(sig::Expr)
+        return [isa(arg,  Symbol) ? arg : arg.args[1] for arg in sig.args[2:end]]
+    end
+
+    
+    function funexpr{N}(f::Function, types::NTuple{N,DataType})
+        method = Sugar.get_method(f, types)
+        file = string(method.file)
+        linestart = method.line
+        code, _ = Sugar.get_source_at(file, linestart)
+        return arg_names(code.args[1]), sanitize(code.args[2])
+    end
+    
 end

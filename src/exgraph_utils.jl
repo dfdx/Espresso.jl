@@ -1,5 +1,5 @@
 
-function expand_const_1(g::ExGraph, nd::ExNode{:call})
+function expand_const_1(g::ExGraph, nd::Union{ExNode{:call}, ExNode{:bcast}})
     st = Dict()
     for dep in dependencies(nd)
         if haskey(g, dep) && isa(g[dep], ExNode{:constant})
@@ -228,14 +228,23 @@ function propagate_size!(g::ExGraph, nd::ExNode{:call})
             size_ex = simplify(subs(rpat, st))
             sizes[nd.var] = size_ex
         else
-            # TODO: take dep with max number of dims to handle broadcasting
-            size_ex = sizes[deps[1]]
+            i = findmax(dep_dims)[2]
+            size_ex = sizes[deps[i]]
             sizes[nd.var] = size_ex
         end
     else
         error("Can't propagate size of $nd: not all deps present in graph")
     end
+end
 
+
+function propagate_size!(g::ExGraph, nd::ExNode{:bcast})
+    sizes = @get_or_create(g.ctx, :sizes, Dict())
+    deps = dependencies(nd)
+    dep_dims = [ndims_from_size(g, dep) for dep in deps]
+    i = findmax(dep_dims)[2]
+    size_ex = sizes[deps[i]]
+    sizes[nd.var] = size_ex
 end
 
 

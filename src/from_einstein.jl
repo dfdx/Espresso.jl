@@ -47,30 +47,30 @@ const FROM_EINSTEIN_RULES =
                 :(Z[i,j] = Y[i,j] .* X[j,i]) => :(Z = X * Y'),
                 # repmat
                 :(Z[i,j] = X[j]) => :(Z = repmat(X', size__(Z)[1])),
-                :(Z[i,j] = X[i]) => :(Z = repmat(X, 1, size__(Z)[2])),
+                :(Z[i,j] = X[i]) => :(Z = repmat(X, 1, size__(Z)[2])))
                 # broadcasting
-                :(Z[i] = _op(_a, X[i])) => :(Z = _op(_a, X)),
-                :(Z[i,j] = _op(_a, X[i,j])) => :(Z = _op(_a, X)),
-                :(Z[i,j,k] = _op(_a, X[i,j,k])) => :(Z = _op(_a, X)),
-                :(Z[i] = _op(X[i], _a)) => :(Z = _op(X, _a)),
-                :(Z[i,j] = _op(X[i,j], _a)) => :(Z = _op(X, _a)),
-                :(Z[i,j,k] = _op(X[i,j,k], _a)) => :(Z = _op(X, _a)),
-                :(Z[i,j] = _op(X[i], Y[i,j])) => :(Z = _op(X, Y)),
-                :(Z[i,j] = _op(X[i,j], Y[i])) => :(Z = _op(X, Y)),
-                :(Z[i,j] = _op(X[j], Y[i,j])) => :(Z = _op(X', Y)),
-                :(Z[i,j] = _op(X[i,j], Y[j])) => :(Z = _op(X', Y)),
-                # elementwise operations (move to special case?)
-                :(Z = _op(X)) => :(Z = _op(X)),
-                :(Z[i] = _op(X[i])) => :(Z = _op(X)),
-                :(Z[i,j] = _op(X[i,j])) => :(Z = _op(X)),
-                :(Z[i,j,k] = _op(X[i,j,k])) => :(Z = _op(X)),
-                :(Z = _op(X,Y)) => :(Z = _op(X,Y)),
-                :(Z[i] = _op(X[i], Y[i])) => :(Z = _op(X,Y)),
-                :(Z[i,j] = _op(X[i,j], Y[i,j])) => :(Z = _op(X,Y)),
-                :(Z[i,j,k] = _op(X[i,j,k], Y[i,j,k])) => :(Z = _op(X,Y)),
-                :(Z[i] = _mod._op(X[i])) => :(Z = _mod._op(X)),
-                :(Z[i,j] = _mod._op(X[i,j])) => :(Z = _mod._op(X)),
-                :(Z[i,j,k] = _mod._op(X[i,j,k])) => :(Z = _mod._op(X)))
+                # :(Z[i] = _op(_a, X[i])) => :(Z = _op(_a, X)),
+                # :(Z[i,j] = _op(_a, X[i,j])) => :(Z = _op(_a, X)),
+                # :(Z[i,j,k] = _op(_a, X[i,j,k])) => :(Z = _op(_a, X)),
+                # :(Z[i] = _op(X[i], _a)) => :(Z = _op(X, _a)),
+                # :(Z[i,j] = _op(X[i,j], _a)) => :(Z = _op(X, _a)),
+                # :(Z[i,j,k] = _op(X[i,j,k], _a)) => :(Z = _op(X, _a)),
+                # :(Z[i,j] = _op(X[i], Y[i,j])) => :(Z = _op(X, Y)),
+                # :(Z[i,j] = _op(X[i,j], Y[i])) => :(Z = _op(X, Y)),
+                # :(Z[i,j] = _op(X[j], Y[i,j])) => :(Z = _op(X', Y)),
+                # :(Z[i,j] = _op(X[i,j], Y[j])) => :(Z = _op(X', Y)),
+                # # elementwise operations (move to special case?)
+                # :(Z = _op(X)) => :(Z = _op(X)),
+                # :(Z[i] = _op(X[i])) => :(Z = _op(X)),
+                # :(Z[i,j] = _op(X[i,j])) => :(Z = _op(X)),
+                # :(Z[i,j,k] = _op(X[i,j,k])) => :(Z = _op(X)),
+                # :(Z = _op(X,Y)) => :(Z = _op(X,Y)),
+                # :(Z[i] = _op(X[i], Y[i])) => :(Z = _op(X,Y)),
+                # :(Z[i,j] = _op(X[i,j], Y[i,j])) => :(Z = _op(X,Y)),
+                # :(Z[i,j,k] = _op(X[i,j,k], Y[i,j,k])) => :(Z = _op(X,Y)),
+                # :(Z[i] = _mod._op(X[i])) => :(Z = _mod._op(X)),
+                # :(Z[i,j] = _mod._op(X[i,j])) => :(Z = _mod._op(X)),
+                # :(Z[i,j,k] = _mod._op(X[i,j,k])) => :(Z = _mod._op(X)))
 
 
 function subs_size(ex::Expr, sizes::Dict)
@@ -115,5 +115,18 @@ function from_einstein(g::ExGraph, nd::Union{ExNode{:call}, ExNode{:(=)}})
             return rex
         end
     end
-    error("No pattern to transform from Einstein notation, expression: $ex")
+    # if no patterns found, try broadcasting
+    all_idxs = call_indices(to_iexpr(nd))
+    longest_idx = longest_index(all_idxs)
+    is_bcast = all(idx -> idx == longest_idx || isempty(idx), all_idxs)
+    if is_bcast
+        # TODO handle ExNode{:(=)} too
+        return Expr(:., expr(nd).args[1], Expr(:tuple, dependencies(nd)...))
+    else
+        error("Neither pattern found, nor broadcasting is applicable when transformaing from" *
+              "Einstein notation, expression: $ex")
+    end
 end
+
+
+

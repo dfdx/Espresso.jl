@@ -1,9 +1,7 @@
 
 # from vectorized to Einstein notation
 
-# TODO: add LHS to patterns
 # TODO: fix transpose
-# TODO: maybe remove pseudoone
 
 const TO_EINSTEIN_RULES =
     OrderedDict((:sum, [0]) => [:(Z = sum(X)) => :(Z = X)],
@@ -66,6 +64,22 @@ function to_einstein(g::ExGraph, nd::ExNode{:call})
         return Expr(:(=), ivar, icall)
     end
 end
+
+
+function to_einstein(g::ExGraph, nd::ExNode{:bcast})
+    ex = expand_const_1(g, nd)
+    op = ex.args[2].args[1]
+    dep_dims = [ndims(g[dep].val) for dep in dependencies(nd) if haskey(g, dep)]
+    
+    depidxs = [IDX_NAMES[1:dims] for dims in dep_dims]
+    ideps = [maybe_indexed(dep, idxs)
+             for (dep, idxs) in zip(dependencies(nd), depidxs)]
+    icall = Expr(:call, op, ideps...)
+    varidxs = forall_indices(icall)
+    ivar = maybe_indexed(nd.var, varidxs)
+    return Expr(:(=), ivar, icall)
+end
+
 
 function to_einstein(g::ExGraph, nd::ExNode{:(=)})
     dep = dependencies(nd)[1]

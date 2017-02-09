@@ -6,6 +6,7 @@
 
 using DataStructures
 using Einsum
+using Sugar
 
 include("utils.jl")
 include("types.jl")

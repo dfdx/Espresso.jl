@@ -2,3 +2,4 @@
 \#*
 *.jld
 .juliahistory
+*.save

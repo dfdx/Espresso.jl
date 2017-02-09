@@ -19,6 +19,9 @@ end
 to_exh(ex::Expr) = ExH{ex.head}(ex.head, ex.args)
 to_expr(exh::ExH) = Expr(exh.head, exh.args...)
 
+Base.convert(::Type{ExH}, ex::Expr) = ExH{ex.head}(ex.head, ex.args)
+ExH(ex::Expr) = ExH{ex.head}(ex.head, ex.args)
+
 @runonce type ExCall{Op}
     head::Symbol
     args::Vector

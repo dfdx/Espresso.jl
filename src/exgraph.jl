@@ -32,6 +32,7 @@ dependencies(nd::ExNode{:input}) = Symbol[]
 dependencies(nd::ExNode{:constant}) = Symbol[]
 dependencies(nd::ExNode{:(=)}) = [nd.ex]
 dependencies(nd::ExNode{:call}) = nd.ex.args[2:end]
+dependencies(nd::ExNode{:bcast}) = nd.ex.args[2].args
 
 to_expr(nd::ExNode) = :($(nd.var) = $(nd.ex))
 function to_einsum_expr(nd::ExNode)
@@ -206,6 +207,20 @@ function parse!(g::ExGraph, ex::ExH{:call})
     return var, varidxs
 end
 
+
+function parse!(g::ExGraph, ex::ExH{:.})
+    @assert(isa(ex.args[2], Expr) && ex.args[2].head == :tuple,
+            "Dot (.) is only allowedd in elementwise operations (e.g. f.(...))")
+    op = canonical(g.ctx[:mod], ex.args[1])
+    deps, depidxs = unzip([parse!(g, arg) for arg in ex.args[2].args])
+    pex = Expr(:., op, Expr(:tuple, deps...))
+    varidxs = forall_indices(op, depidxs)
+    idxs = insert!(copy(depidxs), 1, varidxs)
+    var = addnode!(g, :bcast, genname(g), pex; idxs=idxs)
+    return var, varidxs
+end
+
+
 function parse!(g::ExGraph, ex::ExH{Symbol("'")})
     dep, depidxs = parse!(g, ex.args[1])
     @assert isempty(depidxs) ":' is not allowed in Einstin notation"
@@ -273,6 +288,23 @@ function evaluate!(g::ExGraph, nd::ExNode{:call})
     return nd.val
 end
 
+    
+function evaluate!(g::ExGraph, nd::ExNode{:bcast})
+    if (nd.val != nothing) return nd.val end
+    deps = dependencies(nd)
+    for dep in deps
+        # if dep is not in graph, consider it a global constant (like π)
+        if haskey(g.idx, dep)
+            evaluate!(g, g[dep])
+        end
+    end
+    evex = mk_eval_expr(g, nd)
+    nd.val = eval(evex)
+    return nd.val
+end
+
+    
+    
 evaluate!(g::ExGraph, name::Symbol) = evaluate!(g, g.idx[name])
 evaluate!(g::ExGraph) = evaluate!(g, g[end])
 
