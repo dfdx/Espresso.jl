@@ -36,6 +36,7 @@ function parse_indexed(ex::Expr)
     return convert(Symbol, ex.args[1]), convert(Vector{Symbol}, ex.args[2:end])
 end
 
+call_indices(x::Symbol) = [Symbol[]]
 
 function call_indices(ex::Expr)
     if ex.head == :call     # e.g. :(x[i] + 1)

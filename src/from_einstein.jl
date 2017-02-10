@@ -47,7 +47,9 @@ const FROM_EINSTEIN_RULES =
                 :(Z[i,j] = Y[i,j] .* X[j,i]) => :(Z = X * Y'),
                 # repmat
                 :(Z[i,j] = X[j]) => :(Z = repmat(X', size__(Z)[1])),
-                :(Z[i,j] = X[i]) => :(Z = repmat(X, 1, size__(Z)[2])))
+                :(Z[i,j] = X[i]) => :(Z = repmat(X, 1, size__(Z)[2])),
+                # eye
+                :(Z[i,j] = 1 * (i == j)) => :(eye(size__(Z))[1]))
                 # broadcasting
                 # :(Z[i] = _op(_a, X[i])) => :(Z = _op(_a, X)),
                 # :(Z[i,j] = _op(_a, X[i,j])) => :(Z = _op(_a, X)),
