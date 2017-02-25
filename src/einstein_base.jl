@@ -141,6 +141,9 @@ function forall_sum_indices(ex::Expr)
         depidxs = Vector{ExIndex}[forall_indices(arg) for arg in ex.args[2:end]]
         # should we also add sum indices of dependencies?
         return forall_sum_indices(ex.args[1], depidxs)
+    elseif ex.head == :.
+        depidxs = Vector{ExIndex}[forall_indices(arg) for arg in ex.args[2].args]
+        return forall_sum_indices(ex.args[1], depidxs)
     else
         error("Don't know how to extract forall and sum indices from: $ex")
     end

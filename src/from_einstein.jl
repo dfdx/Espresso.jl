@@ -131,4 +131,9 @@ function from_einstein(g::ExGraph, nd::Union{ExNode{:call}, ExNode{:(=)}})
 end
 
 
-
+function from_einstein(g::ExGraph, nd::ExNode{:bcast})
+    ex = to_iexpr(nd)
+    ivars = indexed_vars(ex)
+    st = Dict(ivar => ivar.args[1] for ivar in ivars)
+    return subs(ex, st)
+end

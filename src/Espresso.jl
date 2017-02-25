@@ -14,8 +14,10 @@ export # ExGraph
        expand_temp,
        dependencies,
        dep_vars,
+       bcast_to_call,
        # rewrite
        matchex,
+       findex,
        subs,
        rewrite,
        tryrewrite,
@@ -51,7 +53,7 @@ export # ExGraph
        # funexpr
        funexpr,
        replace_slots
-       
+
 
 include("core.jl")
 

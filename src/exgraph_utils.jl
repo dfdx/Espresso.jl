@@ -20,6 +20,12 @@ function expand_temp(g::ExGraph, nd::ExNode{:call})
     return subs(expr(nd), expanded)
 end
 
+function expand_temp(g::ExGraph, nd::ExNode{:bcast})
+    deps = dependencies(nd)
+    expanded = Dict([(x, expand_temp(g, g[x])) for x in deps])
+    return subs(expr(nd), expanded)
+end
+
 function expand_temp(g::ExGraph, x::Symbol)
     if haskey(g.idx, x)
         return expand_temp(g, g[x])

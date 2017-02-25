@@ -23,11 +23,30 @@ set_default_placeholders(set::Set{Symbol}) = (DEFAULT_PHS[1] = set)
 isplaceholder(x, phs) = false
 isplaceholder(x::Symbol, phs) = (startswith(string(x), "_")
                                  || in(x, phs))
+# isplaceholder(ex::Expr, phs) = ex.head == :... && isplaceholder(ex.args[1], phs)
 
 
 function matchex!(m::Dict{Symbol,Any}, p::QuoteNode, x::QuoteNode;
                   phs=DEFAULT_PHS[1], allow_ex=true)
     return matchex!(m, p.value, x.value)
+end
+
+
+function matchex!(m::Dict{Symbol,Any}, ps::Vector, xs::Vector;
+                  phs=DEFAULT_PHS[1], allow_ex=true)
+    length(ps) <= length(xs) || return false
+    for i in eachindex(ps)
+        if isa(ps[i], Expr) && ps[i].head == :... && isplaceholder(ps[i].args[1], phs)
+            p = ps[i].args[1]
+            haskey(m, p) && m[p] != x && return false
+            m[p] = xs[i:end]
+            return true
+        else
+            matchex!(m, ps[i], xs[i]; phs=phs, allow_ex=allow_ex) || return false
+        end
+    end
+    # matched everything, didn't encounter dots expression
+    return length(ps) == length(xs)
 end
 
 
@@ -44,10 +63,8 @@ function matchex!(m::Dict{Symbol,Any}, p, x; phs=DEFAULT_PHS[1], allow_ex=true)
             return true
         end
     elseif isa(p, Expr) && isa(x, Expr)
-        result = (matchex!(m, p.head, x.head)
-                  && length(p.args) == length(x.args)
-                  && reduce(&, [matchex!(m, pa, xa; phs=phs, allow_ex=allow_ex)
-                             for (pa, xa) in zip(p.args, x.args)]))
+        return (matchex!(m, p.head, x.head) &&
+                matchex!(m, p.args, x.args; phs=phs, allow_ex=allow_ex))
     else
         return p == x
     end
@@ -76,6 +93,25 @@ pat = :(x ^ n)
 matchex(pat, ex; phs=Set([:x, :n]))
 # ==> Nullable(Dict{Symbol,Any}(:n=>:v,:x=>:u))
 ```
+
+Several elements may be matched using `...` expression, e.g.:
+
+```
+ex = :(A[i, j, k])
+pat = :(x[I...])
+matchex(pat, ex; phs=Set([:x, :I]))
+# ==> Nullable(Dict(:x=>:A, :I=>[:i,:j,:k]))
+```
+
+Optional parameters:
+
+ * phs::Set{Symbol} = DEFAULT_PHS
+       A set of placeholder symbols
+ * allow_ex::Boolean = true
+       Allow matchinng of symbol pattern to an expression. Example:
+
+           matchex(:(_x + 1), :(a*b + 1); allow_ex=true)  # ==> matches
+           matchex(:(_x + 1), :(a*b + 1); allow_ex=false)  # ==> doesn't match
 
 """
 function matchex(pat, ex; phs=DEFAULT_PHS[1], allow_ex=true)
@@ -190,7 +226,7 @@ Find sub-expressions matching a pattern. Example:
     ex = :(a * f(x) + b * f(y))
     pat = :(f(_))
     findex(pat, ex)   # ==> [:(f(x)), :(f(y))]
-    
+
 """
 function findex!(res::Vector, pat, ex; phs=DEFAULT_PHS[1])
     if matchingex(pat, ex; phs=phs)
