@@ -120,10 +120,16 @@ function from_einstein(g::ExGraph, nd::Union{ExNode{:call}, ExNode{:(=)}})
     # if no patterns found, try broadcasting
     all_idxs = call_indices(to_iexpr(nd))
     longest_idx = longest_index(all_idxs)
-    is_bcast = all(idx -> idx == longest_idx || isempty(idx), all_idxs)
+    is_bcast = (all(idx -> idx == longest_idx || isempty(idx), all_idxs))
+    is_bcast_old = in(ex.args[2].args[1], Set([:.*, :.+, :.-, :./]))
     if is_bcast
         # TODO handle ExNode{:(=)} too
-        return Expr(:., expr(nd).args[1], Expr(:tuple, dependencies(nd)...))
+        bcast_call = Expr(:., expr(nd).args[1], Expr(:tuple, dependencies(nd)...))
+        return Expr(:(=), nd.var, bcast_call)
+    elseif is_bcast_old
+        # nearly deprecated syntax, but still actively used in 0.6
+        call = Expr(:call, expr(nd).args[1], dependencies(nd)...)
+        return Expr(:(=), nd.var, call)
     else
         error("Neither pattern found, nor broadcasting is applicable when transformaing from" *
               "Einstein notation, expression: $ex")

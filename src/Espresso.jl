@@ -15,6 +15,7 @@ export # ExGraph
        dependencies,
        dep_vars,
        bcast_to_call,
+       expr_merge,
        # rewrite
        matchex,
        findex,

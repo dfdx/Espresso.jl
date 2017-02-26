@@ -1,13 +1,13 @@
 
 # types.jl - common types and aliases used throught the code
 
-typealias Symbolic Union{Expr, Symbol}
-typealias Numeric Union{Number, Array}
+const Symbolic = Union{Expr, Symbol}
+const Numeric = Union{Number, Array}
 
 # name of operation in a :call node - either symbol or Module.symbol
-typealias OpName Union{Symbol, Expr}
+const OpName = Union{Symbol, Expr}
 
-typealias ExIndex Union{Symbol, Int}
+const ExIndex = Union{Symbol, Int}
 
 # Wrapper around Expr adding `ex.head` to type parameters thus adding convenient
 # type dispatching

@@ -145,7 +145,7 @@ end
 ## addnode!
 
 """
-Add new node to a graph. Expression should be simple, e.g.
+Add a new node to a graph. Expression should be simple, e.g.
 nested calls or blocks are not allowed (use parse!() for it).
 """
 function addnode!(g::ExGraph, C::Symbol, var::Symbol, ex::Any;
@@ -154,6 +154,13 @@ function addnode!(g::ExGraph, C::Symbol, var::Symbol, ex::Any;
     push!(g.tape, nd)
     g.idx[var] = nd
     return var
+end
+
+
+function addnode!(g::ExGraph, nd::ExNode)
+    push!(g.tape, nd)
+    g.idx[nd.var] = nd
+    return nd.var
 end
 
 
