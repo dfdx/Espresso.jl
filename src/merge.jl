@@ -9,6 +9,8 @@ function expr_merge(g1::ExGraph, g2::ExGraph)
             if expr(gm[nd.var]) != expr(nd)
                 error("Can't merge expression graphs: " *
                       "in g1 $(to_iexpr(g1[nd.var])), but in g2 $(to_iexpr(nd))")
+                # TODO: 1) generate new name
+                #       2) rename all further occurrences in g2
             end
         else
             addnode!(gm, nd)
