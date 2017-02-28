@@ -91,6 +91,20 @@ function ExGraph(ex::Expr, do_parse=true; ctx=Dict(), inputs...)
     return g
 end
 
+
+function Base.deepcopy(g::ExGraph)
+    ctx_copy = to_context(Dict())
+    for (k, v) in ctx
+        if isa(v, Module)
+            ctx_copy[k] = copy(v)
+        else
+            ctx_copy[k] = deepcopy(v)
+        end
+    end
+    return ExGraph(deepcopy(g.ex), deepcopy(g.tape), deepcopy(g.idx), ctx_copy)
+end
+
+
 function Base.show(io::IO, g::ExGraph)
     print(io, "ExGraph\n")
     for node in g.tape
@@ -127,7 +141,7 @@ possible_temp_names(name::Symbol) = (startswith(string(name), "tmp") ?
 possible_temp_names(x) = Symbol[]
 
 
-"""Generate new unique name for intermediate variable in graph"""
+"""Generate a new unique name for intermediate variable in graph"""
 function genname(g::ExGraph)
     last_id = @get_or_create(g.ctx, :last_id, 1)
     possible_names = @get_or_create(g.ctx, :possible_names,
@@ -139,6 +153,29 @@ function genname(g::ExGraph)
     end
     g.ctx[:last_id] = last_id + 1
     return name
+end
+
+
+"""Generate a new unique name given the last id and a list of existing names"""
+function genname(last_id::Int, existing::Set{Symbol})
+    name = Symbol("tmp$(last_id)")
+    while in(name, existing)
+        last_id += 1
+        name = Symbol("tmp$(last_id)")
+    end
+    return name, last_id + 1
+end
+
+
+function gennames(last_id::Int, existing::Set{Symbol}, count::Int)
+    existing = copy(existing)
+    names = Vector{Symbol}()
+    for i=1:count
+        name, last_id = genname(last_id, existing)
+        push!(names, name)
+        push!(existing, name)
+    end
+    return names
 end
 
 
