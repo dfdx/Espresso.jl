@@ -94,9 +94,9 @@ end
 
 function Base.deepcopy(g::ExGraph)
     ctx_copy = to_context(Dict())
-    for (k, v) in ctx
+    for (k, v) in g.ctx
         if isa(v, Module)
-            ctx_copy[k] = copy(v)
+            ctx_copy[k] = v
         else
             ctx_copy[k] = deepcopy(v)
         end
