@@ -120,7 +120,8 @@ else
         catch err
             if isa(err, LoadError)
                 code = code_lowered(f, types)[1]
-                return to_expr(code)
+                args = convert(Vector{Symbol}, code.slotnames[2:end])
+                return args,to_expr(code)
             else
                 rethrow(err)
             end

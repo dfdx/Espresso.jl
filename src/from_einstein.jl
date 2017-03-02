@@ -2,7 +2,7 @@
 # from Einstein to vectorized notation
 
 const FROM_EIN_PHS = [:A, :B, :C, :X, :Y, :V, :W, :Z,
-                   :i, :j, :k, :l, :m, :n, :p, :q, :r, :s, :t]
+                      :i, :j, :k, :l, :m, :n, :p, :q, :r, :s, :t]
 
 const FROM_EINSTEIN_RULES =
     OrderedDict(:(Z[j] = I[i] * X[i,j]) => :(Z = sum(X,1)'),
@@ -49,7 +49,9 @@ const FROM_EINSTEIN_RULES =
                 :(Z[i,j] = X[j]) => :(Z = repmat(X', size__(Z)[1])),
                 :(Z[i,j] = X[i]) => :(Z = repmat(X, 1, size__(Z)[2])),
                 # eye
-                :(Z[i,j] = 1 * (i == j)) => :(eye(size__(Z))[1]))
+                :(Z[i,j] = 1 * (i == j)) => :(eye(size__(Z))[1]),
+                # constant
+                :(Z[i] = X) => :(Z = ones(size__(Z)) * X))
                 # broadcasting
                 # :(Z[i] = _op(_a, X[i])) => :(Z = _op(_a, X)),
                 # :(Z[i,j] = _op(_a, X[i,j])) => :(Z = _op(_a, X)),
@@ -97,7 +99,7 @@ function from_einstein(ex::Expr; ctx=Dict(), inputs...)
     for nd in g.tape
         if !isa(nd, ExNode{:input})
             vex = from_einstein(g, nd)
-            push!(res.args, subs_size(vex, sizes))
+            push!(res.args, simplify(subs_size(vex, sizes)))
         end
     end
     return res
@@ -121,15 +123,15 @@ function from_einstein(g::ExGraph, nd::Union{ExNode{:call}, ExNode{:(=)}})
     all_idxs = call_indices(to_iexpr(nd))
     longest_idx = longest_index(all_idxs)
     is_bcast = (all(idx -> idx == longest_idx || isempty(idx), all_idxs))
-    is_bcast_old = in(ex.args[2].args[1], Set([:.*, :.+, :.-, :./]))
-    if is_bcast
-        # TODO handle ExNode{:(=)} too
-        bcast_call = Expr(:., expr(nd).args[1], Expr(:tuple, dependencies(nd)...))
-        return Expr(:(=), nd.var, bcast_call)
-    elseif is_bcast_old
+    is_bcast_old = in(ex.args[2].args[1], Set([:.*, :.+, :.-, :./, :.^]))
+    if is_bcast_old
         # nearly deprecated syntax, but still actively used in 0.6
         call = Expr(:call, expr(nd).args[1], dependencies(nd)...)
         return Expr(:(=), nd.var, call)
+    elseif is_bcast
+        # TODO handle ExNode{:(=)} too
+        bcast_call = Expr(:., expr(nd).args[1], Expr(:tuple, dependencies(nd)...))
+        return Expr(:(=), nd.var, bcast_call)
     else
         error("Neither pattern found, nor broadcasting is applicable when transformaing from" *
               "Einstein notation, expression: $ex")
