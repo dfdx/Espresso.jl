@@ -13,12 +13,12 @@ end
 
 
 
-function expr_merge(g1::ExGraph, g2::ExGraph)
+function mergeex(g1::ExGraph, g2::ExGraph)
     g2 = deepcopy(g2)
     gm = ExGraph(:(no + expr), false)
     # find out what vars in g2 need to be renamed
     g1_vars = Set(nd.var for nd in g1.tape)
-    g2_vars = Set(nd.var for nd in g1.tape)
+    g2_vars = Set(nd.var for nd in g2.tape)
     need_renaming = Symbol[]
     for nd in g2.tape
         if haskey(g1, nd.var) && expr(g1[nd.var]) != expr(nd)
@@ -43,15 +43,14 @@ function expr_merge(g1::ExGraph, g2::ExGraph)
 end
 
 
-function expr_merge(gs::Vararg{ExGraph})
-    return reduce(expr_merge, gs)
+function mergeex(gs::Vararg{ExGraph})
+    return reduce(mergeex, gs)
 end
 
 
-function expr_merge(exs::Vararg{Expr})
-    ctx = to_context(Dict())
-    gs = [ExGraph(ex; ctx=ctx) for ex in exs]
-    gm = expr_merge(gs...)
+function mergeex(exs::Vararg{Expr})
+    gs = [ExGraph(ex) for ex in exs]
+    gm = mergeex(gs...)
     block = to_iexpr(gm)
     res_vars = [g[end].var for g in gs]
     push!(block.args, Expr(:tuple, res_vars...))

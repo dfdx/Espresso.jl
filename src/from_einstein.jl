@@ -15,8 +15,8 @@ const FROM_EINSTEIN_RULES =
                 :(Z = X[i,j] * I[i,j]) => :(Z = sum(X)),
                 :(Z = I[i,j] * X[i,j]) => :(Z = sum(X)),
                 # no-pseudoone summation
-                :(Z[i] = X[i,j]) => :(Z = sum(X,1)'),
-                :(Z[j] = X[i,j]) => :(Z = sum(X,2)),
+                :(Z[i] = X[i,j]) => :(Z = sum(X,2)),
+                :(Z[j] = X[i,j]) => :(Z = sum(X,1)'),
                 :(Z = X[i]) => :(Z = sum(X)),
                 :(Z = X[i,j]) => :(Z = sum(X)),
                 :(Z = X[i,j,k]) => :(Z = sum(X)),
@@ -51,7 +51,9 @@ const FROM_EINSTEIN_RULES =
                 # eye
                 :(Z[i,j] = 1 * (i == j)) => :(eye(size__(Z))[1]),
                 # constant
-                :(Z[i] = X) => :(Z = ones(size__(Z)) * X))
+                :(Z[i] = X) => :(Z = ones(size__(Z)) * X),
+                # special .*
+                :(Z[i,j] = X[j] .+ Y[i,j]) => :(Z = X' .+ Y))
                 # broadcasting
                 # :(Z[i] = _op(_a, X[i])) => :(Z = _op(_a, X)),
                 # :(Z[i,j] = _op(_a, X[i,j])) => :(Z = _op(_a, X)),
