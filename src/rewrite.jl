@@ -220,14 +220,6 @@ function tryrewrite(ex::Symbolic, pat::Symbolic, subex::Any; phs=DEFAULT_PHS[1])
 end
 
 
-"""
-Find sub-expressions matching a pattern. Example:
-
-    ex = :(a * f(x) + b * f(y))
-    pat = :(f(_))
-    findex(pat, ex)   # ==> [:(f(x)), :(f(y))]
-
-"""
 function findex!(res::Vector, pat, ex; phs=DEFAULT_PHS[1])
     if matchingex(pat, ex; phs=phs)
         push!(res, ex)
@@ -239,6 +231,14 @@ function findex!(res::Vector, pat, ex; phs=DEFAULT_PHS[1])
 end
 
 
+"""
+Find sub-expressions matching a pattern. Example:
+
+    ex = :(a * f(x) + b * f(y))
+    pat = :(f(_))
+    findex(pat, ex)   # ==> [:(f(x)), :(f(y))]
+
+"""
 function findex(pat, ex)
     res = Any[]
     findex!(res, pat, ex)

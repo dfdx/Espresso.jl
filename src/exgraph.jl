@@ -91,6 +91,10 @@ function ExGraph(ex::Expr, do_parse=true; ctx=Dict(), inputs...)
     return g
 end
 
+function ExGraph()
+    return ExGraph(:(no + expr), false)
+end
+
 
 function Base.deepcopy(g::ExGraph)
     ctx_copy = to_context(Dict())
@@ -297,6 +301,7 @@ evaluate!(g::ExGraph, node::ExNode{:input}) = node.val
 
 
 function mk_eval_expr(g::ExGraph, nd::ExNode)
+    # TODO: add `let`
     dep_nodes = [g.idx[dep] for dep in dependencies(nd) if haskey(g, dep)]
     deps_vals = [(nd.var, nd.val) for nd in dep_nodes]
     block = Expr(:block)

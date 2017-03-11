@@ -5,32 +5,40 @@ const FROM_EIN_PHS = [:A, :B, :C, :X, :Y, :V, :W, :Z,
                       :i, :j, :k, :l, :m, :n, :p, :q, :r, :s, :t]
 
 const FROM_EINSTEIN_RULES =
-    OrderedDict(:(Z[j] = I[i] * X[i,j]) => :(Z = sum(X,1)'),
-                :(Z[i] = I[j] * X[i,j]) => :(Z = sum(X,2)),
-                :(Z[i] = X[i,j] * I[j]) => :(Z = sum(X,2)),
-                :(Z[j] = X[i,j] * I[i]) => :(Z = sum(X,1)'),
-                :(Z[i] = X[i,j]) => :(Z = sum(X,1)'),
+    OrderedDict(:(Z[j] = I[i] * X[i,j]) => :(Z = squeeze(sum(X,1),1)), # sumsqueeze?
+                :(Z[i] = I[j] * X[i,j]) => :(Z = squeeze(sum(X,2),2)),  # sumsqueeze?
+                :(Z[i] = X[i,j] * I[j]) => :(Z = squeeze(sum(X,2),2)),
+                :(Z[j] = X[i,j] * I[i]) => :(Z = squeeze(sum(X,1),1)),
+                :(Z[i] = X[i,j]) => :(Z = squeeze(sum(X,1),1)),
+                :(Z[i,j] = X[i,j,k]) => :(Z = squeeze(sum(X,3),3)),
+                :(Z[i,k] = X[i,j,k]) => :(Z = squeeze(sum(X,2),2)),
+                :(Z[j,k] = X[i,j,k]) => :(Z = squeeze(sum(X,1),1)),
+                :(Z[i,j] = X[i,j,k] * I[k]) => :(Z = squeeze(sum(X,3),3)),
+                :(Z[i,k] = X[i,j,k] * I[j]) => :(Z = squeeze(sum(X,2),2)),
+                :(Z[j,k] = X[i,j,k] * I[i]) => :(Z = squeeze(sum(X,1),1)),
                 :(Z = X[i] * I[i]) => :(Z = sum(X)),
                 :(Z = I[i] * X[i]) => :(Z = sum(X)),
                 :(Z = X[i,j] * I[i,j]) => :(Z = sum(X)),
                 :(Z = I[i,j] * X[i,j]) => :(Z = sum(X)),
                 # no-pseudoone summation
-                :(Z[i] = X[i,j]) => :(Z = sum(X,2)),
-                :(Z[j] = X[i,j]) => :(Z = sum(X,1)'),
+                :(Z[i] = X[i,j]) => :(Z = squeeze(sum(X,2),2)),
+                :(Z[j] = X[i,j]) => :(Z = squeeze(sum(X,1),1)),
                 :(Z = X[i]) => :(Z = sum(X)),
                 :(Z = X[i,j]) => :(Z = sum(X)),
                 :(Z = X[i,j,k]) => :(Z = sum(X)),
                 # assignment
                 # :(Z = X) => :(Z = X),  # don't use, matches everything
-                :(Z[i] = X[i]) => :(Z = X),
-                :(Z[i,j] = X[i,j]) => :(Z = X),
-                :(Z[i,j,k] = X[i,j,k]) => :(Z = X),
+                # the following rules should already be covered
+                # :(Z[i] = X[i]) => :(Z = X),
+                # :(Z[i,j] = X[i,j]) => :(Z = X),
+                # :(Z[i,j,k] = X[i,j,k]) => :(Z = X),  
                 # inner and outer product
                 :(Z[i,j] = X[i] * Y[j]) => :(Z = X * Y'),
-                :(Z = X[i] * Y[i]) => :(Z = X'Y),   # or sum(X[i] * Y[i])?
+                :(Z = X[i] * Y[i]) => :(Z = X'Y),
                 :(Z[i,j] = X[i] .* Y[j]) => :(Z = X * Y'),
-                :(Z = X[i] .* Y[i]) => :(Z = X'Y),   # or sum(X[i] * Y[i])?
+                :(Z = X[i] .* Y[i]) => :(Z = X'Y),
                 # matrix-by-vector
+                # TODO: check rules below once again
                 :(Z[j] = X[i] * Y[i,j]) => :(Z = Y' * X),
                 :(Z[i] = X[j] * Y[i,j]) => :(Z = Y * X),
                 :(Z[i] = X[i,j] * Y[j]) => :(Z = X * Y),
@@ -95,7 +103,8 @@ subs_size(x, sizes::Dict) = x
 
 
 function from_einstein(ex::Expr; ctx=Dict(), inputs...)
-    g = ExGraph(ex; ctx=ctx, inputs...)
+    g_ = ExGraph(ex; ctx=ctx, inputs...)
+    g = optimize(g_)
     sizes = @get(g.ctx, :sizes, Dict())
     res = :(begin end)
     for nd in g.tape
@@ -112,7 +121,7 @@ from_einstein(g::ExGraph, nd::ExNode{:input}) = expr(nd)
 from_einstein(g::ExGraph, nd::ExNode{:constant}) = to_expr(nd)
 
 
-function from_einstein(g::ExGraph, nd::Union{ExNode{:call}, ExNode{:(=)}})
+function from_einstein(g::ExGraph, nd::ExNode{:call})
     ex = to_iexpr(nd)
     for (pat, rpat) in FROM_EINSTEIN_RULES
         # consider tryrewrite
@@ -121,23 +130,48 @@ function from_einstein(g::ExGraph, nd::Union{ExNode{:call}, ExNode{:(=)}})
             return rex
         end
     end
-    # if no patterns found, try broadcasting
+    # if no pattern matches, try broadcasting
     all_idxs = call_indices(to_iexpr(nd))
     longest_idx = longest_index(all_idxs)
     is_bcast = (all(idx -> idx == longest_idx || isempty(idx), all_idxs))
     is_bcast_old = in(ex.args[2].args[1], Set([:.*, :.+, :.-, :./, :.^]))
+    # TODO: cover things like Z[i] = X[i] .+ Y[i,j]
     if is_bcast_old
         # nearly deprecated syntax, but still actively used in 0.6
         call = Expr(:call, expr(nd).args[1], dependencies(nd)...)
         return Expr(:(=), nd.var, call)
     elseif is_bcast
-        # TODO handle ExNode{:(=)} too
         bcast_call = Expr(:., expr(nd).args[1], Expr(:tuple, dependencies(nd)...))
         return Expr(:(=), nd.var, bcast_call)
     else
-        error("Neither pattern found, nor broadcasting is applicable when transformaing from" *
-              "Einstein notation, expression: $ex")
+        # error("Neither pattern found, nor broadcasting is applicable when transforming from " *
+        #       "Einstein notation, expression: $ex")
+        return to_einsum(ex)
     end
+end
+
+
+function from_einstein(g::ExGraph, nd::ExNode{:(=)})
+    new_ex = expr(nd)
+    sum_idxs = setdiff(nd.idxs[2], nd.idxs[1])    
+    if !isempty(sum_idxs)
+        lhs_idxs = nd.idxs[2]
+        sum_dims = [findfirst(lhs_idxs, idx) for idx in sum_idxs]
+        @assert length(sum_idxs) == 1 "Currently from_enstein() support only " *
+            "summing over a simgle dimension"
+        sum_dim = sum_dims[1]
+        new_ex = :(squeeze(sum($(new_ex), $(sum_dim)), $(sum_dim)))
+    end
+    new_rhs_idxs = [idx for idx in nd.idxs[2] if !in(idx, sum_idxs)]
+    perm = findperm(nd.idxs[1], new_rhs_idxs)
+    if !all(perm .== 1:length(perm))        
+        if length(perm) == 2
+            new_ex = :(transpose($new_ex))
+        else
+            new_ex = :(permutedims($new_ex, $perm))
+        end
+    end
+    return Expr(:(=), nd.var, new_ex)
 end
 
 

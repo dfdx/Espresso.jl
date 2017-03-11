@@ -13,9 +13,10 @@ const TO_EINSTEIN_RULES =
                 # (:*, [1, 1]) => [(:(X * Y), :(X[i] * Y[i]))], -- invalid?
                 (:*, [2, 1]) => [:(Z = X * Y) => :(Z[i] = X[i,k] * Y[k])],
                 (:*, [1, 2]) => [:(Z = X * Y) => :(Z[j] = X[k] * Y[k,j])],
-                (:*, [2, 2]) => [:(Z = X * Y) => :(Z[i,j] = X[i,j] * Y[k,j])],
+                (:*, [2, 2]) => [:(Z = X * Y) => :(Z[i,j] = X[i,k] * Y[k,j])],
                 (:transpose, [1]) => [:(Z = transpose(X)) => :(Z[i] = X[i])],
                 (:transpose, [2]) => [:(Z = transpose(X)) => :(Z[j,i] = X[i,j])])
+
 
 function to_einstein(ex::Expr; ctx=Dict(), inputs...)
     g = ExGraph(ex; ctx=to_context(ctx), inputs...)

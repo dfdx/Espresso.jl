@@ -222,3 +222,8 @@ function to_einsum(ex::Expr)
         return :(@einsum $(uex.args[1]) := $(uex.args[2]))
     end
 end
+
+
+# index permutations
+
+findperm(idxs1, idxs2) = [findfirst(idxs2, idx) for idx in idxs1]
