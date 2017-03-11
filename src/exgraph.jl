@@ -71,28 +71,29 @@ isindexed(nd::ExNode) = !isempty(nd.idxs) && any(x -> !isempty(x), nd.idxs)
 # exgraph
 
 @runonce type ExGraph
-    ex::Expr                       # original expression used to build ExGraph
+#     ex::Expr                       # original expression used to build ExGraph
     tape::Vector{ExNode}           # list of ExNode-s
     idx::Dict{Symbol, ExNode}      # map from var name to its node in the graph
     ctx::Dict{Any,Any}             # settings and caches
 end
 
-function ExGraph(ex::Expr, do_parse=true; ctx=Dict(), inputs...)
+function ExGraph(; ctx=Dict(), inputs...)
     ctx = to_context(ctx)
-    @get_or_create(ctx, :mod, current_module())
-    g = ExGraph(ex, ExNode[], Dict(), ctx)
-    if do_parse
-        for (var, val) in inputs
-            addnode!(g, :input, var, var; val=val)
-        end
-        parse!(g, ex)
-        collapse_assignments!(g)
-    end
+    @get_or_create(ctx, :mod, current_module())    
+    g = ExGraph(ExNode[], Dict(), ctx)
+    for (var, val) in inputs
+        addnode!(g, :input, var, var; val=val)
+    end    
     return g
 end
 
-function ExGraph()
-    return ExGraph(:(no + expr), false)
+function ExGraph(ex::Expr; ctx=Dict(), inputs...)
+    ctx = to_context(ctx)
+    g = ExGraph(;ctx=ctx, inputs...)
+    g.ctx[:expr] = ex
+    parse!(g, ex)
+    collapse_assignments!(g)
+    return g
 end
 
 
@@ -105,7 +106,7 @@ function Base.deepcopy(g::ExGraph)
             ctx_copy[k] = deepcopy(v)
         end
     end
-    return ExGraph(deepcopy(g.ex), deepcopy(g.tape), deepcopy(g.idx), ctx_copy)
+    return ExGraph(deepcopy(g.tape), deepcopy(g.idx), ctx_copy)
 end
 
 
@@ -146,42 +147,18 @@ possible_temp_names(x) = Symbol[]
 
 
 """Generate a new unique name for intermediate variable in graph"""
-function genname(g::ExGraph)
-    last_id = @get_or_create(g.ctx, :last_id, 1)
-    possible_names = @get_or_create(g.ctx, :possible_names,
-                                    possible_temp_names(g.ex))
-    name = Symbol("tmp$(last_id)")
-    while in(name, possible_names)
-        last_id += 1
-        name = Symbol("tmp$(last_id)")
-    end
-    g.ctx[:last_id] = last_id + 1
-    return name
+function genname()
+    return gensym
 end
 
-
-"""Generate a new unique name given the last id and a list of existing names"""
-function genname(last_id::Int, existing::Set{Symbol})
-    name = Symbol("tmp$(last_id)")
-    while in(name, existing)
-        last_id += 1
-        name = Symbol("tmp$(last_id)")
-    end
-    return name, last_id + 1
+# for compatibility, will be removed somewhere in the future
+function genname(g::ExGraph)    
+    return gensym()
 end
 
-
-function gennames(last_id::Int, existing::Set{Symbol}, count::Int)
-    existing = copy(existing)
-    names = Vector{Symbol}()
-    for i=1:count
-        name, last_id = genname(last_id, existing)
-        push!(names, name)
-        push!(existing, name)
-    end
-    return names
+function gennames(count::Int)
+    return [gensym() for _=1:count]
 end
-
 
 ## addnode!
 

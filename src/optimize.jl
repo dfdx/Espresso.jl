@@ -110,7 +110,7 @@ function tryoptimize(ex::Expr, known_names::Set{Symbol})
             new_ex = get(new_ex_nlb)
             genname_patterns = unique(findex(:(genname__(_n)), new_ex))            
             if !isempty(genname_patterns)
-                new_names = gennames(1, known_names, length(genname_patterns))
+                new_names = gennames(length(genname_patterns))
                 push!(known_names, new_names...)
                 st = Dict(zip(genname_patterns, new_names))
                 return Nullable(subs(new_ex, st))
@@ -131,8 +131,22 @@ function reset_tape(g::ExGraph)
 end
 
 
+function remove_pseudoone(g::ExGraph)
+    g = deepcopy(g)
+    I_pat = :(I[_...])
+    for nd in g.tape
+        iex = to_iexpr(nd)
+        new_iex = without(iex, I_pat)
+        # nd.ex =
+        error("Not implemented yet")
+    end
+    return g
+end
+
+
 function optimize(g::ExGraph)
-    new_g = reset_tape(g)
+    g = remove_pseudoone(g)
+    new_g = reset_tape(g)    
     known_names = Set(nd.var for nd in g.tape)
     for nd in g.tape
         if isa(nd, ExNode{:input})
@@ -154,3 +168,6 @@ function optimize(g::ExGraph)
     end
     return remove_unused(new_g,  new_g[end].var)
 end
+
+
+# TODO: deprecate ExNode.idxs, use accessors instead

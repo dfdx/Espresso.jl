@@ -158,7 +158,7 @@ function from_einstein(g::ExGraph, nd::ExNode{:(=)})
         lhs_idxs = nd.idxs[2]
         sum_dims = [findfirst(lhs_idxs, idx) for idx in sum_idxs]
         @assert length(sum_idxs) == 1 "Currently from_enstein() support only " *
-            "summing over a simgle dimension"
+            "summing over a single dimension. Expression was: $(to_iexpr(nd))"
         sum_dim = sum_dims[1]
         new_ex = :(squeeze(sum($(new_ex), $(sum_dim)), $(sum_dim)))
     end

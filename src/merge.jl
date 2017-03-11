@@ -26,7 +26,7 @@ function mergeex(g1::ExGraph, g2::ExGraph)
         end
     end
     # rename variables in g2
-    new_names = gennames(1, union(g1_vars, g2_vars), length(need_renaming))
+    new_names = gennames(length(need_renaming))
     for (name, new_name) in zip(need_renaming, new_names)
         rename!(g2, name, new_name)
     end
