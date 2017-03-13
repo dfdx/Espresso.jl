@@ -279,11 +279,3 @@ function bcast_to_call(pex::Expr)
     @assert pex.head == :(.)
     return Expr(:call, pex.args[1], pex.args[2].args...)
 end
-
-
-# TODO: remove
-
-function test_fun(x::Int, y::Float64)
-    z = x + y
-    return exp(z)
-end

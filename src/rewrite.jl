@@ -15,7 +15,10 @@
 # rules where using underscores creates unnecessary noise.
 
 
-## pat matching
+const Symbolic = Union{Expr, Symbol}
+const Numeric = Union{Number, Array}
+
+## pattern matching
 
 const DEFAULT_PHS = [Set{Symbol}()]
 set_default_placeholders(set::Set{Symbol}) = (DEFAULT_PHS[1] = set)
@@ -38,7 +41,7 @@ function matchex!(m::Dict{Symbol,Any}, ps::Vector, xs::Vector;
     for i in eachindex(ps)
         if isa(ps[i], Expr) && ps[i].head == :... && isplaceholder(ps[i].args[1], phs)
             p = ps[i].args[1]
-            haskey(m, p) && m[p] != x && return false
+            haskey(m, p) && m[p] != x && m[p] != xs[i:end] && return false
             m[p] = xs[i:end]
             return true
         else

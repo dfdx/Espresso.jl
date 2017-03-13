@@ -101,3 +101,9 @@ end
 
 @simple_rule size(x)[1] size(x, 1)
 @simple_rule size(x)[2] size(x, 2)
+@simple_rule (size(x), size(y))[1] size(x)
+@simple_rule (size(x), size(y))[[1]] size(x)
+@simple_rule (size(x), size(y))[2] size(y)
+@simple_rule (size(x), size(y))[[2]] size(y)
+@simple_rule (size(x), size(y))[[1,2]] (size(x), size(y))
+@simple_rule (size(x), size(y))[[2,1]] (size(y), size(x))

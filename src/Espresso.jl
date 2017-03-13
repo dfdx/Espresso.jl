@@ -3,57 +3,50 @@ __precompile__()
 
 module Espresso
 
-export # ExGraph
-       ExGraph,
-       ExNode,
-       Symbolic,
-       Numeric,
-       OpName,
-       evaluate!,
-       propagate_size!,
-       expand_temp,
-       dependencies,
-       dep_vars,
-       bcast_to_call,
-       mergeex,
-       # rewrite
-       matchex,
-       findex,
-       subs,
-       rewrite,
-       tryrewrite,
-       without,
-       set_default_placeholders,
-       # types & conversions
-       ExH,
-       to_expr,
-       to_iexpr,
-       to_exh,
-       to_expr,
-       to_block,
-       # simplification
-       simplify,
-       @simple_rule,
-       # einstein notation
-       ExIndex,
-       isindexed,
-       is_einstein,
-       forall_indices,
-       sum_indices,
-       sanitize,
-       get_indices,
-       with_indices,
-       call_indices,
-       indexed,
-       maybe_indexed,
-       get_guards,
-       without_guards,
-       from_einstein,
-       to_einstein,
-       to_einsum,
-       # funexpr
-       funexpr,
-       replace_slots
+export
+    # utils
+    ExH,    
+    # rewrite
+    matchex,
+    findex,
+    subs,
+    rewrite,
+    tryrewrite,
+    without,
+    set_default_placeholders,     
+    # simplification
+    simplify,
+    @simple_rule,
+    # funexpr
+    funexpr,
+    # indexing
+    split_indexed,
+    make_indexed,
+    get_vars,
+    get_var_names,
+    get_indices,
+    # ExNode
+    ExNode,
+    category,
+    variable,
+    variable!,
+    varname,
+    varidxs,
+    expr,
+    expr!,
+    guards,
+    guards!,
+    value,
+    value!,
+    dependencies,
+    to_expr,
+    isindexed,
+    # ExGraph core
+    ExGraph,
+    parse!,
+    evaluate!,
+    # ExGraph utils
+    propagate_size!
 
 
 include("core.jl")
