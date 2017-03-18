@@ -166,7 +166,8 @@ function parse!(g::ExGraph, ex::ExH{:.})
             "Dot (.) is only allowedd in broadcasting (e.g. `f.(x)`), but `$ex` passed in")
     op = canonical(g.ctx[:mod], ex.args[1])
     deps = [parse!(g, arg) for arg in ex.args[2].args]
-    pex = Expr(:call, op, deps...)
+    # pex = Expr(:call, op, deps...)
+    pex = Expr(:., op, Expr(:tuple, deps...))
     vidxs = forall_indices(op, [split_indexed(dep)[2] for dep in deps])
     var = addnode!(g, :bcast, make_indexed(genname(), vidxs), pex)
     return var
@@ -275,16 +276,17 @@ function collapse_assignments!(g::ExGraph)
     st = Dict{Symbol, Symbol}()
     delvars = Set{Symbol}()
     for nd in g.tape
-        nd.ex = subs(nd.ex, st)
+        expr!(nd, subs(expr(nd), st))
         vidxs = varidxs(nd)
         depidxs = get_indices(expr(nd))
         if isa(nd, ExNode{:(=)}) && !isempty(depidxs) && vidxs == depidxs[1]
             vname = varname(nd)
-            dep = dependencies(nd)[1]
-            # st[dep] = nd.var
-            if istemp(dep) # && !istemp(nd.var)
+            dep = dependencies(nd)[1]            
+            if istemp(dep)
+                # if dependency is a temp var name, replace it with the normal one
                 st[dep] = vname
             else
+                # otherwise replace all future alias occurrences with the original one
                 st[vname] = dep
             end
             push!(delvars, vname)

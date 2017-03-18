@@ -45,8 +45,16 @@ export
     ExGraph,
     parse!,
     evaluate!,
-    # ExGraph utils
-    propagate_size!
+    # ExGraph utils    
+    propagate_size!,
+    # expr utils
+    mergeex,
+    optimize,
+    sanitize,
+    # Einstein conversions
+    to_einstein,
+    from_einstein
+
 
 
 include("core.jl")

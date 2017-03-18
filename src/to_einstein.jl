@@ -1,7 +1,8 @@
 
-# from vectorized to Einstein notation
+# to_einstein.jl - from vectorized to Einstein notation
 
-# TODO: fix transpose
+const IDX_NAMES = [:i, :j, :k, :l, :m, :n, :p, :q, :r, :s]
+
 
 const TO_EINSTEIN_RULES =
     OrderedDict((:sum, [0]) => [:(Z = sum(X)) => :(Z = X)],
@@ -38,18 +39,17 @@ end
 
 
 function to_einstein(g::ExGraph, nd::ExNode{:call})
-    ex = expand_const_1(g, nd)
+    # ex = expand_const_1(g, nd)
+    ex = to_expr(nd)
     op = ex.args[2].args[1]
-    dep_dims = [ndims(g[dep].val) for dep in dependencies(nd) if haskey(g, dep)]
+    dep_dims = [ndims(value(g[dep])) for dep in dependencies(nd) if haskey(g, dep)]
     if haskey(TO_EINSTEIN_RULES, (op, dep_dims))
         rules = TO_EINSTEIN_RULES[(op, dep_dims)]
-        for (pat, subex) in rules
-            matched = tryrewrite(ex, pat, subex; phs=FROM_EIN_PHS)
+        for (pat, subs_ex) in rules
+            matched = tryrewrite(ex, pat, subs_ex; phs=FROM_EIN_PHS)
             if !isnull(matched)
                 new_ex = get(matched)
-                return new_ex
-                # varidxs = forall_indices(new_ex)
-                # return Expr(:(=), maybe_indexed(nd.var, varidxs), new_ex)
+                return new_ex         
             end
         end
         # if nothing matched, throw an error
@@ -57,35 +57,35 @@ function to_einstein(g::ExGraph, nd::ExNode{:call})
               "Einstein notation")
     else
         depidxs = [IDX_NAMES[1:dims] for dims in dep_dims]
-        ideps = [maybe_indexed(dep, idxs)
-                 for (dep, idxs) in zip(dependencies(nd), depidxs)]
-        icall = Expr(:call, op, ideps...)
-        varidxs = forall_indices(icall)
-        ivar = maybe_indexed(nd.var, varidxs)
-        return Expr(:(=), ivar, icall)
+        deps = [make_indexed(depname, idxs)
+                 for (depname, idxs) in zip(dependencies(nd), depidxs)]
+        callex = Expr(:call, op, deps...)
+        vidxs = forall_indices(callex)
+        var = make_indexed(varname(nd), vidxs)
+        return Expr(:(=), var, callex)
     end
 end
 
 
 function to_einstein(g::ExGraph, nd::ExNode{:bcast})
-    ex = expand_const_1(g, nd)
+    # ex = expand_const_1(g, nd)
+    ex = to_expr(nd)
     op = ex.args[2].args[1]
-    dep_dims = [ndims(g[dep].val) for dep in dependencies(nd) if haskey(g, dep)]
-    
+    dep_dims = [ndims(g[dep].val) for dep in dependencies(nd) if haskey(g, dep)]    
     depidxs = [IDX_NAMES[1:dims] for dims in dep_dims]
-    ideps = [maybe_indexed(dep, idxs)
-             for (dep, idxs) in zip(dependencies(nd), depidxs)]
-    icall = Expr(:call, op, ideps...)
-    varidxs = forall_indices(icall)
-    ivar = maybe_indexed(nd.var, varidxs)
-    return Expr(:(=), ivar, icall)
+    deps = [make_indexed(depname, idxs)
+            for (depname, idxs) in zip(dependencies(nd), depidxs)]
+    iex = Expr(:., op, Expr(:tuple, deps...))
+    vidxs = forall_indices(icall)
+    var = make_indexed(varname(nd), vidxs)
+    return Expr(:(=), var, iex)
 end
 
 
 function to_einstein(g::ExGraph, nd::ExNode{:(=)})
-    dep = dependencies(nd)[1]
-    varidxs = g[dep].idxs[1]
-    lhs = Expr(:ref, nd.var, varidxs...)
-    rhs = Expr(:ref, dep, varidxs...)
+    depname = dependencies(nd)[1]
+    vidxs = varidxs(g[depname])
+    lhs = make_indexed(varname(nd), vidxs)
+    rhs = make_indexed(dep, vidxs)
     return Expr(:(=), lhs, rhs)
 end

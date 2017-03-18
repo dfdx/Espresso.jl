@@ -116,6 +116,15 @@ function get_indices(ex; rec::Bool=false)
 end
 
 
+function longest_index{T}(idxs_list::Vector{Vector{T}})
+    if isempty(idxs_list)
+        return []
+    else
+        reduce((idx1, idx2) -> length(idx1) < length(idx2) ? idx2 : idx1,
+               idxs_list)
+    end
+end
+
 
 ##  forall & sum indexes
 
@@ -124,15 +133,6 @@ end
 # 2. If expression is multiplication (*, not .*), summation is implied
 # 3. Otherwise (including element-wise operations and broadcasting), forall is implied
 
-
-function longest_index{Idx}(idxs_list::Vector{Vector{Idx}})
-    if isempty(idxs_list)
-        return Symbol[]
-    else
-        reduce((idx1, idx2) -> length(idx1) < length(idx2) ? idx2 : idx1,
-               idxs_list)
-    end
-end
 
 
 function repeated_non_repeated(depidxs::Vector)
@@ -144,14 +144,14 @@ function repeated_non_repeated(depidxs::Vector)
 end
 
 
-function forall_sum_indices(op::Symbolic, depidxs::Vector)
+function forall_sum_indices(op::Symbolic, depidxs::Vector)    
     longest_idx = longest_index(depidxs)
     elem_wise = all(idx -> idx == longest_idx || isempty(idx), depidxs)
     if op == :*
         repeated, non_repeated = repeated_non_repeated(depidxs)
         return non_repeated, repeated
     elseif elem_wise
-        return longest_idx, Symbol[]
+        return longest_idx, []
     else
         # broadcasting - pass on all indices, preserving order of longest index
         all_idxs = vcat(longest_idx, flatten(Symbol, depidxs))
@@ -170,20 +170,34 @@ function forall_sum_indices(ex::Expr)
     elseif ex.head == :ref
         return ex.args[2:end], Symbol[]
     elseif ex.head == :call
-        depidxs = Vector[forall_indices(arg) for arg in ex.args[2:end]]
+        depidxs = Vector{Any}[forall_indices(arg) for arg in ex.args[2:end]]
         # should we also add sum indices of dependencies?
         return forall_sum_indices(ex.args[1], depidxs)
     elseif ex.head == :.
-        depidxs = Vector[forall_indices(arg) for arg in ex.args[2].args]
+        depidxs = Vector{Any}[forall_indices(arg) for arg in ex.args[2].args]
         return forall_sum_indices(ex.args[1], depidxs)
     else
         error("Don't know how to extract forall and sum indices from: $ex")
     end
 end
 
-forall_sum_indices(x) = (Symbol[], Symbol[])
+forall_sum_indices(x) = ([], [])
 
 forall_indices(op::Symbolic, depidxs::Vector) = forall_sum_indices(op, depidxs)[1]
 forall_indices(x) = forall_sum_indices(x)[1]
 sum_indices(op::Symbolic, depidxs::Vector) = forall_sum_indices(op, depidxs)[2]
 sum_indices(x) = forall_sum_indices(x)[2]
+
+
+## index permutations
+
+findperm(idxs1, idxs2) = [findfirst(idxs2, idx) for idx in idxs1]
+
+
+## other utils
+
+function without_indices(ex::Expr)
+    vars = findex(:(X[IX...]), ex; phs=[:X, :IX])
+    st = Dict(var => var.args[1] for var in vars)
+    return subs(ex, st)
+end

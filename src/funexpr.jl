@@ -6,7 +6,7 @@
 # counterparts (e.g. expression with `.` and variable node).
 
 sanitize(x) = x
-sanitize(ex::Expr) = sanitize(to_exh(ex))
+sanitize(ex::Expr) = sanitize(ExH(ex))
 sanitize(ex::LineNumberNode) = nothing
 sanitize(ex::ExH{:line}) = nothing
 sanitize(ex::ExH{:return}) = ex.args[1]

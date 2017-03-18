@@ -27,14 +27,7 @@ const OPT_RULES = OrderedDict(
 
     :(W[k,i,j] = X[k,i] .* Y[k,j]; Z[i,j] = W[k,i,j]) =>
     :(genname__(1)[i,k] = X[k,i]; Z[i,j] = genname__(1)[i,k] * Y[k,j])
-
-    # TODO: X'[i,k] isn't correct in Einstein notation
-    # replace with: genname__1[i,k] = X[k,i]; genname__1[i,k]
 )
-
-
-  # ExNode{call}(tmp16[i, m, k] = tmp15[i, m] .* Wd[i, k] | nothing)
-  # ExNode{=}(tmp17[m, k] = tmp16[i, m, k] | nothing)
 
 
 function expand_deps!(g::ExGraph, nd::ExNode{:input}, depth::Int, result::Vector{Expr})
@@ -42,13 +35,13 @@ function expand_deps!(g::ExGraph, nd::ExNode{:input}, depth::Int, result::Vector
 end
 
 function expand_deps!(g::ExGraph, nd::ExNode{:constat}, depth::Int, result::Vector{Expr})
-    push!(result, to_iexpr(nd))
+    push!(result, to_expr(nd))
 end
 
 function expand_deps!(g::ExGraph, nd::ExNode{:(=)}, depth::Int, result::Vector{Expr})
     if depth > 0
         expand_deps!(g, [g[var] for var in dependencies(nd)], depth - 1, result)
-        push!(result, to_iexpr(nd))
+        push!(result, to_expr(nd))
     end
 end
 
@@ -57,7 +50,7 @@ function expand_deps!(g::ExGraph, nd::ExNode{:call}, depth::Int, result::Vector{
         for dep in dependencies(nd)
             expand_deps!(g, g[end], depth - 1, result)
         end
-        push!(result, to_iexpr(nd))
+        push!(result, to_expr(nd))
     end
 end
 
@@ -65,10 +58,12 @@ end
 function collect_deps!(result::Set{Symbol}, g::ExGraph, nd::ExNode, depth::Int=typemax(Int))
     if depth > 0
         for dep in dependencies(nd)
-            collect_deps!(result, g, g[dep], depth - 1)
+            if haskey(g, dep)
+                collect_deps!(result, g, g[dep], depth - 1)
+            end
         end
     end
-    push!(result, nd.var)
+    push!(result, varname(nd))
 end
 
 
@@ -83,8 +78,8 @@ function expand_deps(g::ExGraph, nd::ExNode, depth::Int=typemax(Int))
     deps = collect_deps(g, nd, depth)
     ex = Expr(:block)
     for nd in g.tape
-        if !isa(nd, ExNode{:input}) && in(nd.var, deps)
-            push!(ex.args, to_iexpr(nd))
+        if !isa(nd, ExNode{:input}) && in(varname(nd), deps)
+            push!(ex.args, to_expr(nd))
         end
     end
     return ex
@@ -95,7 +90,7 @@ function remove_unused(g::ExGraph, output_var::Symbol)
     deps = collect_deps(g, g[output_var])
     gr = reset_tape(g)
     for nd in g.tape
-        if in(nd.var, deps)
+        if in(varname(nd), deps)
             addnode!(gr, nd)
         end
     end
@@ -103,15 +98,14 @@ function remove_unused(g::ExGraph, output_var::Symbol)
 end
 
 
-function tryoptimize(ex::Expr, known_names::Set{Symbol})
+function tryoptimize(ex::Expr)
     for (pat, subs_ex) in OPT_RULES
         new_ex_nlb = tryrewrite(ex, pat, subs_ex; phs=OPT_PHS)
         if !isnull(new_ex_nlb)
             new_ex = get(new_ex_nlb)
             genname_patterns = unique(findex(:(genname__(_n)), new_ex))            
             if !isempty(genname_patterns)
-                new_names = gennames(length(genname_patterns))
-                push!(known_names, new_names...)
+                new_names = gennames(length(genname_patterns))               
                 st = Dict(zip(genname_patterns, new_names))
                 return Nullable(subs(new_ex, st))
             else
@@ -135,10 +129,9 @@ function remove_pseudoone(g::ExGraph)
     g = deepcopy(g)
     I_pat = :(I[_...])
     for nd in g.tape
-        iex = to_iexpr(nd)
-        new_iex = without(iex, I_pat)
-        # nd.ex =
-        error("Not implemented yet")
+        ex = expr(nd)        
+        new_ex = without(ex, I_pat)
+        expr!(nd, new_ex)
     end
     return g
 end
@@ -147,27 +140,29 @@ end
 function optimize(g::ExGraph)
     g = remove_pseudoone(g)
     new_g = reset_tape(g)    
-    known_names = Set(nd.var for nd in g.tape)
+    known_names = Set(varname(nd) for nd in g.tape)
     for nd in g.tape
         if isa(nd, ExNode{:input})
             addnode!(new_g, nd)
         else
+            # try to optimize current node + 1st level dependencies
             ex_1 = expand_deps(g, nd, 1)
-            new_ex = tryoptimize(ex_1, known_names)
+            new_ex = tryoptimize(ex_1)
             if !isnull(new_ex)                
                 parse!(new_g, get(new_ex))
                 continue
             end
-            new_ex = tryoptimize(to_iexpr(nd), known_names)
+            # try to optimize only current node
+            new_ex = tryoptimize(to_expr(nd))
             if !isnull(new_ex)                
                 parse!(new_g, get(new_ex))
                 continue
             end
+            # if nothing matched, add node as is
             addnode!(new_g, nd)
         end
     end
-    return remove_unused(new_g,  new_g[end].var)
+    new_g = remove_unused(new_g,  varname(new_g[end]))
+    collapse_assignments!(new_g)
+    return new_g
 end
-
-
-# TODO: deprecate ExNode.idxs, use accessors instead

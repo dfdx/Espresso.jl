@@ -41,7 +41,7 @@ function matchex!(m::Dict{Symbol,Any}, ps::Vector, xs::Vector;
     for i in eachindex(ps)
         if isa(ps[i], Expr) && ps[i].head == :... && isplaceholder(ps[i].args[1], phs)
             p = ps[i].args[1]
-            haskey(m, p) && m[p] != x && m[p] != xs[i:end] && return false
+            haskey(m, p) && m[p] != xs[i] && m[p] != xs[i:end] && return false
             m[p] = xs[i:end]
             return true
         else
@@ -200,8 +200,8 @@ Example (derivative of x^n):
     subex = :(_n * _x ^ (_n - 1))
     rewrite(ex, pat, subex) # ==> :(v * u ^ (v - 1))
 """
-function rewrite(ex::Symbolic, pat::Symbolic, subex::Any; phs=DEFAULT_PHS[1])
-    st = matchex(pat, ex; phs=phs)
+function rewrite(ex::Symbolic, pat::Symbolic, subex::Any; phs=DEFAULT_PHS[1], allow_ex=true)
+    st = matchex(pat, ex; phs=phs, allow_ex=allow_ex)
     if isnull(st)
         error("Expression $ex doesn't match pattern $pat")
     else
@@ -213,8 +213,8 @@ end
 Same as rewrite, but returns Nullable{Expr} and doesn't throw an error
 when expression doesn't match pattern
 """
-function tryrewrite(ex::Symbolic, pat::Symbolic, subex::Any; phs=DEFAULT_PHS[1])
-    st = matchex(pat, ex; phs=phs)
+function tryrewrite(ex::Symbolic, pat::Symbolic, subex::Any; phs=DEFAULT_PHS[1], allow_ex=true)
+    st = matchex(pat, ex; phs=phs, allow_ex=allow_ex)
     if isnull(st)
         return Nullable{Expr}()
     else
@@ -226,9 +226,9 @@ end
 function findex!(res::Vector, pat, ex; phs=DEFAULT_PHS[1])
     if matchingex(pat, ex; phs=phs)
         push!(res, ex)
-    elseif exprlike(ex)
+    elseif expr_like(ex)
         for arg in ex.args
-            findex!(res, pat, arg)
+            findex!(res, pat, arg; phs=phs)
         end
     end
 end
@@ -242,8 +242,8 @@ Find sub-expressions matching a pattern. Example:
     findex(pat, ex)   # ==> [:(f(x)), :(f(y))]
 
 """
-function findex(pat, ex)
+function findex(pat, ex; phs=DEFAULT_PHS[1])
     res = Any[]
-    findex!(res, pat, ex)
+    findex!(res, pat, ex; phs=phs)
     return res
 end

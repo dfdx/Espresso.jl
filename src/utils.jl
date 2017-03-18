@@ -143,6 +143,26 @@ end
 unzip(coll) = map(collect, zip(coll...))
 
 
+"""
+Compose functins, similar to Haskell's dot operator:
+
+    @c f g x   # ==> f(g(x))
+
+Note that with current implementation a built-in |> operator may be used instead:
+
+    x |> g |> f
+
+@c may become more powerful than that, though.
+"""
+macro c(args...)
+    ex = args[end]
+    for arg in reverse(args[1:end-1])
+        ex = Expr(:call, arg, ex)
+    end
+    return ex
+end
+
+
 ## package-specific stuff
 
 if VERSION < v"0.5-"
