@@ -10,45 +10,42 @@ function expand_const_1(g::ExGraph, nd::Union{ExNode{:call}, ExNode{:bcast}})
 end
 
 
-expand_temp(g::ExGraph, nd::ExNode{:input}) = variable(nd)
-expand_temp(g::ExGraph, nd::ExNode{:constant}) = value(nd)
-expand_temp(g::ExGraph, nd::ExNode{:(=)}) = expand_temp(g, expr(nd))
+# expand_temp(g::ExGraph, nd::ExNode{:input}) = variable(nd)
+# expand_temp(g::ExGraph, nd::ExNode{:constant}) = value(nd)
+# expand_temp(g::ExGraph, nd::ExNode{:(=)}) = expand_temp(g, expr(nd))
 
-function expand_temp(g::ExGraph, nd::ExNode{:call})
-    deps = dependencies(nd)
-    expanded = Dict([(x, expand_temp(g, g[x])) for x in deps])
-    return subs(expr(nd), expanded)
-end
+# function expand_temp(g::ExGraph, nd::ExNode{:call})
+#     deps = dependencies(nd)
+#     expanded = Dict([(x, expand_temp(g, g[x])) for x in deps])
+#     return subs(expr(nd), expanded)
+# end
 
-function expand_temp(g::ExGraph, nd::ExNode{:bcast})
-    deps = dependencies(nd)
-    expanded = Dict([(x, expand_temp(g, g[x])) for x in deps])
-    return subs(expr(nd), expanded)
-end
+# function expand_temp(g::ExGraph, nd::ExNode{:bcast})
+#     deps = dependencies(nd)
+#     expanded = Dict([(x, expand_temp(g, g[x])) for x in deps])
+#     return subs(expr(nd), expanded)
+# end
 
-function expand_temp(g::ExGraph, x::Symbol)
-    if haskey(g.idx, x)
-        return expand_temp(g, g[x])
-    else
-        return x
-    end
-end
+# function expand_temp(g::ExGraph, x::Symbol)
+#     if haskey(g.idx, x)
+#         return expand_temp(g, g[x])
+#     else
+#         return x
+#     end
+# end
 
-function expand_temp(g::ExGraph, ex::Expr)
-    new_args = [expand_temp(g, arg) for arg in ex.args]
-    return Expr(ex.head, new_args...)
-end
+# function expand_temp(g::ExGraph, ex::Expr)
+#     new_args = [expand_temp(g, arg) for arg in ex.args]
+#     return Expr(ex.head, new_args...)
+# end
 
-expand_temp(g::ExGraph, x) = x
+# expand_temp(g::ExGraph, x) = x
 
 
 # iexpand_temp
 
 
-function to_block(exs...)
-    new_exs = flatten([exprlike(ex) && ex.head == :block ? ex.args : [ex] for ex in exs])
-    return sanitize(Expr(:block, new_exs...))
-end
+
 
 iexpand_temp(g::ExGraph, nd::ExNode{:input}) = quote end
 iexpand_temp(g::ExGraph, nd::ExNode{:constant}) = to_iexpr(nd)

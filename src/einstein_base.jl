@@ -57,38 +57,10 @@ function add_indices(ex, s2i::Dict)
 end
 
 
-function with_indices(x::Symbol, start_idx::Int, num_idxs::Int)
-    return Expr(:ref, x, IDX_NAMES[start_idx:start_idx+num_idxs-1]...)
-end
-
-with_indices(x::Symbol, num_idxs::Int) = with_indices(x, 1, num_idxs)
 
 
 
 
-
-# guards
-
-isequality(ex) = isa(ex, Expr) && ex.head == :call && ex.args[1] == :(==)
-
-function get_guards!(guards::Vector{Expr}, ex::Expr)
-    if isequality(ex)
-        push!(guards, ex)
-    else
-        for arg in ex.args
-            get_guards!(guards, arg)
-        end
-    end
-    return guards
-end
-
-get_guards!(guards::Vector{Expr}, x) = guards
-get_guards(ex) = get_guards!(Expr[], ex)
-
-
-function without_guards(ex)
-    return without(ex, :(i == j); phs=[:i, :j])
-end
 
 
 # LHS inference (not used for now)
@@ -107,21 +79,7 @@ end
 
 # einsum
 
-"""
-Translates guarded expression, e.g. :(Y[i,j] = X[i] * (i == j)),
-into the unguarded one, e.g. :(Y[i, i] = X[i])
-"""
-function unguarded(ex::Expr)
-    st = Dict([(grd.args[3], grd.args[2]) for grd in get_guards(ex)])
-    new_ex = without_guards(ex)
-    idxs = @view new_ex.args[1].args[2:end]
-    for i=1:length(idxs)
-        if haskey(st, idxs[i])
-            idxs[i] = st[idxs[i]]
-        end
-    end
-    return new_ex
-end
+
 
 function to_einsum(ex::Expr)
     if ex.head == :block

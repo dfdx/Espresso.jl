@@ -49,11 +49,14 @@ function Base.show(io::IO, g::ExGraph)
 end
 
 Base.haskey(g::ExGraph, var::Symbol) = haskey(g.idx, var)
+Base.endof(g::ExGraph) = endof(g.tape)
 Base.get(g::ExGraph, var::Symbol) = g.idx[var]
 Base.getindex(g::ExGraph, var::Symbol) = g.idx[var]
 Base.getindex(g::ExGraph, var::String) = g.idx[Symbol(var)]
 Base.getindex(g::ExGraph, i::Integer) = g.tape[i]
-Base.endof(g::ExGraph) = endof(g.tape)
+Base.setindex!(g::ExGraph, nd::ExNode, i::Integer) =
+    (g.tape[i] = nd; g.idx[varname(nd)] = nd)
+
 
 function to_expr(g::ExGraph)
     res = quote end

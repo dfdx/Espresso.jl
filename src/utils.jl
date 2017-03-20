@@ -295,7 +295,13 @@ function reduce_equalities{T}(pairs::Vector{Tuple{T,T}}, anchors::Set{T})
 end
 
 
-function bcast_to_call(pex::Expr)
-    @assert pex.head == :(.)
-    return Expr(:call, pex.args[1], pex.args[2].args...)
+function expr_like(x)
+    flds = Set(fieldnames(x))
+    return in(:head, flds) && in(:args, flds)
+end
+
+
+function to_block(exs...)
+    new_exs = flatten([expr_like(ex) && ex.head == :block ? ex.args : [ex] for ex in exs])
+    return sanitize(Expr(:block, new_exs...))
 end

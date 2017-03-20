@@ -34,6 +34,9 @@ guards!(nd::ExNode, guards::Vector{Expr}) = (nd.guards = guards)
 value(nd::ExNode) = nd.val
 value!(nd::ExNode, val) = (nd.val = val)
 
+Base.copy{C}(nd::ExNode{C}; category=C, var=nd.var, ex=nd.ex,  guards=nd.guards, val=nd.val) =
+    ExNode{category}(var, ex, guards, val)
+
 
 ## to_expr and friends
 

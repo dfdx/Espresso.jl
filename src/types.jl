@@ -35,8 +35,3 @@ end
 # to_expr(exc::ExCall) = Expr(exc.head, exc.args...)
 
 
-function expr_like(x)
-    flds = Set(fieldnames(x))
-    return in(:head, flds) && in(:args, flds)
-end
-

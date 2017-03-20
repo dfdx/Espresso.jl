@@ -5,7 +5,8 @@ module Espresso
 
 export
     # utils
-    ExH,    
+    ExH,
+    to_block,
     # rewrite
     matchex,
     findex,
@@ -13,7 +14,7 @@ export
     rewrite,
     tryrewrite,
     without,
-    set_default_placeholders,     
+    set_default_placeholders,
     # simplification
     simplify,
     @simple_rule,
@@ -22,9 +23,15 @@ export
     # indexing
     split_indexed,
     make_indexed,
+    with_indices,
     get_vars,
     get_var_names,
     get_indices,
+    forall_sum_indices,
+    forall_indices,
+    sum_indices,
+    get_guards,
+    without_guards,
     # ExNode
     ExNode,
     category,
@@ -45,8 +52,11 @@ export
     ExGraph,
     parse!,
     evaluate!,
-    # ExGraph utils    
+    # ExGraph utils
     propagate_size!,
+    collect_deps,
+    expand_deps,
+    expand_temp,
     # expr utils
     mergeex,
     optimize,

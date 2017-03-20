@@ -30,62 +30,6 @@ const OPT_RULES = OrderedDict(
 )
 
 
-function expand_deps!(g::ExGraph, nd::ExNode{:input}, depth::Int, result::Vector{Expr})
-    # do nothing
-end
-
-function expand_deps!(g::ExGraph, nd::ExNode{:constat}, depth::Int, result::Vector{Expr})
-    push!(result, to_expr(nd))
-end
-
-function expand_deps!(g::ExGraph, nd::ExNode{:(=)}, depth::Int, result::Vector{Expr})
-    if depth > 0
-        expand_deps!(g, [g[var] for var in dependencies(nd)], depth - 1, result)
-        push!(result, to_expr(nd))
-    end
-end
-
-function expand_deps!(g::ExGraph, nd::ExNode{:call}, depth::Int, result::Vector{Expr})
-    if depth > 0
-        for dep in dependencies(nd)
-            expand_deps!(g, g[end], depth - 1, result)
-        end
-        push!(result, to_expr(nd))
-    end
-end
-
-
-function collect_deps!(result::Set{Symbol}, g::ExGraph, nd::ExNode, depth::Int=typemax(Int))
-    if depth > 0
-        for dep in dependencies(nd)
-            if haskey(g, dep)
-                collect_deps!(result, g, g[dep], depth - 1)
-            end
-        end
-    end
-    push!(result, varname(nd))
-end
-
-
-function collect_deps(g::ExGraph, nd::ExNode, depth::Int=typemax(Int))
-    result = Set{Symbol}()
-    collect_deps!(result, g, nd, depth)
-    return result
-end
-
-
-function expand_deps(g::ExGraph, nd::ExNode, depth::Int=typemax(Int))
-    deps = collect_deps(g, nd, depth)
-    ex = Expr(:block)
-    for nd in g.tape
-        if !isa(nd, ExNode{:input}) && in(varname(nd), deps)
-            push!(ex.args, to_expr(nd))
-        end
-    end
-    return ex
-end
-
-
 function remove_unused(g::ExGraph, output_var::Symbol)
     deps = collect_deps(g, g[output_var])
     gr = reset_tape(g)
@@ -128,10 +72,16 @@ end
 function remove_pseudoone(g::ExGraph)
     g = deepcopy(g)
     I_pat = :(I[_...])
-    for nd in g.tape
+    for (i, nd) in enumerate(g.tape)
         ex = expr(nd)        
         new_ex = without(ex, I_pat)
-        expr!(nd, new_ex)
+        if isa(nd, ExNode{:call}) && isa(new_ex, Expr) && new_ex.head != :call
+            # after removing I the node changed it's type from :call to :(=)
+            new_nd = copy(nd; category=:(=), ex=new_ex)
+            g[i] = new_nd            
+        else
+            expr!(nd, new_ex)
+        end
     end
     return g
 end

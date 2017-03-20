@@ -75,8 +75,12 @@ function to_einstein(g::ExGraph, nd::ExNode{:bcast})
     depidxs = [IDX_NAMES[1:dims] for dims in dep_dims]
     deps = [make_indexed(depname, idxs)
             for (depname, idxs) in zip(dependencies(nd), depidxs)]
-    iex = Expr(:., op, Expr(:tuple, deps...))
-    vidxs = forall_indices(icall)
+    # transforming `f.(x)` to `f.(x[i])` is preferable than to `f(x[i])`,
+    # but Einsum currectly doesn't support broadcasting, so have
+    # to go with the second option
+    #   iex = Expr(:., op, Expr(:tuple, deps...))
+    iex = Expr(:call, op, deps...)
+    vidxs = forall_indices(iex)
     var = make_indexed(varname(nd), vidxs)
     return Expr(:(=), var, iex)
 end

@@ -4,15 +4,11 @@
 const FROM_EIN_PHS = [:A, :B, :C, :X, :Y, :V, :W, :Z,
                       :i, :j, :k, :l, :m, :n, :p, :q, :r, :s, :t]
 
-const FROM_EINSTEIN_RULES =
+const FROM_EINSTEIN_CALL_RULES =
     OrderedDict(:(Z[j] = I[i] * X[i,j]) => :(Z = squeeze(sum(X,1),1)),
                 :(Z[i] = I[j] * X[i,j]) => :(Z = squeeze(sum(X,2),2)),
                 :(Z[i] = X[i,j] * I[j]) => :(Z = squeeze(sum(X,2),2)),
                 :(Z[j] = X[i,j] * I[i]) => :(Z = squeeze(sum(X,1),1)),
-                :(Z[i] = X[i,j]) => :(Z = squeeze(sum(X,1),1)),
-                :(Z[i,j] = X[i,j,k]) => :(Z = squeeze(sum(X,3),3)),
-                :(Z[i,k] = X[i,j,k]) => :(Z = squeeze(sum(X,2),2)),
-                :(Z[j,k] = X[i,j,k]) => :(Z = squeeze(sum(X,1),1)),
                 :(Z[i,j] = X[i,j,k] * I[k]) => :(Z = squeeze(sum(X,3),3)),
                 :(Z[i,k] = X[i,j,k] * I[j]) => :(Z = squeeze(sum(X,2),2)),
                 :(Z[j,k] = X[i,j,k] * I[i]) => :(Z = squeeze(sum(X,1),1)),
@@ -20,12 +16,6 @@ const FROM_EINSTEIN_RULES =
                 :(Z = I[i] * X[i]) => :(Z = sum(X)),
                 :(Z = X[i,j] * I[i,j]) => :(Z = sum(X)),
                 :(Z = I[i,j] * X[i,j]) => :(Z = sum(X)),
-                # no-pseudoone summation
-                :(Z[i] = X[i,j]) => :(Z = squeeze(sum(X,2),2)),
-                :(Z[j] = X[i,j]) => :(Z = squeeze(sum(X,1),1)),
-                :(Z = X[i]) => :(Z = sum(X)),
-                :(Z = X[i,j]) => :(Z = sum(X)),
-                :(Z = X[i,j,k]) => :(Z = sum(X)), 
                 # inner and outer product
                 :(Z[i,j] = X[i] * Y[j]) => :(Z = X * Y'),
                 :(Z = X[i] * Y[i]) => :(Z = X'Y),
@@ -47,15 +37,31 @@ const FROM_EINSTEIN_RULES =
                 :(Z[i,j] = X[i,k] .* Y[k,j]) => :(Z = X * Y),
                 :(Z[i,j] = Y[k,j] .* X[i,k]) => :(Z = X * Y),
                 :(Z[i,j] = Y[i,j] .* X[j,i]) => :(Z = X * Y'),
+                # eye
+                :(Z[i,j] = 1 * (i == j)) => :(eye(size__(Z))[1]),
+                # special .*
+                :(Z[i,j] = X[j] .+ Y[i,j]) => :(Z = X' .+ Y))
+
+
+const FROM_EINSTEIN_ASSIGN_RULES =
+    OrderedDict(:(Z[i] = X[i,j]) => :(Z = squeeze(sum(X,1),1)),
+                :(Z[i,j] = X[i,j,k]) => :(Z = squeeze(sum(X,3),3)),
+                :(Z[i,k] = X[i,j,k]) => :(Z = squeeze(sum(X,2),2)),
+                :(Z[j,k] = X[i,j,k]) => :(Z = squeeze(sum(X,1),1)),
+                # no-pseudoone summation
+                :(Z[i] = X[i,j]) => :(Z = squeeze(sum(X,2),2)),
+                :(Z[j] = X[i,j]) => :(Z = squeeze(sum(X,1),1)),
+                :(Z = X[i]) => :(Z = sum(X)),
+                :(Z = X[i,j]) => :(Z = sum(X)),
+                :(Z = X[i,j,k]) => :(Z = sum(X)),
                 # repmat
                 :(Z[i,j] = X[j]) => :(Z = repmat(X', size__(Z)[1])),
                 :(Z[i,j] = X[i]) => :(Z = repmat(X, 1, size__(Z)[2])),
                 # eye
                 :(Z[i,j] = 1 * (i == j)) => :(eye(size__(Z))[1]),
                 # constant
-                :(Z[i] = X) => :(Z = ones(size__(Z)) * X),
-                # special .*
-                :(Z[i,j] = X[j] .+ Y[i,j]) => :(Z = X' .+ Y))
+                :(Z[i] = X) => :(Z = ones(size__(Z)) * X))
+
 
 
 function subs_size(ex::Expr, sizes::Dict)
@@ -103,10 +109,10 @@ from_einstein(g::ExGraph, nd::ExNode{:constant}) = to_expr(nd)
 
 function from_einstein(g::ExGraph, nd::ExNode{:call})
     ex = to_expr(nd)
-    for (pat, rpat) in FROM_EINSTEIN_RULES
+    for (pat, rpat) in FROM_EINSTEIN_CALL_RULES
         # consider tryrewrite
         rex = tryrewrite(ex, pat, rpat; phs=FROM_EIN_PHS, allow_ex=false)
-        if !isnull(rex)          
+        if !isnull(rex)
             return get(rex)
         end
     end
@@ -124,17 +130,27 @@ function from_einstein(g::ExGraph, nd::ExNode{:call})
         bcast_call = Expr(:., expr(nd).args[1], Expr(:tuple, dependencies(nd)...))
         return Expr(:(=), varname(nd), bcast_call)
     else
-        # error("Neither pattern found, nor broadcasting is applicable when transforming from " *
-        #       "Einstein notation, expression: $ex")
-        return to_einsum(ex)
+        error("Neither pattern found, nor broadcasting is applicable when transforming from " *
+              "Einstein notation, expression: $ex")
+        # return to_einsum(ex)
     end
 end
 
 
 function from_einstein(g::ExGraph, nd::ExNode{:(=)})
+    # there are several special rules like (e.g. for `repmat()`), check them first
+    ex = to_expr(nd)
+    for (pat, rpat) in FROM_EINSTEIN_ASSIGN_RULES
+        # consider tryrewrite
+        rex = tryrewrite(ex, pat, rpat; phs=FROM_EIN_PHS, allow_ex=false)
+        if !isnull(rex)
+            return get(rex)
+        end
+    end
+    # if special rules don't match, assume summation and/or permutation
     new_ex = without_indices(expr(nd))
     depidxs = get_indices(expr(nd))[1]
-    sum_idxs = setdiff(depidxs, varidxs(nd))    
+    sum_idxs = setdiff(depidxs, varidxs(nd))
     if  !isempty(sum_idxs)
         lhs_idxs = depidxs
         sum_dims = [findfirst(lhs_idxs, idx) for idx in sum_idxs]
@@ -145,7 +161,7 @@ function from_einstein(g::ExGraph, nd::ExNode{:(=)})
     end
     new_rhs_idxs = [idx for idx in depidxs if !in(idx, sum_idxs)]
     perm = findperm(varidxs(nd), new_rhs_idxs)
-    if !all(perm .== 1:length(perm))        
+    if !all(perm .== 1:length(perm))
         if length(perm) == 2
             new_ex = :(transpose($new_ex))
         else
