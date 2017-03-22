@@ -69,30 +69,15 @@ function to_expr(g::ExGraph)
 end
 
 
-# """Extract symbols that may make conflicts with temporary names in ExGraph"""
-# function possible_temp_names(ex::Expr)
-#     names = unique(flatten(map(possible_temp_names, ex.args)))
-#     return convert(Vector{Symbol}, names)
-# end
-
-# possible_temp_names(name::Symbol) = (startswith(string(name), "tmp") ?
-#                                      [name] :
-#                                      Symbol[])
-# possible_temp_names(x) = Symbol[]
-
-
 """Generate a new unique name for intermediate variable in graph"""
 function genname()
-    return gensym()
+    s = String(gensym())
+    return Symbol(replace(s, "##", "tmp"))
 end
 
-# for compatibility, will be removed somewhere in the future
-# function genname(g::ExGraph)
-#     return gensym()
-# end
 
 function gennames(count::Int)
-    return [gensym() for _=1:count]
+    return [genname() for _=1:count]
 end
 
 ## addnode!
@@ -181,7 +166,7 @@ function parse!(g::ExGraph, ex::ExH{Symbol("'")})
     dep = parse!(g, ex.args[1])
     depname, depidxs = split_indexed(dep)
     @assert isempty(depidxs) ":' is not allowed in Einstin notation"
-    pex = :(transpose($dep))    
+    pex = :(transpose($dep))
     var = addnode!(g, :call, genname(), pex)
     return var
 end
@@ -284,7 +269,7 @@ function collapse_assignments!(g::ExGraph)
         depidxs = get_indices(expr(nd))
         if isa(nd, ExNode{:(=)}) && !isempty(depidxs) && vidxs == depidxs[1]
             vname = varname(nd)
-            dep = dependencies(nd)[1]            
+            dep = dependencies(nd)[1]
             if istemp(dep)
                 # if dependency is a temp var name, replace it with the normal one
                 st[dep] = vname
@@ -305,7 +290,7 @@ function collapse_assignments!(g::ExGraph)
                 # new_nd.var = st[nd.var]
                 variable!(new_nd, subs(variable(nd), st))
                 # new_nd.ex = subs(nd.ex, st)
-                expr!(new_nd, subs(expr(nd), st))                
+                expr!(new_nd, subs(expr(nd), st))
                 push!(new_tape, new_nd)
                 new_idx[varname(new_nd)] = new_nd
             else
@@ -317,5 +302,3 @@ function collapse_assignments!(g::ExGraph)
     g.tape = new_tape
     g.idx = new_idx
 end
-
-

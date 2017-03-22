@@ -1,7 +1,7 @@
 
 # to_einstein.jl - from vectorized to Einstein notation
 
-const IDX_NAMES = [:i, :j, :k, :l, :m, :n, :p, :q, :r, :s]
+const IDX_NAMES = [:i, :j, :k, :m, :n, :p, :q, :r, :s, :l]
 
 
 const TO_EINSTEIN_RULES =
@@ -22,7 +22,7 @@ const TO_EINSTEIN_RULES =
 function to_einstein(ex::Expr; ctx=Dict(), inputs...)
     g = ExGraph(ex; ctx=to_context(ctx), inputs...)
     evaluate!(g, g.tape[end].var)
-    propagate_size!(g)
+    # propagate_size!(g) -- should/can we use propagate_size in vector notation? 
     res = :(begin end)
     for nd in g.tape
         if !isa(nd, ExNode{:input})

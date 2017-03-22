@@ -18,30 +18,31 @@ function propagate_size!(g::ExGraph, nd::ExNode{:constant})
     sizes[varname(nd)] = Expr(:tuple, sz...)
 end
 
-function indexperm(lhs_idxs::Vector, rhs_idxs::Vector)
-    perm = Int[]
-    for lhs_idx in lhs_idxs
-        rhs_pos = findfirst(rhs_idxs, lhs_idx)
-        if rhs_pos < 1
-            error("LHS index $lhs_idx doesn't happen on RHS")
-        end
-        push!(perm, rhs_pos)
-    end
-    return perm
-end
+# function indexperm(lhs_idxs::Vector, rhs_idxs::Vector)
+#     perm = Int[]
+#     for lhs_idx in lhs_idxs
+#         rhs_pos = findfirst(rhs_idxs, lhs_idx)
+#         if rhs_pos < 1
+#             error("LHS index $lhs_idx doesn't happen on RHS")
+#         end
+#         push!(perm, rhs_pos)
+#     end
+#     return perm
+# end
 
 function propagated_size(g::ExGraph, nd::ExNode{:(=)})
-    dep = dependencies(nd)[1]
-    sizes = @get_or_create(g.ctx, :sizes, Dict())
+    sizes = @get_or_create(g.ctx, :sizes, Dict()) 
+    dep = dependencies(nd)[1]    
     idxs = get_indices(to_expr(nd))
     if length(idxs) == 0 || (length(idxs) == 2 && idxs[1] == idxs[2])
         # not indexed or indices on LHS and RHS are equal
         return sizes[dep]
     elseif isempty(varidxs(nd))
-        # special case for scalars (nicer expression then the following)
+        # special case for scalars (produce nicer expression then the following)
         return Expr(:tuple)
     else
-        perm = indexperm(varidxs(nd), get_indices(expr(nd))[1])
+        # perm = indexperm(varidxs(nd), get_indices(expr(nd))[1])
+        perm = findperm(idxs[1], idxs[2])
         dep_sz = sizes[dep]
         var_sz_maybe = tryrewrite(dep_sz, :(size(_V)), :(size(_V, $(perm...))))
         if !isnull(var_sz_maybe)
@@ -57,6 +58,7 @@ end
 
 function propagate_size!(g::ExGraph, nd::ExNode{:(=)})
     sizes = @get_or_create(g.ctx, :sizes, Dict())
+    haskey(sizes, varname(nd)) && return
     sizes[varname(nd)] = propagated_size(g, nd)
 end
 
@@ -81,6 +83,7 @@ end
 
 function propagate_size!(g::ExGraph, nd::ExNode{:call})
     sizes = @get_or_create(g.ctx, :sizes, Dict())
+    haskey(sizes, varname(nd)) && return
     deps = dependencies(nd)
     if in(:I, deps)
         lhs_idxs = varidxs(nd)
@@ -119,6 +122,7 @@ end
 
 function propagate_size!(g::ExGraph, nd::ExNode{:bcast})
     sizes = @get_or_create(g.ctx, :sizes, Dict())
+    haskey(sizes, varname(nd)) && return
     deps = dependencies(nd)
     dep_dims = [ndims_from_size(g, dep) for dep in deps]
     i = findmax(dep_dims)[2]
@@ -132,3 +136,36 @@ function propagate_size!(g::ExGraph)
         propagate_size!(g, nd)
     end
 end
+
+
+
+# special case - sizes of derivatives
+
+function propagate_deriv_size!(g::ExGraph, dd_name::Symbol)
+    sizes = @get_or_create(g.ctx, :sizes, Dict())
+    rg = match(r"(d.+)_(d.+)", String(dd_name))
+    @assert length(rg.captures) == 2
+    str_dnames = rg.captures
+    zname = Symbol(str_dnames[1][2:end])
+    xname = Symbol(split(str_dnames[2][2:end], "__")[1]) # cut down `__$(i)` part if any    
+    zsize, xsize = (sizes[zname], sizes[xname])
+    if zsize == :(())
+        # output var is constant
+        sizes[dd_name] = xsize
+    else
+        sizes[dd_name] = :(($zsize..., $xsize...)) |> simplify
+    end
+end
+
+
+function propagate_deriv_size!(g::ExGraph)
+    for nd in g.tape
+        vname = varname(nd)
+        if match(r"(d.+)_(d.+)", String(vname)) != nothing
+            propagate_deriv_size!(g, vname)
+        end
+    end
+end
+
+
+
