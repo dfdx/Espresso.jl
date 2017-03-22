@@ -60,7 +60,9 @@ const FROM_EINSTEIN_ASSIGN_RULES =
                 # eye
                 :(Z[i,j] = 1 * (i == j)) => :(eye(size__(Z))[1]),
                 # constant
-                :(Z[i] = X) => :(Z = ones(size__(Z)) * X))
+                :(Z[i] = X) => :(Z = ones(size__(Z)) * X),
+                # other cases
+                :(Z[i,j] = X[j,k]) => :(Z = repmat(squeeze(sum(X, 2), 2)', size__(Z)[1])))
 
 
 
