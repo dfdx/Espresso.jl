@@ -155,18 +155,32 @@ function repeated_non_repeated(depidxs::Vector)
 end
 
 
+# function forall_sum_indices(op::Symbolic, depidxs::Vector)    
+#     longest_idx = longest_index(depidxs)
+#     elem_wise = all(idx -> idx == longest_idx || isempty(idx), depidxs)
+#     if op == :*
+#         repeated, non_repeated = repeated_non_repeated(depidxs)
+#         return non_repeated, repeated
+#     elseif elem_wise
+#         return longest_idx, []
+#     else
+#         # broadcasting - pass on all indices, preserving order of longest index
+#         # TODO: depidxs = [[:i], [:j, :n]] ->  [:j, :n, :i] - not broadcasting
+#         all_idxs = vcat(longest_idx, flatten(Symbol, depidxs))
+#         return unique(all_idxs), Symbol[]
+#     end
+# end
+
 function forall_sum_indices(op::Symbolic, depidxs::Vector)    
     longest_idx = longest_index(depidxs)
-    elem_wise = all(idx -> idx == longest_idx || isempty(idx), depidxs)
+    bcast = all(idx -> idx == longest_idx || isempty(setdiff(idx, longest_idx)), depidxs)
     if op == :*
         repeated, non_repeated = repeated_non_repeated(depidxs)
         return non_repeated, repeated
-    elseif elem_wise
+    elseif bcast
         return longest_idx, []
     else
-        # broadcasting - pass on all indices, preserving order of longest index
-        all_idxs = vcat(longest_idx, flatten(Symbol, depidxs))
-        return unique(all_idxs), Symbol[]
+        return unique(flatten(depidxs)), Symbol[]
     end
 end
 

@@ -39,8 +39,11 @@ const FROM_EINSTEIN_CALL_RULES =
                 :(Z[i,j] = Y[i,j] .* X[j,i]) => :(Z = X * Y'),
                 # eye
                 :(Z[i,j] = 1 * (i == j)) => :(eye(size__(Z))[1]),
-                # special .*
-                :(Z[i,j] = X[j] .+ Y[i,j]) => :(Z = X' .+ Y))
+                # special .+ and .*
+                :(Z[i,j] = X[j] .+ Y[i,j]) => :(Z = X' .+ Y),
+                # –> ∑ₖxᵢyⱼₖ == xᵢ∑ₖyⱼₖ   # TODO: seems incorrect, see 2-level rules
+                :(Z[i,j] = X[i] .* Y[j,k]) => :(Z = X .* squeeze(sum(Y,2),2))
+                )
 
 
 const FROM_EINSTEIN_ASSIGN_RULES =
@@ -63,6 +66,12 @@ const FROM_EINSTEIN_ASSIGN_RULES =
                 :(Z[i] = X) => :(Z = ones(size__(Z)) * X),
                 # other cases
                 :(Z[i,j] = X[j,k]) => :(Z = repmat(squeeze(sum(X, 2), 2)', size__(Z)[1])))
+
+
+const FROM_EINSTEIN_ASSIGN_2_RULES =
+    OrderedDict(:(W[i,j,k] = X[i] .* Y[j,k]; Z[i,j] = W[i,j,k]) =>  
+                :(Z = X .* sum(Y,2)')  # since: ∑ₖxᵢyⱼₖ == xᵢ∑ₖyⱼₖ
+                )
 
 
 
@@ -102,6 +111,8 @@ function from_einstein(ex::Expr; ctx=Dict(), inputs...)
             push!(res.args, simplify(subs_size(vex, sizes)))
         end
     end
+    res = remove_unused(res, varname(g[end]))
+    res = sanitize(res)
     return res
 end
 
@@ -140,16 +151,23 @@ end
 
 
 function from_einstein(g::ExGraph, nd::ExNode{:(=)})
-    # there are several special rules like (e.g. for `repmat()`), check them first
-    ex = to_expr(nd)
-    for (pat, rpat) in FROM_EINSTEIN_ASSIGN_RULES
-        # consider tryrewrite
+    # first try 2-level rules
+    ex = expand_deps(g, nd, 1)
+    for (pat, rpat) in FROM_EINSTEIN_ASSIGN_2_RULES
         rex = tryrewrite(ex, pat, rpat; phs=FROM_EIN_PHS, allow_ex=false)
         if !isnull(rex)
             return get(rex)
         end
     end
-    # if special rules don't match, assume summation and/or permutation
+    # then check 1-level rules
+    ex = to_expr(nd)
+    for (pat, rpat) in FROM_EINSTEIN_ASSIGN_RULES
+        rex = tryrewrite(ex, pat, rpat; phs=FROM_EIN_PHS, allow_ex=false)
+        if !isnull(rex)
+            return get(rex)
+        end
+    end    
+    # if no rules matched, assume summation and/or permutation
     new_ex = without_indices(expr(nd))
     depidxs = get_indices(expr(nd))[1]
     sum_idxs = setdiff(depidxs, varidxs(nd))

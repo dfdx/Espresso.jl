@@ -1,7 +1,7 @@
 
 # to_einstein.jl - from vectorized to Einstein notation
 
-const IDX_NAMES = [:i, :j, :k, :l, :m, :n, :p, :q, :r, :s]
+const IDX_NAMES = [:i, :j, :k, :m, :n, :p, :q, :r, :s, :l]
 
 
 const TO_EINSTEIN_RULES =
