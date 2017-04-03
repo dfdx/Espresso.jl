@@ -22,7 +22,7 @@ const TO_EINSTEIN_RULES =
 function to_einstein(ex::Expr; ctx=Dict(), inputs...)
     g = ExGraph(ex; ctx=to_context(ctx), inputs...)
     evaluate!(g, g.tape[end].var)
-    propagate_size!(g)
+    # propagate_size!(g) -- should/can we use propagate_size in vector notation? 
     res = :(begin end)
     for nd in g.tape
         if !isa(nd, ExNode{:input})

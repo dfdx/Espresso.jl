@@ -41,7 +41,7 @@ end
 
 """Generate index names and make an indexed variable using them"""
 function with_indices(x::Symbol, start_idx::Int, num_idxs::Int)
-    return Expr(:ref, x, IDX_NAMES[start_idx:start_idx+num_idxs-1]...)
+    return make_indexed(x, IDX_NAMES[start_idx:start_idx+num_idxs-1])
 end
 
 with_indices(x::Symbol, num_idxs::Int) = with_indices(x, 1, num_idxs)
@@ -95,6 +95,13 @@ end
 function get_vars!(ex::ExH{:(=)}, rec::Bool, result::Vector{Union{Symbol, Expr}})
     get_vars!(ex.args[1], rec, result)
     get_vars!(ex.args[2], rec, result)
+end
+
+
+function get_vars!(ex::ExH{:block}, rec::Bool, result::Vector{Union{Symbol, Expr}})
+    for subex in ex.args
+        get_vars!(subex, rec, result)
+    end
 end
 
 

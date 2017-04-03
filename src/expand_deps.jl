@@ -5,11 +5,11 @@
 
 ## collect_deps
 
-function collect_deps!(result::Set{Symbol}, g::ExGraph, nd::ExNode, depth::Int=typemax(Int))
+function collect_deps!(g::ExGraph, nd::ExNode, depth::Int, result::Set{Symbol})
     if depth > 0
         for dep in dependencies(nd)
             if haskey(g, dep)
-                collect_deps!(result, g, g[dep], depth - 1)
+                collect_deps!(g, g[dep], depth - 1, result)
             end
         end
     end
@@ -17,52 +17,43 @@ function collect_deps!(result::Set{Symbol}, g::ExGraph, nd::ExNode, depth::Int=t
 end
 
 
-function collect_deps!(result::Set{Symbol}, g::ExGraph, ex::Expr, depth::Int=typemax(Int))
-    if depth > 0
-        if ex.head == :call
-            for arg in ex.args[2:end]
-                if isa(arg, Symbol)
-                    push!(result, arg)
-                end
-                collect_deps!(result, g, arg, depth - 1)
-            end
-        elseif ex.head == :ref
-            push!(result, ex.args[1])
-            collect_deps!(result, g, ex.args[1], depth - 1)
-        end
+function collect_deps!(g::ExGraph, ex::Expr, depth::Int, result::Set{Symbol})
+    vnames = get_var_names(ex, rec=true)
+    for vname in vnames
+        collect_deps!(g, vname, depth, result)
     end
 end
 
 
-function collect_deps!(result::Set{Symbol}, g::ExGraph, x::Symbol, depth::Int=typemax(Int))
+function collect_deps!(g::ExGraph, x::Symbol, depth::Int, result::Set{Symbol})
     if haskey(g, x)
-        collect_deps!(result, g, g[x], depth)
+        collect_deps!(g, g[x], depth, result)
     end
 end
 
 
-function collect_deps!(result::Set{Symbol}, g::ExGraph, x, depth::Int=typemax(Int))
+function collect_deps!(g::ExGraph, x, depth::Int, result::Set{Symbol})
     # do nothing
 end
 
 
 function collect_deps(g::ExGraph, nd::ExNode, depth::Int=typemax(Int))
     result = Set{Symbol}()
-    collect_deps!(result, g, nd, depth)
+    collect_deps!(g, nd, depth, result)
     return result
 end
 
 
 function collect_deps(g::ExGraph, ex::Expr, depth::Int=typemax(Int))
     result = Set{Symbol}()
-    collect_deps!(result, g, ex, depth)
+    collect_deps!(g, ex, depth,  result)
     return result
 end
 
 
 function collect_deps(g::ExGraph, x::Symbol, depth::Int=typemax(Int))
     result = Set{Symbol}()
-    collect_deps!(result, g, x, depth)
+    collect_deps!(g, x, depth, result)
     return result
 end
 
