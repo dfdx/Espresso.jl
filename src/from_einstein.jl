@@ -63,13 +63,13 @@ const FROM_EINSTEIN_ASSIGN_RULES =
                 # eye
                 :(Z[i,j] = 1 * (i == j)) => :(eye(size__(Z))[1]),
                 # constant
-                :(Z[i] = X) => :(Z = ones(size__(Z)) * X),
+                :(Z[i...] = X) => :(Z = ones(size__(Z)) * X),
                 # other cases
                 :(Z[i,j] = X[j,k]) => :(Z = repmat(squeeze(sum(X, 2), 2)', size__(Z)[1])))
 
 
 const FROM_EINSTEIN_ASSIGN_2_RULES =
-    OrderedDict(:(W[i,j,k] = X[i] .* Y[j,k]; Z[i,j] = W[i,j,k]) =>  
+    OrderedDict(:(W[i,j,k] = X[i] .* Y[j,k]; Z[i,j] = W[i,j,k]) =>
                 :(Z = X .* sum(Y,2)'),  # since: ∑ₖxᵢyⱼₖ == xᵢ∑ₖyⱼₖ
 
                 :(W[i,j] = X[i] .* Y[j]; Z[k,j] = W[i,j]) =>
@@ -107,7 +107,7 @@ function from_einstein(ex::Expr; ctx=Dict(), inputs...)
     g_ = ExGraph(ex; ctx=ctx, inputs...)
     g = optimize(g_)
     propagate_deriv_size!(g)  # TODO: Espresso shouldn't know about derivatives
-    # propagate_size!(g)
+    propagate_size!(g)
     sizes = @get(g.ctx, :sizes, Dict())
     res = :(begin end)
     for nd in g.tape
@@ -168,10 +168,10 @@ function from_einstein(g::ExGraph, nd::ExNode{:(=)})
     ex = to_expr(nd)
     for (pat, rpat) in FROM_EINSTEIN_ASSIGN_RULES
         rex = tryrewrite(ex, pat, rpat; phs=FROM_EIN_PHS, allow_ex=false)
-        if !isnull(rex)    
+        if !isnull(rex)
             return get(rex)
         end
-    end    
+    end
     vidxs = varidxs(nd)
     depidxs = get_indices(expr(nd))[1]
     # if LHS contains indices not in RHS, fail since all such cases
@@ -179,8 +179,8 @@ function from_einstein(g::ExGraph, nd::ExNode{:(=)})
     if !isempty(setdiff(vidxs, depidxs))
         throw(ErrorException("LHS contains indices not in RHS in: $(to_expr(nd))"))
     end
-    # otherwise assume summation and/or permutation    
-    new_ex = without_indices(expr(nd))    
+    # otherwise assume summation and/or permutation
+    new_ex = without_indices(expr(nd))
     sum_idxs = setdiff(depidxs, varidxs(nd))
     if  !isempty(sum_idxs)
         lhs_idxs = depidxs
