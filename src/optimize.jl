@@ -48,37 +48,37 @@ function remove_unused(g::ExGraph, output_var::Symbol)
 end
 
 
-"""
-Removes unused variables from multiline expressions, e.g. in:
+# """
+# Removes unused variables from multiline expressions, e.g. in:
 
-    x = u * v
-    y = x + 1
-    z = 2x
+#     x = u * v
+#     y = x + 1
+#     z = 2x
 
-`y` isn't used to compute output variable `z`, so it's removed:
+# `y` isn't used to compute output variable `z`, so it's removed:
 
-    x = u * v
-    z = 2x
+#     x = u * v
+#     z = 2x
 
-"""
-function remove_unused(ex::Expr, output_var::Symbol)
-    ex.head == :block || return ex  # nothing to remove
-    g = ExGraph(ex)
-    deps = collect_deps(g, g[output_var])
-    push!(deps, output_var)
-    res = quote end
-    for subex in ex.args
-        if subex.head == :(=)
-            vname = split_indexed(subex.args[1])[1]
-            if in(vname, deps)
-                push!(res.args, subex)
-            end
-        else
-            push!(res.args, subex)
-        end
-    end
-    return res
-end
+# """
+# function remove_unused(ex::Expr, output_var::Symbol)
+#     ex.head == :block || return ex  # nothing to remove
+#     g = ExGraph(ex)
+#     deps = collect_deps(g, g[output_var])
+#     push!(deps, output_var)
+#     res = quote end
+#     for subex in ex.args
+#         if subex.head == :(=)
+#             vname = split_indexed(subex.args[1])[1]
+#             if in(vname, deps)
+#                 push!(res.args, subex)
+#             end
+#         else
+#             push!(res.args, subex)
+#         end
+#     end
+#     return res
+# end
 
 
 function tryoptimize(ex::Expr)
