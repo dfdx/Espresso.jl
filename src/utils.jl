@@ -143,6 +143,26 @@ end
 unzip(coll) = map(collect, zip(coll...))
 
 
+"""
+Compose functins, similar to Haskell's dot operator:
+
+    @c f g x   # ==> f(g(x))
+
+Note that with current implementation a built-in |> operator may be used instead:
+
+    x |> g |> f
+
+@c may become more powerful than that, though.
+"""
+macro c(args...)
+    ex = args[end]
+    for arg in reverse(args[1:end-1])
+        ex = Expr(:call, arg, ex)
+    end
+    return ex
+end
+
+
 ## package-specific stuff
 
 if VERSION < v"0.5-"
@@ -186,7 +206,9 @@ function canonical(mod::Module, qname)
     f = eval(mod, qname)
     mod = func_mod(f)
     name = func_name(f)
-    if mod == Base || mod == Base.Math || mod == Base.LinAlg
+    if qname in [:.*, :./, :.+, :.-, :.^]
+        return qname  # for Julia 0.6 only
+    elseif mod == Base || mod == Base.Math || mod == Base.LinAlg
         return Symbol(name)
     else
         # there should be a smarter way to do it...
@@ -270,4 +292,16 @@ function reduce_equalities{T}(pairs::Vector{Tuple{T,T}}, anchors::Set{T})
         end
     end
     return st, [p for p in new_pairs]
+end
+
+
+function expr_like(x)
+    flds = Set(fieldnames(x))
+    return in(:head, flds) && in(:args, flds)
+end
+
+
+function to_block(exs...)
+    new_exs = flatten([expr_like(ex) && ex.head == :block ? ex.args : [ex] for ex in exs])
+    return sanitize(Expr(:block, new_exs...))
 end

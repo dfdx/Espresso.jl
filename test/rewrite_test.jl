@@ -20,3 +20,7 @@ set_default_placeholders(Set(Symbol[]))
 @test subs(:(x^n); n=2) == :(x^2)
 @test subs(:(x^n), Dict(:n => 2)) == :(x^2)
 @test subs(:(_mod._op); _mod=:Main, _op=:inc) == :(Main.inc)
+
+phs = Set([:x, :I])
+@test get(matchex(:(x[I...]), :(A[i,j,k]); phs=phs)) == Dict(:x => :A, :I => [:i, :j, :k])
+@test get(matchex(:(foo(_args...)), :(foo(x, y)))) == Dict(:_args => [:x, :y])

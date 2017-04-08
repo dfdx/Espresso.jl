@@ -6,14 +6,22 @@
 
 using DataStructures
 using Einsum
+using Sugar
 
 include("utils.jl")
 include("types.jl")
 include("rewrite.jl")
 include("simplify.jl")
 include("funexpr.jl")
+include("indexing.jl")
+include("exnode.jl")
 include("exgraph.jl")
-include("exgraph_utils.jl")
-include("einstein_base.jl")
-include("from_einstein.jl")
+include("eingraph.jl")
+include("expand_temp.jl")
+include("expand_deps.jl")
+include("optimize.jl")
+include("propagate_size.jl")
+include("merge.jl")
 include("to_einstein.jl")
+include("from_einstein.jl")
+

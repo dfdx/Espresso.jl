@@ -1,5 +1,5 @@
 
-function expand_const_1(g::ExGraph, nd::ExNode{:call})
+function expand_const_1(g::ExGraph, nd::Union{ExNode{:call}, ExNode{:bcast}})
     st = Dict()
     for dep in dependencies(nd)
         if haskey(g, dep) && isa(g[dep], ExNode{:constant})
@@ -10,39 +10,42 @@ function expand_const_1(g::ExGraph, nd::ExNode{:call})
 end
 
 
-expand_temp(g::ExGraph, nd::ExNode{:input}) = variable(nd)
-expand_temp(g::ExGraph, nd::ExNode{:constant}) = value(nd)
-expand_temp(g::ExGraph, nd::ExNode{:(=)}) = expand_temp(g, expr(nd))
+# expand_temp(g::ExGraph, nd::ExNode{:input}) = variable(nd)
+# expand_temp(g::ExGraph, nd::ExNode{:constant}) = value(nd)
+# expand_temp(g::ExGraph, nd::ExNode{:(=)}) = expand_temp(g, expr(nd))
 
-function expand_temp(g::ExGraph, nd::ExNode{:call})
-    deps = dependencies(nd)
-    expanded = Dict([(x, expand_temp(g, g[x])) for x in deps])
-    return subs(expr(nd), expanded)
-end
+# function expand_temp(g::ExGraph, nd::ExNode{:call})
+#     deps = dependencies(nd)
+#     expanded = Dict([(x, expand_temp(g, g[x])) for x in deps])
+#     return subs(expr(nd), expanded)
+# end
 
-function expand_temp(g::ExGraph, x::Symbol)
-    if haskey(g.idx, x)
-        return expand_temp(g, g[x])
-    else
-        return x
-    end
-end
+# function expand_temp(g::ExGraph, nd::ExNode{:bcast})
+#     deps = dependencies(nd)
+#     expanded = Dict([(x, expand_temp(g, g[x])) for x in deps])
+#     return subs(expr(nd), expanded)
+# end
 
-function expand_temp(g::ExGraph, ex::Expr)
-    new_args = [expand_temp(g, arg) for arg in ex.args]
-    return Expr(ex.head, new_args...)
-end
+# function expand_temp(g::ExGraph, x::Symbol)
+#     if haskey(g.idx, x)
+#         return expand_temp(g, g[x])
+#     else
+#         return x
+#     end
+# end
 
-expand_temp(g::ExGraph, x) = x
+# function expand_temp(g::ExGraph, ex::Expr)
+#     new_args = [expand_temp(g, arg) for arg in ex.args]
+#     return Expr(ex.head, new_args...)
+# end
+
+# expand_temp(g::ExGraph, x) = x
 
 
 # iexpand_temp
 
 
-function to_block(exs...)
-    new_exs = flatten([exprlike(ex) && ex.head == :block ? ex.args : [ex] for ex in exs])
-    return sanitize(Expr(:block, new_exs...))
-end
+
 
 iexpand_temp(g::ExGraph, nd::ExNode{:input}) = quote end
 iexpand_temp(g::ExGraph, nd::ExNode{:constant}) = to_iexpr(nd)
@@ -125,122 +128,3 @@ end
 dep_vars(g::ExGraph, x) = Set{Symbol}()
 
 
-## propagate size
-
-const SIZE_PROP_RULES =
-    Dict((:*, [0, 0]) => :(()),
-         (:*, [2, 1]) => :((_1[1])),
-         (:*, [2, 2]) => :((_1[1], _2[2])))
-
-function propagate_size!(g::ExGraph, nd::ExNode{:input})
-    sizes = @get_or_create(g.ctx, :sizes, Dict())
-    sizes[nd.var] = :(size($(nd.var)))
-end
-
-function propagate_size!(g::ExGraph, nd::ExNode{:constant})
-    sizes = @get_or_create(g.ctx, :sizes, Dict())
-    sz = size(nd.val)
-    sizes[nd.var] = Expr(:tuple, sz...)
-end
-
-function indexperm{I<:ExIndex}(lhs_idxs::Vector{I}, rhs_idxs::Vector{I})
-    perm = Int[]
-    for lhs_idx in lhs_idxs
-        rhs_pos = findfirst(rhs_idxs, lhs_idx)
-        if rhs_pos < 1
-            error("LHS index $lhs_idx doesn't happen on RHS")
-        end
-        push!(perm, rhs_pos)
-    end
-    return perm
-end
-
-function propagated_size(g::ExGraph, nd::ExNode{:(=)})
-    dep = dependencies(nd)[1]
-    sizes = @get_or_create(g.ctx, :sizes, Dict())
-    if length(nd.idxs) == 0 || (length(nd.idxs) == 2 && nd.idxs[1] == nd.idxs[2])
-        # not indexed or indices on LHS and RHS are equal
-        return sizes[dep]
-    elseif isempty(nd.idxs[1])
-        # special case for scalars (nicer expression then the following)
-        return Expr(:tuple)
-    else
-        perm = indexperm(nd.idxs[1], nd.idxs[2])
-        dep_sz = sizes[dep]
-        var_sz_maybe = tryrewrite(dep_sz, :(size(_V)), :(size(_V, $(perm...))))
-        if !isnull(var_sz_maybe)
-            return get(var_sz_maybe)
-        else
-            return :($(dep_sz)[[$(perm...)]])
-        end
-    end
-end
-
-function propagate_size!(g::ExGraph, nd::ExNode{:(=)})
-    sizes = @get_or_create(g.ctx, :sizes, Dict())
-    sizes[nd.var] = propagated_size(g, nd)
-end
-
-
-function graph_inputs(g::ExGraph)
-    res = Dict()
-    for nd in g.tape
-        if isa(nd, ExNode{:input})
-            res[nd.var] = nd.val
-        end
-    end
-    return res
-end
-
-function ndims_from_size(g::ExGraph, var::Symbol)
-    inputs = graph_inputs(g)
-    sizes = @get_or_create(g.ctx, :sizes, Dict())
-    evex = subs(sizes[var], inputs)
-    sz = eval(evex)
-    return length(sz)
-end
-
-function propagate_size!(g::ExGraph, nd::ExNode{:call})
-    sizes = @get_or_create(g.ctx, :sizes, Dict())
-    deps = dependencies(nd)
-    if in(:I, deps)
-        lhs_idxs = nd.idxs[1]
-        I_pos = findfirst(deps, :I)
-        # I_idxs = nd.idxs[I_pos + 1]
-        not_I_pos = 3 - I_pos
-        not_I_idxs = nd.idxs[not_I_pos + 1]
-        idxs_to_keep = findin(lhs_idxs, not_I_idxs)
-        if isempty(idxs_to_keep)
-            sizes[nd.var] = :(())
-        else
-            dep_size_expr = sizes[deps[not_I_pos]]
-            size_expr = simplify(Expr(:ref, dep_size_expr, idxs_to_keep...))
-            sizes[nd.var] = size_expr
-        end
-    elseif all(dep -> haskey(g, dep), deps)
-        dep_dims = [ndims_from_size(g, dep) for dep in deps]
-        sz_key = (expr(nd).args[1], dep_dims)
-        if haskey(SIZE_PROP_RULES, sz_key)
-            rpat = SIZE_PROP_RULES[sz_key]
-            dep_sizes = [sizes[dep] for dep in deps]
-            size_names = [Symbol("_$i") for i=1:length(deps)]
-            st = Dict(zip(size_names, dep_sizes))
-            size_ex = simplify(subs(rpat, st))
-            sizes[nd.var] = size_ex
-        else
-            # TODO: take dep with max number of dims to handle broadcasting
-            size_ex = sizes[deps[1]]
-            sizes[nd.var] = size_ex
-        end
-    else
-        error("Can't propagate size of $nd: not all deps present in graph")
-    end
-
-end
-
-
-function propagate_size!(g::ExGraph)
-    for nd in g.tape
-        propagate_size!(g, nd)
-    end
-end

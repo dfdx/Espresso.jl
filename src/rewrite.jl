@@ -15,7 +15,10 @@
 # rules where using underscores creates unnecessary noise.
 
 
-## pat matching
+const Symbolic = Union{Expr, Symbol}
+const Numeric = Union{Number, Array}
+
+## pattern matching
 
 const DEFAULT_PHS = [Set{Symbol}()]
 set_default_placeholders(set::Set{Symbol}) = (DEFAULT_PHS[1] = set)
@@ -23,11 +26,30 @@ set_default_placeholders(set::Set{Symbol}) = (DEFAULT_PHS[1] = set)
 isplaceholder(x, phs) = false
 isplaceholder(x::Symbol, phs) = (startswith(string(x), "_")
                                  || in(x, phs))
+# isplaceholder(ex::Expr, phs) = ex.head == :... && isplaceholder(ex.args[1], phs)
 
 
 function matchex!(m::Dict{Symbol,Any}, p::QuoteNode, x::QuoteNode;
                   phs=DEFAULT_PHS[1], allow_ex=true)
     return matchex!(m, p.value, x.value)
+end
+
+
+function matchex!(m::Dict{Symbol,Any}, ps::Vector, xs::Vector;
+                  phs=DEFAULT_PHS[1], allow_ex=true)
+    length(ps) <= length(xs) || return false
+    for i in eachindex(ps)
+        if isa(ps[i], Expr) && ps[i].head == :... && isplaceholder(ps[i].args[1], phs)
+            p = ps[i].args[1]
+            haskey(m, p) && m[p] != xs[i] && m[p] != xs[i:end] && return false
+            m[p] = xs[i:end]
+            return true
+        else
+            matchex!(m, ps[i], xs[i]; phs=phs, allow_ex=allow_ex) || return false
+        end
+    end
+    # matched everything, didn't encounter dots expression
+    return length(ps) == length(xs)
 end
 
 
@@ -44,10 +66,8 @@ function matchex!(m::Dict{Symbol,Any}, p, x; phs=DEFAULT_PHS[1], allow_ex=true)
             return true
         end
     elseif isa(p, Expr) && isa(x, Expr)
-        result = (matchex!(m, p.head, x.head)
-                  && length(p.args) == length(x.args)
-                  && reduce(&, [matchex!(m, pa, xa; phs=phs, allow_ex=allow_ex)
-                             for (pa, xa) in zip(p.args, x.args)]))
+        return (matchex!(m, p.head, x.head) &&
+                matchex!(m, p.args, x.args; phs=phs, allow_ex=allow_ex))
     else
         return p == x
     end
@@ -76,6 +96,25 @@ pat = :(x ^ n)
 matchex(pat, ex; phs=Set([:x, :n]))
 # ==> Nullable(Dict{Symbol,Any}(:n=>:v,:x=>:u))
 ```
+
+Several elements may be matched using `...` expression, e.g.:
+
+```
+ex = :(A[i, j, k])
+pat = :(x[I...])
+matchex(pat, ex; phs=Set([:x, :I]))
+# ==> Nullable(Dict(:x=>:A, :I=>[:i,:j,:k]))
+```
+
+Optional parameters:
+
+ * phs::Set{Symbol} = DEFAULT_PHS
+       A set of placeholder symbols
+ * allow_ex::Boolean = true
+       Allow matchinng of symbol pattern to an expression. Example:
+
+           matchex(:(_x + 1), :(a*b + 1); allow_ex=true)  # ==> matches
+           matchex(:(_x + 1), :(a*b + 1); allow_ex=false)  # ==> doesn't match
 
 """
 function matchex(pat, ex; phs=DEFAULT_PHS[1], allow_ex=true)
@@ -161,8 +200,8 @@ Example (derivative of x^n):
     subex = :(_n * _x ^ (_n - 1))
     rewrite(ex, pat, subex) # ==> :(v * u ^ (v - 1))
 """
-function rewrite(ex::Symbolic, pat::Symbolic, subex::Any; phs=DEFAULT_PHS[1])
-    st = matchex(pat, ex; phs=phs)
+function rewrite(ex::Symbolic, pat::Symbolic, subex::Any; phs=DEFAULT_PHS[1], allow_ex=true)
+    st = matchex(pat, ex; phs=phs, allow_ex=allow_ex)
     if isnull(st)
         error("Expression $ex doesn't match pattern $pat")
     else
@@ -174,12 +213,23 @@ end
 Same as rewrite, but returns Nullable{Expr} and doesn't throw an error
 when expression doesn't match pattern
 """
-function tryrewrite(ex::Symbolic, pat::Symbolic, subex::Any; phs=DEFAULT_PHS[1])
-    st = matchex(pat, ex; phs=phs)
+function tryrewrite(ex::Symbolic, pat::Symbolic, subex::Any; phs=DEFAULT_PHS[1], allow_ex=true)
+    st = matchex(pat, ex; phs=phs, allow_ex=allow_ex)
     if isnull(st)
         return Nullable{Expr}()
     else
         return Nullable(subs(subex, get(st)))
+    end
+end
+
+
+function findex!(res::Vector, pat, ex; phs=DEFAULT_PHS[1])
+    if matchingex(pat, ex; phs=phs)
+        push!(res, ex)
+    elseif expr_like(ex)
+        for arg in ex.args
+            findex!(res, pat, arg; phs=phs)
+        end
     end
 end
 
@@ -190,21 +240,10 @@ Find sub-expressions matching a pattern. Example:
     ex = :(a * f(x) + b * f(y))
     pat = :(f(_))
     findex(pat, ex)   # ==> [:(f(x)), :(f(y))]
-    
+
 """
-function findex!(res::Vector, pat, ex; phs=DEFAULT_PHS[1])
-    if matchingex(pat, ex; phs=phs)
-        push!(res, ex)
-    elseif exprlike(ex)
-        for arg in ex.args
-            findex!(res, pat, arg)
-        end
-    end
-end
-
-
-function findex(pat, ex)
+function findex(pat, ex; phs=DEFAULT_PHS[1])
     res = Any[]
-    findex!(res, pat, ex)
+    findex!(res, pat, ex; phs=phs)
     return res
 end
