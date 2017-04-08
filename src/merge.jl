@@ -1,5 +1,5 @@
 
-function rename!(g::ExGraph, name::Symbol, new_name::Symbol)
+function rename!(g::AbstractExGraph, name::Symbol, new_name::Symbol)
     st = Dict(name => new_name)
     for nd in g.tape
         if nd.var == name
@@ -11,9 +11,10 @@ function rename!(g::ExGraph, name::Symbol, new_name::Symbol)
 end
 
 
-function mergeex(g1::ExGraph, g2::ExGraph)
+function mergeex(g1::AbstractExGraph, g2::AbstractExGraph)
     g2 = deepcopy(g2)
-    gm = ExGraph()
+    @assert typeof(g1) == typeof(g2)
+    gm = typeof(g1)()
     # find out what vars in g2 need to be renamed
     g1_vars = Set(varname(nd) for nd in g1.tape)
     g2_vars = Set(varname(nd) for nd in g2.tape)
@@ -42,13 +43,14 @@ function mergeex(g1::ExGraph, g2::ExGraph)
 end
 
 
-function mergeex(gs::Vararg{ExGraph})
+function mergeex(gs::Vararg{AbstractExGraph})
     return reduce(mergeex, gs)
 end
 
 
 function mergeex(exs::Vararg{Expr})
-    gs = [ExGraph(ex) for ex in exs]
+    indexed = any(isindexed, exs)
+    gs = indexed ? [EinGraph(ex) for ex in exs] : [ExGraph(ex) for ex in exs]
     gm = mergeex(gs...)
     block = to_expr(gm)
     res_vars = [g[end].var for g in gs]

@@ -6,7 +6,7 @@ let
         y[i] = 2 * x[i]
         z = y[i] * I[i]
     end
-    g = ExGraph(ex; u=rand(3), v=rand(3))
+    g = EinGraph(ex; u=rand(3), v=rand(3))
     propagate_size!(g)
 
     sizes = g.ctx[:sizes]

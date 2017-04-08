@@ -48,11 +48,12 @@ export
     dependencies,
     to_expr,
     isindexed,
-    # ExGraph core
+    # ExGraph/EinGraph core
     ExGraph,
+    EinGraph,
     parse!,
     evaluate!,
-    # ExGraph utils
+    # ExGraph/EinGraph utils
     propagate_size!,
     collect_deps,
     expand_deps,

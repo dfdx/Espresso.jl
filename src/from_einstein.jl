@@ -104,7 +104,7 @@ end
 
 
 function from_einstein(ex::Expr; ctx=Dict(), inputs...)
-    g_ = ExGraph(ex; ctx=ctx, inputs...)
+    g_ = EinGraph(ex; ctx=ctx, inputs...)
     g = optimize(g_)
     propagate_deriv_size!(g)  # TODO: Espresso shouldn't know about derivatives
     propagate_size!(g)
@@ -121,16 +121,16 @@ function from_einstein(ex::Expr; ctx=Dict(), inputs...)
     return res
 end
 
-from_einstein(g::ExGraph, nd::ExNode{:input}) = expr(nd)
-from_einstein(g::ExGraph, nd::ExNode{:constant}) = to_expr(nd)
+from_einstein(g::EinGraph, nd::ExNode{:input}) = expr(nd)
+from_einstein(g::EinGraph, nd::ExNode{:constant}) = to_expr(nd)
 
 
-function from_einstein(g::ExGraph, nd::ExNode{:call})
+function from_einstein(g::EinGraph, nd::ExNode{:call})
     ex = to_expr(nd)
     for (pat, rpat) in FROM_EINSTEIN_CALL_RULES
         # consider tryrewrite
         rex = tryrewrite(ex, pat, rpat; phs=FROM_EIN_PHS, allow_ex=false)
-        if !isnull(rex)
+        if !isnull(rex)   
             return get(rex)
         end
     end
@@ -155,7 +155,7 @@ function from_einstein(g::ExGraph, nd::ExNode{:call})
 end
 
 
-function from_einstein(g::ExGraph, nd::ExNode{:(=)})
+function from_einstein(g::EinGraph, nd::ExNode{:(=)})
     # first try 2-level rules
     ex = expand_deps(g, nd, 1)
     for (pat, rpat) in FROM_EINSTEIN_ASSIGN_2_RULES
@@ -203,7 +203,7 @@ function from_einstein(g::ExGraph, nd::ExNode{:(=)})
 end
 
 
-function from_einstein(g::ExGraph, nd::ExNode{:bcast})
+function from_einstein(g::EinGraph, nd::ExNode{:bcast})
     ex = to_expr(nd)
     vars = findex(:(_x[_i...]), ex)
     st = Dict(var => var.args[1] for var in vars)

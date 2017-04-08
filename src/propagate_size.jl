@@ -1,5 +1,5 @@
 
-# propagate_size.jl - propagate size of variables in ExGraph, saving them into g.ctx[:sizes]
+# propagate_size.jl - propagate size of variables in AbstractExGraph, saving them into g.ctx[:sizes]
 
 const SIZE_PROP_RULES =
     Dict((:*, [0, 0]) => :(()),
@@ -7,12 +7,12 @@ const SIZE_PROP_RULES =
          (:*, [2, 2]) => :((_1[1], _2[2])),
          (:.*, [1, 1]) => :((_1, _2)))
 
-function propagate_size!(g::ExGraph, nd::ExNode{:input})
+function propagate_size!(g::AbstractExGraph, nd::ExNode{:input})
     sizes = @get_or_create(g.ctx, :sizes, Dict())
     sizes[varname(nd)] = :(size($(varname(nd))))
 end
 
-function propagate_size!(g::ExGraph, nd::ExNode{:constant})
+function propagate_size!(g::AbstractExGraph, nd::ExNode{:constant})
     sizes = @get_or_create(g.ctx, :sizes, Dict())
     sz = size(value(nd))
     sizes[varname(nd)] = Expr(:tuple, sz...)
@@ -30,7 +30,7 @@ end
 #     return perm
 # end
 
-function propagated_size(g::ExGraph, nd::ExNode{:(=)})
+function propagated_size(g::AbstractExGraph, nd::ExNode{:(=)})
     sizes = @get_or_create(g.ctx, :sizes, Dict()) 
     dep = dependencies(nd)[1]    
     idxs = get_indices(to_expr(nd))
@@ -56,14 +56,14 @@ function propagated_size(g::ExGraph, nd::ExNode{:(=)})
     end
 end
 
-function propagate_size!(g::ExGraph, nd::ExNode{:(=)})
+function propagate_size!(g::AbstractExGraph, nd::ExNode{:(=)})
     sizes = @get_or_create(g.ctx, :sizes, Dict())
     haskey(sizes, varname(nd)) && return
     sizes[varname(nd)] = propagated_size(g, nd)
 end
 
 
-function graph_inputs(g::ExGraph)
+function graph_inputs(g::AbstractExGraph)
     res = Dict()
     for nd in g.tape
         if isa(nd, ExNode{:input})
@@ -73,7 +73,7 @@ function graph_inputs(g::ExGraph)
     return res
 end
 
-function ndims_from_size(g::ExGraph, var::Symbol)
+function ndims_from_size(g::AbstractExGraph, var::Symbol)
     inputs = graph_inputs(g)
     sizes = @get_or_create(g.ctx, :sizes, Dict())
     evex = subs(sizes[var], inputs)
@@ -81,7 +81,7 @@ function ndims_from_size(g::ExGraph, var::Symbol)
     return length(sz)
 end
 
-function propagate_size!(g::ExGraph, nd::ExNode{:call})
+function propagate_size!(g::AbstractExGraph, nd::ExNode{:call})
     sizes = @get_or_create(g.ctx, :sizes, Dict())
     haskey(sizes, varname(nd)) && return
     deps = dependencies(nd)
@@ -116,11 +116,12 @@ function propagate_size!(g::ExGraph, nd::ExNode{:call})
         end
     else
         error("Can't propagate size of $nd: not all deps present in graph")
+        # sizes[varname(nd)] = :size_not_inferred
     end
 end
 
 
-function propagate_size!(g::ExGraph, nd::ExNode{:bcast})
+function propagate_size!(g::AbstractExGraph, nd::ExNode{:bcast})
     sizes = @get_or_create(g.ctx, :sizes, Dict())
     haskey(sizes, varname(nd)) && return
     deps = dependencies(nd)
@@ -131,7 +132,7 @@ function propagate_size!(g::ExGraph, nd::ExNode{:bcast})
 end
 
 
-function propagate_size!(g::ExGraph)
+function propagate_size!(g::AbstractExGraph)
     for nd in g.tape
         propagate_size!(g, nd)
     end
@@ -141,7 +142,7 @@ end
 
 # special case - sizes of derivatives
 
-function propagate_deriv_size!(g::ExGraph, dd_name::Symbol)
+function propagate_deriv_size!(g::AbstractExGraph, dd_name::Symbol)
     sizes = @get_or_create(g.ctx, :sizes, Dict())
     rg = match(r"(d.+)_(d.+)", String(dd_name))
     @assert length(rg.captures) == 2
@@ -158,7 +159,7 @@ function propagate_deriv_size!(g::ExGraph, dd_name::Symbol)
 end
 
 
-function propagate_deriv_size!(g::ExGraph)
+function propagate_deriv_size!(g::AbstractExGraph)
     for nd in g.tape
         vname = varname(nd)
         if match(r"(d.+)_(d.+)", String(vname)) != nothing

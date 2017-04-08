@@ -36,7 +36,7 @@ const OPT_RULES = OrderedDict(
 )
 
 
-function remove_unused(g::ExGraph, output_var::Symbol)
+function remove_unused(g::AbstractExGraph, output_var::Symbol)
     deps = collect_deps(g, g[output_var])
     gr = reset_tape(g)
     for nd in g.tape
@@ -100,7 +100,7 @@ function tryoptimize(ex::Expr)
 end
 
 
-function reset_tape(g::ExGraph)
+function reset_tape(g::AbstractExGraph)
     new_g = deepcopy(g)
     new_g.tape = []
     new_g.idx = Dict()
@@ -108,7 +108,7 @@ function reset_tape(g::ExGraph)
 end
 
 
-function remove_pseudoone(g::ExGraph)
+function remove_pseudoone(g::AbstractExGraph)
     g = deepcopy(g)
     I_pat = :(I[_...])
     for (i, nd) in enumerate(g.tape)
@@ -126,7 +126,7 @@ function remove_pseudoone(g::ExGraph)
 end
 
 
-function optimize(g::ExGraph)
+function optimize(g::EinGraph)
     g = remove_pseudoone(g)
     new_g = reset_tape(g)
     for nd in g.tape

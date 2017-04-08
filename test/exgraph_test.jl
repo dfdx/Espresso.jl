@@ -15,7 +15,7 @@ let
     g = ExGraph(:(z = (x .+ y).^2); x=ones(3), y=ones(3))
     @test evaluate!(g) == [4.0, 4.0, 4.0]
 
-    g = ExGraph(:(z = (x[i] .+ y[i]) * I[i]); x=ones(3), y=ones(3))
+    g = EinGraph(:(z = (x[i] .+ y[i]) * I[i]); x=ones(3), y=ones(3))
     @test length(g.tape) == 4     # check that collapse_assignment!() removed extra var
     @test varname(g[4]) == :z
     @test evaluate!(g) == 6.0
@@ -30,7 +30,7 @@ let
         y[i] = 2 * x[i]
         z = y[i] * I[i]
     end
-    g = ExGraph(ex; u=rand(3), v=rand(3))
+    g = EinGraph(ex; u=rand(3), v=rand(3))
     @test category(g[1]) == :input
     @test category(g[3]) == :call
     @test category(g[4]) == :bcast
