@@ -41,7 +41,7 @@ function remove_unused(g::AbstractExGraph, output_var::Symbol)
     gr = reset_tape(g)
     for nd in g.tape
         if in(varname(nd), deps)
-            addnode!(gr, nd)
+            push!(gr, nd)
         end
     end
     return gr
@@ -112,14 +112,14 @@ function remove_pseudoone(g::AbstractExGraph)
     g = deepcopy(g)
     I_pat = :(I[_...])
     for (i, nd) in enumerate(g.tape)
-        ex = expr(nd)
+        ex = getexpr(nd)
         new_ex = without(ex, I_pat)
         if isa(nd, ExNode{:call}) && isa(new_ex, Expr) && new_ex.head != :call
             # after removing I the node changed it's type from :call to :(=)
             new_nd = copy(nd; category=:(=), ex=new_ex)
             g[i] = new_nd
         else
-            expr!(nd, new_ex)
+            setexpr!(nd, new_ex)
         end
     end
     return g
@@ -131,7 +131,7 @@ function optimize(g::EinGraph)
     new_g = reset_tape(g)
     for nd in g.tape
         if isa(nd, ExNode{:input})
-            addnode!(new_g, nd)
+            push!(new_g, nd)
         else
             # try to optimize current node + 1st level dependencies
             ex_1 = expand_deps(g, nd, 1)
@@ -147,7 +147,7 @@ function optimize(g::EinGraph)
                 continue
             end
             # if nothing matched, add node as is
-            addnode!(new_g, copy(nd))
+            push!(new_g, copy(nd))
         end
     end
     new_g = remove_unused(new_g,  varname(new_g[end]))

@@ -3,7 +3,7 @@ let
     g = ExGraph()
     g = ExGraph(ctx=[:foo => 42], x=1)
     @test g.ctx[:foo] == 42
-    @test value(g[1]) == 1    
+    @test getvalue(g[1]) == 1    
 end
 
 let
@@ -31,11 +31,11 @@ let
         z = y[i] * I[i]
     end
     g = EinGraph(ex; u=rand(3), v=rand(3))
-    @test category(g[1]) == :input
-    @test category(g[3]) == :call
-    @test category(g[4]) == :bcast
-    @test category(g[5]) == :(=)
-    @test category(g[6]) == :constant
+    @test getcategory(g[1]) == :input
+    @test getcategory(g[3]) == :call
+    @test getcategory(g[4]) == :bcast
+    @test getcategory(g[5]) == :(=)
+    @test getcategory(g[6]) == :constant
 
     # test node access methods
     @test g[4] == g[:M] && g[:M] == g["M"]
@@ -45,6 +45,25 @@ let
 
     ex = :(M = u'v)
     g = ExGraph(ex; u=rand(3), v=rand(3))
-    @test category(g[3]) == :call
-    @test expr(g[3]) == :(transpose(u))
+    @test getcategory(g[3]) == :call
+    @test getexpr(g[3]) == :(transpose(u))
+end
+
+
+let
+    g = ExGraph(:(x = u + v; z = 2x))
+    nd = ExNode{:call}(:y, :(x - 1))
+    insert!(g, 2, nd)
+    @test varname(g[2]) == :y
+
+    nds = ExGraph(:(t1 = u + x; t2 = u - x)).tape
+    insert!(g, 3, nds)
+    @test varname(g[3]) == :t1
+    @test varname(g[4]) == :t2
+
+    delete!(g, 3)
+    @test length(g) == 5
+    delete!(g, :t2)
+    @test length(g) == 4
+    
 end

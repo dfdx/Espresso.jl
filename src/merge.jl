@@ -21,7 +21,7 @@ function mergeex(g1::AbstractExGraph, g2::AbstractExGraph)
     need_renaming = Symbol[]
     for nd in g2.tape
         vname = varname(nd)
-        if haskey(g1, vname) && expr(g1[vname]) != expr(nd)
+        if haskey(g1, vname) && getexpr(g1[vname]) != getexpr(nd)
             push!(need_renaming, vname)
         end
     end
@@ -32,11 +32,11 @@ function mergeex(g1::AbstractExGraph, g2::AbstractExGraph)
     end
     # concat graphs
     for nd in g1.tape
-        addnode!(gm, nd)
+        push!(gm, nd)
     end
     for nd in g2.tape
         if !haskey(gm, varname(nd))
-            addnode!(gm, nd)
+            push!(gm, nd)
         end
     end
     return gm

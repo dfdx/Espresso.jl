@@ -121,7 +121,7 @@ function from_einstein(ex::Expr; ctx=Dict(), inputs...)
     return res
 end
 
-from_einstein(g::EinGraph, nd::ExNode{:input}) = expr(nd)
+from_einstein(g::EinGraph, nd::ExNode{:input}) = getexpr(nd)
 from_einstein(g::EinGraph, nd::ExNode{:constant}) = to_expr(nd)
 
 
@@ -145,7 +145,7 @@ function from_einstein(g::EinGraph, nd::ExNode{:call})
         call = Expr(:call, expr(nd).args[1], dependencies(nd)...)
         return Expr(:(=), varname(nd), call)
     elseif is_bcast
-        bcast_call = Expr(:., expr(nd).args[1], Expr(:tuple, dependencies(nd)...))
+        bcast_call = Expr(:., getexpr(nd).args[1], Expr(:tuple, dependencies(nd)...))
         return Expr(:(=), varname(nd), bcast_call)
     else
         error("Neither pattern found, nor broadcasting is applicable when transforming from " *
@@ -173,14 +173,14 @@ function from_einstein(g::EinGraph, nd::ExNode{:(=)})
         end
     end
     vidxs = varidxs(nd)
-    depidxs = get_indices(expr(nd))[1]
+    depidxs = get_indices(getexpr(nd))[1]
     # if LHS contains indices not in RHS, fail since all such cases
     # should be covered by rules above
     if !isempty(setdiff(vidxs, depidxs))
         throw(ErrorException("LHS contains indices not in RHS in: $(to_expr(nd))"))
     end
     # otherwise assume summation and/or permutation
-    new_ex = without_indices(expr(nd))
+    new_ex = without_indices(getexpr(nd))
     sum_idxs = setdiff(depidxs, varidxs(nd))
     if  !isempty(sum_idxs)
         lhs_idxs = depidxs

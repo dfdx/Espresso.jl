@@ -14,7 +14,7 @@ function ExGraph(; ctx=Dict(), inputs...)
     @get_or_create(ctx, :mod, current_module())
     g = ExGraph(ExNode[], Dict(), ctx)
     for (var, val) in inputs
-        addnode!(g, :input, var, var; val=val)
+        push!(g, :input, var, var; val=val)
     end
     return g
 end
@@ -51,12 +51,21 @@ end
 
 Base.haskey(g::AbstractExGraph, var::Symbol) = haskey(g.idx, var)
 Base.endof(g::AbstractExGraph) = endof(g.tape)
+Base.length(g::AbstractExGraph) = length(g.tape)
 Base.get(g::AbstractExGraph, var::Symbol) = g.idx[var]
 Base.getindex(g::AbstractExGraph, var::Symbol) = g.idx[var]
 Base.getindex(g::AbstractExGraph, var::String) = g.idx[Symbol(var)]
 Base.getindex(g::AbstractExGraph, i::Integer) = g.tape[i]
 Base.setindex!(g::AbstractExGraph, nd::ExNode, i::Integer) =
     (g.tape[i] = nd; g.idx[varname(nd)] = nd)
+
+indexof(g::AbstractExGraph, vname::Symbol) = findfirst(map(varname, g.tape), vname)
+
+
+function ++(g1::AbstractExGraph, g2::AbstractExGraph)
+    @assert typeof(g1) == typeof(g2)
+    return ExGraph(vcat(g1.tape, g2.tape), merge(g1.idx, g2.idx), merge(g1.ctx, g2.ctx))
+end
 
 
 function to_expr(g::AbstractExGraph)
@@ -81,24 +90,49 @@ function gennames(count::Int)
     return [genname() for _=1:count]
 end
 
-## addnode!
+## push!
 
 """
 Add a new node to a graph. Expression should be simple, e.g.
 nested calls or blocks are not allowed (use parse!() for it).
 """
-function addnode!(g::AbstractExGraph, nd::ExNode)
+function Base.push!(g::AbstractExGraph, nd::ExNode)
     push!(g.tape, nd)
     g.idx[varname(nd)] = nd
     return varname(nd)
 end
 
-function addnode!(g::AbstractExGraph, C::Symbol, var::Union{Symbol,Expr}, ex::Any; val=nothing)
+function Base.push!(g::AbstractExGraph, C::Symbol, var::Union{Symbol,Expr}, ex::Any; val=nothing)
     nd = ExNode{C}(var, ex; val=val)
-    addnode!(g, nd)
+    push!(g, nd)
     return var
 end
 
+
+function Base.insert!(g::AbstractExGraph, i::Integer, nd::ExNode)
+    g.idx[varname(nd)] = nd
+    insert!(g.tape, i, nd)
+end
+
+
+function Base.insert!(g::AbstractExGraph, i::Integer, nds::Vector{ExNode})
+    for (j, nd) in enumerate(nds)
+        insert!(g, i + j - 1, nd)
+    end
+end
+
+
+function Base.delete!(g::AbstractExGraph, i::Integer)
+    delete!(g.idx, varname(g[i]))
+    deleteat!(g.tape, i)
+end
+
+
+function Base.delete!(g::AbstractExGraph, vname::Symbol)
+    delete!(g.idx, vname)
+    i = find(nd -> varname(nd) == vname, g.tape)
+    deleteat!(g.tape, i)
+end
 
 
 ## parse!
@@ -114,13 +148,13 @@ parse!(g::AbstractExGraph, s::Symbol) = s
 # parse!(g::ExGraph, gr::GlobalRef) = (gr, [])
 
 function parse!(g::AbstractExGraph, x::Number)
-    var = addnode!(g, :constant, genname(), x; val=x)
+    var = push!(g, :constant, genname(), x; val=x)
     return var
 end
 
 
 function parse!(g::AbstractExGraph, x::AbstractArray)
-    var = addnode!(g, :constant, genname(), x; val=x)
+    var = push!(g, :constant, genname(), x; val=x)
     return var
 end
 
@@ -128,7 +162,7 @@ end
 function parse!(g::ExGraph, ex::ExH{:(=)})
     vname, rhs = ex.args
     dep = parse!(g, rhs)
-    addnode!(g, :(=), vname, dep)
+    push!(g, :(=), vname, dep)
     return vname
 end
 
@@ -143,7 +177,7 @@ function parse!(g::ExGraph, ex::ExH{:call})
     op = canonical(g.ctx[:mod], ex.args[1])
     deps = [parse!(g, arg) for arg in ex.args[2:end]]
     pex = Expr(:call, op, deps...)
-    var = addnode!(g, :call, genname(), pex)
+    var = push!(g, :call, genname(), pex)
     return var
 end
 
@@ -155,7 +189,7 @@ function parse!(g::ExGraph, ex::ExH{:.})
     deps = [parse!(g, arg) for arg in ex.args[2].args]
     # pex = Expr(:call, op, deps...)
     pex = Expr(:., op, Expr(:tuple, deps...))
-    var = addnode!(g, :bcast, genname(), pex)
+    var = push!(g, :bcast, genname(), pex)
     return var
 end
 
@@ -163,7 +197,7 @@ end
 function parse!(g::ExGraph, ex::ExH{Symbol("'")})
     dep = parse!(g, ex.args[1])    
     pex = :(transpose($dep))
-    var = addnode!(g, :call, genname(), pex)
+    var = push!(g, :call, genname(), pex)
     return var
 end
 
@@ -179,13 +213,13 @@ end
 Evaluate node, i.e. fill its `val` by evaluating node's expression using
 values of its dependencies.
 """
-evaluate!(g::AbstractExGraph, nd::ExNode{:constant}) = value(nd)
-evaluate!(g::AbstractExGraph, nd::ExNode{:input}) = value(nd)
+evaluate!(g::AbstractExGraph, nd::ExNode{:constant}) = getvalue(nd)
+evaluate!(g::AbstractExGraph, nd::ExNode{:input}) = getvalue(nd)
 
 
 function mk_eval_expr(g::AbstractExGraph, nd::ExNode)
     dep_nodes = [g[dep] for dep in dependencies(nd) if haskey(g, dep)]
-    deps_vals = [(varname(nd), value(nd)) for nd in dep_nodes]
+    deps_vals = [(varname(nd), getvalue(nd)) for nd in dep_nodes]
     eval_ex = Expr(:block, Expr(:let, Expr(:block)))
     block = eval_ex.args[1].args[1]
     for (dep, val) in deps_vals
@@ -198,16 +232,16 @@ end
 
 
 function evaluate!(g::AbstractExGraph, nd::ExNode{:(=)})
-    if (value(nd) != nothing) return value(nd) end
+    if (getvalue(nd) != nothing) return getvalue(nd) end
     dep = dependencies(nd)[1]
     evaluate!(g, g[dep])
     evex = mk_eval_expr(g, nd)
-    value!(nd, eval(evex))
-    return value(nd)
+    setvalue!(nd, eval(evex))
+    return getvalue(nd)
 end
 
 function evaluate!(g::AbstractExGraph, nd::ExNode{:call})
-    if (value(nd) != nothing) return value(nd) end
+    if (getvalue(nd) != nothing) return getvalue(nd) end
     deps = dependencies(nd)
     for dep in deps
         # if dep is not in graph, consider it a global constant (like π)
@@ -216,13 +250,13 @@ function evaluate!(g::AbstractExGraph, nd::ExNode{:call})
         end
     end
     evex = mk_eval_expr(g, nd)
-    value!(nd, eval(evex))
-    return value(nd)
+    setvalue!(nd, eval(evex))
+    return getvalue(nd)
 end
 
 
 function evaluate!(g::AbstractExGraph, nd::ExNode{:bcast})
-    if (value(nd) != nothing) return value(nd) end
+    if (setvalue(nd) != nothing) return getvalue(nd) end
     deps = dependencies(nd)
     for dep in deps
         # if dep is not in graph, consider it a global constant (like π)
@@ -231,8 +265,8 @@ function evaluate!(g::AbstractExGraph, nd::ExNode{:bcast})
         end
     end
     evex = mk_eval_expr(g, nd)
-    value!(nd, eval(evex))
-    return value(nd)
+    setvalue!(nd, eval(evex))
+    return getvalue(nd)
 end
 
 
@@ -260,9 +294,9 @@ function collapse_assignments!(g::AbstractExGraph)
     st = Dict{Symbol, Symbol}()
     delvars = Set{Symbol}()
     for nd in g.tape
-        expr!(nd, subs(expr(nd), st))
+        setexpr!(nd, subs(getexpr(nd), st))
         vidxs = varidxs(nd)
-        depidxs = get_indices(expr(nd))
+        depidxs = get_indices(getexpr(nd))
         if isa(nd, ExNode{:(=)}) && !isempty(depidxs) && vidxs == depidxs[1]
             vname = varname(nd)
             dep = dependencies(nd)[1]
@@ -284,9 +318,9 @@ function collapse_assignments!(g::AbstractExGraph)
             if haskey(st, vname)
                 new_nd = deepcopy(nd)
                 # new_nd.var = st[nd.var]
-                variable!(new_nd, subs(variable(nd), st))
+                setvar!(new_nd, subs(getvar(nd), st))
                 # new_nd.ex = subs(nd.ex, st)
-                expr!(new_nd, subs(expr(nd), st))
+                setexpr!(new_nd, subs(getexpr(nd), st))
                 push!(new_tape, new_nd)
                 new_idx[varname(new_nd)] = new_nd
             else
@@ -297,4 +331,7 @@ function collapse_assignments!(g::AbstractExGraph)
     end
     g.tape = new_tape
     g.idx = new_idx
+    return g
 end
+
+fold_equal! = collapse_assignments!

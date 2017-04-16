@@ -12,7 +12,7 @@ function EinGraph(; ctx=Dict(), inputs...)
     @get_or_create(ctx, :mod, current_module())
     g = EinGraph(ExNode[], Dict(), ctx)
     for (var, val) in inputs
-        addnode!(g, :input, var, var; val=val)
+        push!(g, :input, var, var; val=val)
     end
     return g
 end
@@ -43,7 +43,7 @@ function parse!(g::EinGraph, ex::ExH{:(=)})
     var, rhs = ex.args
     vname = split_indexed(var)[1]
     dep = parse!(g, rhs)
-    addnode!(g, :(=), var, dep)
+    push!(g, :(=), var, dep)
     return vname
 end
 
@@ -59,7 +59,7 @@ function parse!(g::EinGraph, ex::ExH{:call})
     depnames, depidxs = unzip(map(split_indexed, deps))
     pex = Expr(:call, op, deps...)
     vidxs = forall_indices(op, [split_indexed(dep)[2] for dep in deps])
-    var = addnode!(g, :call, make_indexed(genname(), vidxs), pex)
+    var = push!(g, :call, make_indexed(genname(), vidxs), pex)
     return var
 end
 
@@ -72,7 +72,7 @@ function parse!(g::EinGraph, ex::ExH{:.})
     # pex = Expr(:call, op, deps...)
     pex = Expr(:., op, Expr(:tuple, deps...))
     vidxs = forall_indices(op, [split_indexed(dep)[2] for dep in deps])
-    var = addnode!(g, :bcast, make_indexed(genname(), vidxs), pex)
+    var = push!(g, :bcast, make_indexed(genname(), vidxs), pex)
     return var
 end
 

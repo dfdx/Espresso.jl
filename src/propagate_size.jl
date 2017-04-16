@@ -14,7 +14,7 @@ end
 
 function propagate_size!(g::AbstractExGraph, nd::ExNode{:constant})
     sizes = @get_or_create(g.ctx, :sizes, Dict())
-    sz = size(value(nd))
+    sz = size(getvalue(nd))
     sizes[varname(nd)] = Expr(:tuple, sz...)
 end
 
@@ -67,7 +67,7 @@ function graph_inputs(g::AbstractExGraph)
     res = Dict()
     for nd in g.tape
         if isa(nd, ExNode{:input})
-            res[varname(nd)] = value(nd)
+            res[varname(nd)] = getvalue(nd)
         end
     end
     return res
@@ -101,7 +101,7 @@ function propagate_size!(g::AbstractExGraph, nd::ExNode{:call})
         end
     elseif all(dep -> haskey(g, dep), deps)
         dep_dims = [ndims_from_size(g, dep) for dep in deps]
-        sz_key = (expr(nd).args[1], dep_dims)
+        sz_key = (getexpr(nd).args[1], dep_dims)
         if haskey(SIZE_PROP_RULES, sz_key)
             rpat = SIZE_PROP_RULES[sz_key]
             dep_sizes = [sizes[dep] for dep in deps]
