@@ -31,12 +31,19 @@ const FROM_EINSTEIN_CALL_RULES =
                 :(Z[i] = X[j] .* Y[i,j]) => :(Z = Y * X),
                 :(Z[i] = X[i,j] .* Y[j]) => :(Z = X * Y),
                 :(Z[j] = X[i,j] .* Y[i]) => :(Z = X' * Y),
+                :(Z[i,j] = X[i,j] .* Y[i]) => :(Z = X .* Y),
+                :(Z[i,j] = X[i,j] .* Y[j]) => :(Z = X .* Y'),
                 # matrix-by-matrix
                 :(Z[i,j] = X[i,k] * Y[k,j]) => :(Z = X * Y),
                 :(Z[i,j] = Y[k,j] * X[i,k]) => :(Z = X * Y),
                 :(Z[i,j] = X[i,k] .* Y[k,j]) => :(Z = X * Y),
                 :(Z[i,j] = Y[k,j] .* X[i,k]) => :(Z = X * Y),
                 :(Z[i,j] = Y[i,j] .* X[j,i]) => :(Z = X * Y'),
+                # matrix-by-matrix: 3-index rule
+                :(Z[i,j] = X[i,k] .* Y[j,k]) => :(Z = X * Y'),
+                :(Z[i,j] = X[k,i] .* Y[k,j]) => :(Z = X' * Y),
+                :(Z[j,i] = X[i,k] .* Y[j,k]) => :(Z = Y * X'),  # same transposed
+                :(Z[j,i] = X[k,i] .* Y[k,j]) => :(Z = Y' * X),  # same transposed
                 # eye
                 :(Z[i,j] = 1 * (i == j)) => :(eye(size__(Z))[1]),
                 # special .+ and .*
@@ -61,7 +68,7 @@ const FROM_EINSTEIN_ASSIGN_RULES =
                 :(Z[i,j] = X[j]) => :(Z = repmat(X', size__(Z)[1])),
                 :(Z[i,j] = X[i]) => :(Z = repmat(X, 1, size__(Z)[2])),
                 # eye
-                :(Z[i,j] = 1 * (i == j)) => :(eye(size__(Z))[1]),
+                :(Z[i,j] = 1 * (i == j)) => :(Z = eye(size__(Z))[1]),
                 # constant
                 :(Z[i...] = X) => :(Z = ones(size__(Z)) * X),
                 # other cases
@@ -73,7 +80,13 @@ const FROM_EINSTEIN_ASSIGN_2_RULES =
                 :(Z = X .* sum(Y,2)'),  # since: ∑ₖxᵢyⱼₖ == xᵢ∑ₖyⱼₖ
 
                 :(W[i,j] = X[i] .* Y[j]; Z[k,j] = W[i,j]) =>
-                :(repmat((Y * sum(X))', size__(Z)[1]))
+                :(Z = repmat((Y * sum(X))', size__(Z)[1])),
+
+                :(W[i,k,j] = X[i,k] .* Y[k,j]; Z[i,j] = W[i,k,j]) =>
+                :(Z = X * Y),
+                
+                :(W[i,k,j] = X[i,k] .* Y[j,k]; Z[i,j] = W[i,k,j]) =>
+                :(Z = X * Y')
                 )
 
 
@@ -104,10 +117,12 @@ end
 
 
 function from_einstein(ex::Expr; ctx=Dict(), inputs...)
-    g_ = EinGraph(ex; ctx=ctx, inputs...)
-    g = optimize(g_)
-    propagate_deriv_size!(g)  # TODO: Espresso shouldn't know about derivatives
-    propagate_size!(g)
+    g = EinGraph(ex; ctx=ctx, inputs...)
+    return from_einstein(g)
+end
+
+
+function from_einstein(g::EinGraph)    
     sizes = @get(g.ctx, :sizes, Dict())
     res = :(begin end)
     for nd in g.tape
@@ -116,7 +131,8 @@ function from_einstein(ex::Expr; ctx=Dict(), inputs...)
             push!(res.args, simplify(subs_size(vex, sizes)))
         end
     end
-    # res = remove_unused(res, varname(g[end]))
+    # res = remove_unused(res) # can't remove unused because last expression
+                               # may not be output var
     res = sanitize(res)
     return res
 end
@@ -134,6 +150,10 @@ function from_einstein(g::EinGraph, nd::ExNode{:call})
             return get(rex)
         end
     end
+    if length(varidxs(nd)) >= 3
+        error("Can't convert to vectorized notation a tensor of " *
+              "$(length(varidxs(nd))) dimensions: $(to_expr(nd))")
+    end
     # if no pattern matches, try broadcasting
     all_idxs = get_indices(to_expr(nd))
     longest_idx = longest_index(all_idxs)
@@ -142,7 +162,7 @@ function from_einstein(g::EinGraph, nd::ExNode{:call})
     # TODO: cover things like Z[i] = X[i] .+ Y[i,j]
     if is_bcast_old
         # nearly deprecated syntax, but still actively used in 0.6
-        call = Expr(:call, expr(nd).args[1], dependencies(nd)...)
+        call = Expr(:call, getexpr(nd).args[1], dependencies(nd)...)
         return Expr(:(=), varname(nd), call)
     elseif is_bcast
         bcast_call = Expr(:., getexpr(nd).args[1], Expr(:tuple, dependencies(nd)...))
@@ -186,7 +206,7 @@ function from_einstein(g::EinGraph, nd::ExNode{:(=)})
         lhs_idxs = depidxs
         sum_dims = [findfirst(lhs_idxs, idx) for idx in sum_idxs]
         @assert length(sum_idxs) == 1 "Currently from_enstein() support only " *
-            "summing over a single dimension. Expression was: $(to_iexpr(nd))"
+            "summing over a single dimension. Expression was: $(to_expr(nd))"
         sum_dim = sum_dims[1]
         new_ex = :(squeeze(sum($(new_ex), $(sum_dim)), $(sum_dim)))
     end

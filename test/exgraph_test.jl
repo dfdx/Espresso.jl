@@ -56,7 +56,7 @@ let
     insert!(g, 2, nd)
     @test varname(g[2]) == :y
 
-    nds = ExGraph(:(t1 = u + x; t2 = u - x)).tape
+    nds = ExGraph(:(t1 = u + x; t2 = t1 - x)).tape
     insert!(g, 3, nds)
     @test varname(g[3]) == :t1
     @test varname(g[4]) == :t2

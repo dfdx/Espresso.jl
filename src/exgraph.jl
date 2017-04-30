@@ -19,12 +19,14 @@ function ExGraph(; ctx=Dict(), inputs...)
     return g
 end
 
-function ExGraph(ex::Expr; ctx=Dict(), inputs...)
+function ExGraph(ex::Expr; fuse=true, ctx=Dict(), inputs...)
     ctx = to_context(ctx)
     g = ExGraph(;ctx=ctx, inputs...)
     g.ctx[:expr] = ex
     parse!(g, ex)
-    collapse_assignments!(g)
+    if fuse
+        g = fuse_equal(g)
+    end
     return g
 end
 
@@ -62,9 +64,9 @@ Base.setindex!(g::AbstractExGraph, nd::ExNode, i::Integer) =
 indexof(g::AbstractExGraph, vname::Symbol) = findfirst(map(varname, g.tape), vname)
 
 
-function ++(g1::AbstractExGraph, g2::AbstractExGraph)
+function Base.cat(g1::AbstractExGraph, g2::AbstractExGraph)
     @assert typeof(g1) == typeof(g2)
-    return ExGraph(vcat(g1.tape, g2.tape), merge(g1.idx, g2.idx), merge(g1.ctx, g2.ctx))
+    return typeof(g1)(vcat(g1.tape, g2.tape), merge(g1.idx, g2.idx), merge(g1.ctx, g2.ctx))
 end
 
 
@@ -195,15 +197,23 @@ end
 
 
 function parse!(g::ExGraph, ex::ExH{Symbol("'")})
-    dep = parse!(g, ex.args[1])    
+    dep = parse!(g, ex.args[1])
     pex = :(transpose($dep))
     var = push!(g, :call, genname(), pex)
     return var
 end
 
+
 function parse!(g::AbstractExGraph, ex::Union{ExH{:block}, ExH{:body}})
     deps = [parse!(g, arg) for arg in ex.args]
     return deps[end]
+end
+
+
+function parse!(g::ExGraph, ex::ExH{:tuple})
+    deps = [parse!(g, arg) for arg in ex.args]
+    pex = Expr(:tuple, deps...)
+    vname = push!(g, :tuple, genname(), pex)
 end
 
 
@@ -256,7 +266,7 @@ end
 
 
 function evaluate!(g::AbstractExGraph, nd::ExNode{:bcast})
-    if (setvalue(nd) != nothing) return getvalue(nd) end
+    if (getvalue(nd) != nothing) return getvalue(nd) end
     deps = dependencies(nd)
     for dep in deps
         # if dep is not in graph, consider it a global constant (like π)
@@ -280,6 +290,19 @@ evaluate!(g::AbstractExGraph) = evaluate!(g, g[end])
 istemp(var::Symbol) = startswith(string(var), "tmp")
 
 
+function external_vars(g::AbstractExGraph)
+    ext_vnames = Set{Symbol}()
+    for nd in g.tape
+        for dep in dependencies(nd)
+            if !haskey(g, dep)
+                push!(ext_vnames, dep)
+            end
+        end
+    end
+    return ext_vnames
+end
+
+
 """
 Collapse unnecessary assignment nodes, rewriting all affected nodes. Example:
 
@@ -290,14 +313,10 @@ will be rewritten to
 
     z = x * y
 """
-function collapse_assignments!(g::AbstractExGraph)
+function fuse_equal(g::AbstractExGraph; outvars=nothing)
     st = Dict{Symbol, Symbol}()
-    delvars = Set{Symbol}()
     for nd in g.tape
-        setexpr!(nd, subs(getexpr(nd), st))
-        vidxs = varidxs(nd)
-        depidxs = get_indices(getexpr(nd))
-        if isa(nd, ExNode{:(=)}) && !isempty(depidxs) && vidxs == depidxs[1]
+        if isa(nd, ExNode{:(=)})
             vname = varname(nd)
             dep = dependencies(nd)[1]
             if istemp(dep)
@@ -307,31 +326,75 @@ function collapse_assignments!(g::AbstractExGraph)
                 # otherwise replace all future alias occurrences with the original one
                 st[vname] = dep
             end
-            push!(delvars, vname)
         end
     end
-    new_tape = Vector{ExNode}()
-    new_idx = Dict{Symbol, ExNode}()
+    st = prop_subs(st)
+    new_g = reset_tape(g)
+    replace_vars = Set(values(st))
     for nd in g.tape
         vname = varname(nd)
-        if !in(vname, delvars)
-            if haskey(st, vname)
-                new_nd = deepcopy(nd)
-                # new_nd.var = st[nd.var]
-                setvar!(new_nd, subs(getvar(nd), st))
-                # new_nd.ex = subs(nd.ex, st)
-                setexpr!(new_nd, subs(getexpr(nd), st))
-                push!(new_tape, new_nd)
-                new_idx[varname(new_nd)] = new_nd
-            else
-                push!(new_tape, nd)
-                new_idx[varname(nd)] = nd
+        if in(vname, replace_vars)
+            dep_nd = nd
+            while isa(dep_nd, ExNode{:(=)}) && haskey(g, dependencies(dep_nd)[1])
+                # go through graph to the first non-assignment node
+                dep_nd = g[dependencies(dep_nd)[1]]
             end
+            new_nd = copy(dep_nd; var=subs(getvar(nd), st))
+            push!(new_g, new_nd)
+        else
+            push!(new_g, nd)
         end
     end
-    g.tape = new_tape
-    g.idx = new_idx
-    return g
+    new_g = remove_unused(new_g, outvars == nothing ? [varname(new_g[end])] : outvars)
+    return new_g
 end
 
-fold_equal! = collapse_assignments!
+
+# function fuse_equal!(g::AbstractExGraph)
+#     ext_vars = external_vars(g)
+#     st = Dict{Symbol, Symbol}()
+#     delvars = Set{Symbol}()
+#     for nd in g.tape
+#         setexpr!(nd, subs(getexpr(nd), st))
+#         vidxs = varidxs(nd)
+#         depidxs = get_indices(getexpr(nd))
+#         if isa(nd, ExNode{:(=)}) && !isempty(depidxs) && vidxs == depidxs[1]
+#             vname = varname(nd)
+#             dep = dependencies(nd)[1]
+#             if !in(dep, ext_vars)  # can't remove external vars
+#                 if istemp(dep)
+#                     # if dependency is a temp var name, replace it with the normal one
+#                     st[dep] = vname
+#                     push!(delvars, vname)
+#                 else
+#                     # otherwise replace all future alias occurrences with the original one
+#                     st[vname] = dep
+#                     push!(delvars, vname)
+#                 end
+#             end
+#         end
+#     end
+#     new_tape = Vector{ExNode}()
+#     new_idx = Dict{Symbol, ExNode}()
+#     for nd in g.tape
+#         vname = varname(nd)
+#         if !in(vname, delvars)
+#             if haskey(st, vname)
+#                 new_nd = deepcopy(nd)
+#                 setvar!(new_nd, subs(getvar(nd), st))
+#                 setexpr!(new_nd, subs(getexpr(nd), st))
+#                 push!(new_tape, new_nd)
+#                 new_idx[varname(new_nd)] = new_nd
+#             else
+#                 push!(new_tape, nd)
+#                 new_idx[varname(nd)] = nd
+#             end
+#         end
+#     end
+#     g.tape = new_tape
+#     g.idx = new_idx
+#     return g
+# end
+
+
+# collapse_assignments! = fuse_equal!

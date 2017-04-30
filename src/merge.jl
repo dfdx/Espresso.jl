@@ -2,10 +2,8 @@
 function rename!(g::AbstractExGraph, name::Symbol, new_name::Symbol)
     st = Dict(name => new_name)
     for nd in g.tape
-        if nd.var == name
-            nd.var = new_name
-        end
-        nd.ex = subs(nd.ex, st)
+        setvar!(nd, subs(getvar(nd), st))
+        setexpr!(nd, subs(getexpr(nd), st))
     end
     return g
 end

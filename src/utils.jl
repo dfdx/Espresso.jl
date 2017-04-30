@@ -305,3 +305,31 @@ function to_block(exs...)
     new_exs = flatten([expr_like(ex) && ex.head == :block ? ex.args : [ex] for ex in exs])
     return sanitize(Expr(:block, new_exs...))
 end
+
+
+"""
+Propagate substitution rules. Example:
+
+    Dict(
+        :x => y,
+        :y => z
+    )
+
+is transformed into:
+
+    Dict(
+        :x => z,
+        :y => z
+    )
+
+"""
+function prop_subs(st::Dict)
+    new_st = similar(st)
+    for (k, v) in st
+        while haskey(st, v)
+            v = st[v]
+        end
+        new_st[k] = v
+    end
+    return new_st
+end

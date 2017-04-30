@@ -17,12 +17,14 @@ function EinGraph(; ctx=Dict(), inputs...)
     return g
 end
 
-function EinGraph(ex::Expr; ctx=Dict(), inputs...)
+function EinGraph(ex::Expr; fuse=true, ctx=Dict(), inputs...)
     ctx = to_context(ctx)
     g = EinGraph(;ctx=ctx, inputs...)
     g.ctx[:expr] = ex
     parse!(g, ex)
-    collapse_assignments!(g)
+    if fuse
+        g = fuse_equal(g)
+    end
     return g
 end
 

@@ -70,6 +70,7 @@ dependencies(nd::ExNode{:constant}) = Symbol[]
 dependencies(nd::ExNode{:(=)}) = get_var_names(getexpr(nd))
 dependencies(nd::ExNode{:call}) = get_var_names(getexpr(nd))
 dependencies(nd::ExNode{:bcast}) = get_var_names(getexpr(nd))
+dependencies(nd::ExNode{:tuple}) = getexpr(nd).args
 
 
 function Base.show{C}(io::IO, nd::ExNode{C})

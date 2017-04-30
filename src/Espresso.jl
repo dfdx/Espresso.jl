@@ -55,12 +55,17 @@ export
     EinGraph,
     parse!,
     evaluate!,
-    ++,
+    cat,
+    fuse_equal,
     # ExGraph/EinGraph utils
+    dependents,
+    external_vars,
+    topsort,
     propagate_size!,
     collect_deps,
     expand_deps,
     expand_temp,
+    remove_unused,
     # expr utils
     mergeex,
     optimize,

@@ -35,6 +35,6 @@ let
         res3 = x[i,j] * y[i]
     end
     merged = mergeex(ex1, ex2, ex3)
-    @test length(sanitize(merged).args) == 9
+    @test length(sanitize(merged).args) == 8
     @test merged.args[end] == :((res1[i,j], res2[i], res3)) 
 end

@@ -4,7 +4,7 @@ let
         M[i,j] = exp.(u[i] .* v[j])
         x[i] = M[i,j]
         y[i] = 2 * x[i]
-        z = y[i] * I[i]
+        z = y[i]
     end
     g = EinGraph(ex; u=rand(3), v=rand(3))
     propagate_size!(g)
