@@ -92,7 +92,7 @@ function gennames(count::Int)
     return [genname() for _=1:count]
 end
 
-## push!
+## push!, insert!, delete!
 
 """
 Add a new node to a graph. Expression should be simple, e.g.
@@ -187,7 +187,7 @@ end
 function parse!(g::ExGraph, ex::ExH{:.})
     @assert(isa(ex.args[2], Expr) && ex.args[2].head == :tuple,
             "Dot (.) is only allowedd in broadcasting (e.g. `f.(x)`), but `$ex` passed in")
-    op = canonical(g.ctx[:mod], ex.args[1])
+    op = canonical(g.ctx[:mod], ex.args[1])    
     deps = [parse!(g, arg) for arg in ex.args[2].args]
     # pex = Expr(:call, op, deps...)
     pex = Expr(:., op, Expr(:tuple, deps...))
@@ -339,7 +339,8 @@ function fuse_equal(g::AbstractExGraph; outvars=nothing)
                 # go through graph to the first non-assignment node
                 dep_nd = g[dependencies(dep_nd)[1]]
             end
-            new_nd = copy(dep_nd; var=subs(getvar(nd), st))
+            new_nd_ = copy(dep_nd; var=subs(getvar(nd), st))
+            new_nd = apply_guards(new_nd_, vcat(getguards(nd), getguards(dep_nd)))
             push!(new_g, new_nd)
         else
             push!(new_g, nd)

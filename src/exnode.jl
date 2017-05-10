@@ -28,7 +28,7 @@ varidxs(nd::ExNode)::Vector = isa(nd.var, Symbol) ? [] : nd.var.args[2:end]
 getexpr(nd::ExNode) = nd.ex
 setexpr!(nd::ExNode, ex) = (nd.ex = ex)
 
-getguards(nd::ExNode) = nd.guars
+getguards(nd::ExNode) = nd.guards
 setguards!(nd::ExNode, guards::Vector{Expr}) = (nd.guards = guards)
 
 getvalue(nd::ExNode) = nd.val
@@ -49,7 +49,11 @@ or for indexed notation:
 
     z[i] = x[i] + y[i]
 """
-to_expr(nd::ExNode) = :($(getvar(nd)) = $(getexpr(nd)))
+function to_expr(nd::ExNode)
+    var = getvar(nd)
+    ex = with_guards(getexpr(nd), getguards(nd))
+    return :($var = $ex)
+end
 
 
 """
@@ -70,7 +74,7 @@ dependencies(nd::ExNode{:constant}) = Symbol[]
 dependencies(nd::ExNode{:(=)}) = get_var_names(getexpr(nd))
 dependencies(nd::ExNode{:call}) = get_var_names(getexpr(nd))
 dependencies(nd::ExNode{:bcast}) = get_var_names(getexpr(nd))
-dependencies(nd::ExNode{:tuple}) = getexpr(nd).args
+dependencies(nd::ExNode{:tuple}) = [split_indexed(dep)[1] for dep in getexpr(nd).args]
 
 
 function Base.show{C}(io::IO, nd::ExNode{C})

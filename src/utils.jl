@@ -111,7 +111,7 @@ function flatten!(b::Vector, a::Vector)
     return b
 end
 
-"""Flatten vector of vectors"""
+"""Flattenx vector of vectors"""
 flatten(a::Vector) = flatten!([], a)
 flatten{T}(::Type{T}, a::Vector) = convert(Vector{T}, flatten(a))
 
@@ -268,7 +268,24 @@ function cliqueset{T}(pairs::Vector{Tuple{T,T}})
 end
 
 
-function reduce_equalities{T}(pairs::Vector{Tuple{T,T}}, anchors::Set{T})
+function crosspairs{T}(pairs::Vector{Tuple{T,T}})
+    cliques = cliqueset(pairs)
+    xpairs = Set{Tuple{T,T}}()
+    for (x, ys) in cliques
+        for y in ys
+            if x != y
+                mn, mx = min(x, y), max(x, y)
+                push!(xpairs, (mn, mx))
+            end
+        end
+    end
+    return xpairs
+end
+
+
+function reduce_equalities{T}(pairs::Vector{Tuple{T,T}}, anchors::Set{T}; replace_anchors=true)
+    # Q: Why do we need prop_subs here?
+    # cliques = cliqueset([(k, v) for (k, v) in prop_subs(Dict(pairs))])
     cliques = cliqueset(pairs)
     st = Dict{T,T}()
     new_pairs = Set{Tuple{T,T}}()
@@ -279,20 +296,58 @@ function reduce_equalities{T}(pairs::Vector{Tuple{T,T}}, anchors::Set{T})
             elseif in(x, anchors) && in(y, anchors)
                 # replace larger anchor with smaller one, keep pair
                 mn, mx = min(x, y), max(x, y)
-                st[mx] = mn
+                if replace_anchors
+                    st[mx] = mn
+                end
                 push!(new_pairs, (mn, mx))
             elseif in(x, anchors)
                 # replace non-anchor with anchor
                 st[y] = x
             elseif !in(x, anchors) && !in(y, anchors)
-                # replace larger anchor with smaller one
+                # replace larger element with smaller one
                 mn, mx = min(x, y), max(x, y)
                 st[mx] = mn
             end
         end
     end
-    return st, [p for p in new_pairs]
+    return st, collect(new_pairs)
 end
+
+
+"""
+Reduce a list of guards. Optional parameters:
+
+ * keep : iterable, indices that need to be kept; default = []
+ * used : iterable, indices used in indexed expression; default = all indices
+
+"""
+function reduce_guards(guards::Vector{Expr}; keep=[], used=nothing)
+    keep = Set{Any}(keep)
+    pairs = [(g.args[2], g.args[3]) for g in guards]
+    xpairs = crosspairs(pairs)
+    used = used == nothing ? Set(flatten(map(collect, pairs))) : Set{Any}(used)
+    ordered = [(min(x, y), max(x, y)) for (x, y) in xpairs if in(x, used) && in(y, used)]
+    st = Dict{Any,Any}()
+    new_pairs = Tuple{Any,Any}[]
+    for (x, y) in ordered
+        if in(x, keep) && in(y, keep)
+            # requested to keep both indices, don't replace anything
+            push!(new_pairs, (x, y))
+        elseif in(x, keep)
+            # replace 2nd element with the 1st one
+            st[y] = x
+        elseif in(y, keep)
+            # replace 1st element with the 2nd one
+            st[x] = y
+        else
+            # free to replace either way, but keep min index for simplicity
+            st[y] = x
+        end
+    end
+    new_guards = [:($x == $y) for (x, y) in new_pairs]
+    return st, new_guards
+end
+
 
 
 function expr_like(x)
@@ -333,3 +388,48 @@ function prop_subs(st::Dict)
     end
     return new_st
 end
+
+
+function with_guards(ex, guards::Vector{Expr})
+    if isempty(guards)
+        return ex
+    elseif length(guards) == 1
+        return :($ex * $(guards[1]))
+    else
+        return Expr(:call, :*, ex, guards...)
+    end
+end
+
+
+function apply_guards(ex::Expr, guards::Vector{Expr}; anchors=Set())
+    if ex.head == :block
+        return apply_guards_to_block(ex, guards; anchors=anchors)
+    end
+    ex_idxs = Set(flatten(get_indices(ex)))
+    pairs = Tuple{Any,Any}[(grd.args[2], grd.args[3]) for grd in guards
+                           if in(grd.args[2], ex_idxs) && in(grd.args[3], ex_idxs)]
+    st, new_pairs = reduce_equalities(pairs, anchors; replace_anchors=false)
+    new_guards = [:($i1 == $i2) for (i1, i2) in new_pairs]
+    new_ex = subs(ex, st)
+    return new_ex, new_guards
+end
+
+
+function apply_guards_to_block(ex::Expr, guards::Vector{Expr}; anchors=Set())
+    @assert ex.head == :block
+    res = Expr(:block)
+    for subex in ex.args
+        new_subex_, new_guards = apply_guards(subex, guards; anchors=anchors)
+        if isa(new_subex_, Expr) && new_subex_.head == :(=)
+            lhs, rhs = new_subex_.args
+            new_subex = :($lhs = $(with_guards(rhs, new_guards)))
+        else
+            new_subex = with_guards(new_subex_, new_guards)
+        end
+        push!(res.args, new_subex)
+    end
+    return res
+end
+
+
+apply_guards(x, guards::Vector{Expr}; anchors=Set()) = (x, guards)
