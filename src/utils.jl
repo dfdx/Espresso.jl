@@ -345,7 +345,7 @@ function reduce_guards(guards::Vector{Expr}; keep=[], used=nothing)
         end
     end
     new_guards = [:($x == $y) for (x, y) in new_pairs]
-    return st, new_guards
+    return prop_subs(st), new_guards
 end
 
 
@@ -401,35 +401,75 @@ function with_guards(ex, guards::Vector{Expr})
 end
 
 
-function apply_guards(ex::Expr, guards::Vector{Expr}; anchors=Set())
-    if ex.head == :block
-        return apply_guards_to_block(ex, guards; anchors=anchors)
-    end
-    ex_idxs = Set(flatten(get_indices(ex)))
-    pairs = Tuple{Any,Any}[(grd.args[2], grd.args[3]) for grd in guards
-                           if in(grd.args[2], ex_idxs) && in(grd.args[3], ex_idxs)]
-    st, new_pairs = reduce_equalities(pairs, anchors; replace_anchors=false)
-    new_guards = [:($i1 == $i2) for (i1, i2) in new_pairs]
-    new_ex = subs(ex, st)
-    return new_ex, new_guards
+
+function apply_guards(ex::Expr, guards::Vector{Expr}; keep=[])
+    return apply_guards(ExH(ex), guards; keep=keep)
 end
 
 
-function apply_guards_to_block(ex::Expr, guards::Vector{Expr}; anchors=Set())
-    @assert ex.head == :block
+function apply_guards(ex::ExH{:block}, guards::Vector{Expr}; keep=[])
     res = Expr(:block)
     for subex in ex.args
-        new_subex_, new_guards = apply_guards(subex, guards; anchors=anchors)
-        if isa(new_subex_, Expr) && new_subex_.head == :(=)
-            lhs, rhs = new_subex_.args
-            new_subex = :($lhs = $(with_guards(rhs, new_guards)))
-        else
-            new_subex = with_guards(new_subex_, new_guards)
-        end
+        new_subex = apply_guards(subex, guards::Vector{Expr}; keep=[])
         push!(res.args, new_subex)
     end
     return res
 end
 
 
-apply_guards(x, guards::Vector{Expr}; anchors=Set()) = (x, guards)
+function apply_guards(ex::ExH{:(=)}, guards::Vector{Expr}; keep=[])
+    ex = Expr(ex)
+    lhs, rhs = ex.args
+    used = flatten(get_indices(ex))
+    keep = vcat(keep, flatten(get_indices(lhs)))
+    st, new_guards = reduce_guards(guards; keep=keep, used=used)
+    new_lhs = subs(lhs, st)
+    new_rhs = with_guards(subs(rhs, st), new_guards)
+    return :($new_lhs = $new_rhs)
+end
+
+
+function apply_guards(ex::ExH, guards::Vector{Expr}; keep=[])
+    ex = Expr(ex)
+    used = flatten(get_indices(ex))
+    st, new_guards = reduce_guards(guards; keep=keep, used=used)
+    new_ex = with_guards(subs(ex, st), new_guards)
+    return new_ex
+end
+
+
+apply_guards(x, guards::Vector{Expr}; keep=[]) = x
+             
+
+# function apply_guards(ex::Expr, guards::Vector{Expr}; anchors=Set())
+#     if ex.head == :block
+#         return apply_guards_to_block(ex, guards; anchors=anchors)
+#     end
+#     ex_idxs = Set(flatten(get_indices(ex)))
+#     pairs = Tuple{Any,Any}[(grd.args[2], grd.args[3]) for grd in guards
+#                            if in(grd.args[2], ex_idxs) && in(grd.args[3], ex_idxs)]
+#     st, new_pairs = reduce_equalities(pairs, anchors; replace_anchors=false)
+#     new_guards = [:($i1 == $i2) for (i1, i2) in new_pairs]
+#     new_ex = subs(ex, st)
+#     return new_ex, new_guards
+# end
+
+
+# function apply_guards_to_block(ex::Expr, guards::Vector{Expr}; anchors=Set())
+#     @assert ex.head == :block
+#     res = Expr(:block)
+#     for subex in ex.args
+#         new_subex_, new_guards = apply_guards(subex, guards; anchors=anchors)
+#         if isa(new_subex_, Expr) && new_subex_.head == :(=)
+#             lhs, rhs = new_subex_.args
+#             new_subex = :($lhs = $(with_guards(rhs, new_guards)))
+#         else
+#             new_subex = with_guards(new_subex_, new_guards)
+#         end
+#         push!(res.args, new_subex)
+#     end
+#     return res
+# end
+
+
+# apply_guards(x, guards::Vector{Expr}; anchors=Set()) = (x, guards)
