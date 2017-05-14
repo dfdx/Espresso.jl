@@ -8,8 +8,8 @@ using DataStructures
 using Einsum
 using Sugar
 
-include("utils.jl")
 include("types.jl")
+include("utils.jl")
 include("rewrite.jl")
 include("simplify.jl")
 include("funexpr.jl")

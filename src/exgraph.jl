@@ -187,7 +187,7 @@ end
 function parse!(g::ExGraph, ex::ExH{:.})
     @assert(isa(ex.args[2], Expr) && ex.args[2].head == :tuple,
             "Dot (.) is only allowedd in broadcasting (e.g. `f.(x)`), but `$ex` passed in")
-    op = canonical(g.ctx[:mod], ex.args[1])    
+    op = canonical(g.ctx[:mod], ex.args[1])
     deps = [parse!(g, arg) for arg in ex.args[2].args]
     # pex = Expr(:call, op, deps...)
     pex = Expr(:., op, Expr(:tuple, deps...))
@@ -303,6 +303,70 @@ function external_vars(g::AbstractExGraph)
 end
 
 
+# """
+# Collapse unnecessary assignment nodes, rewriting all affected nodes. Example:
+
+#     tmp1 = x * y
+#     z = tmp1
+
+# will be rewritten to
+
+#     z = x * y
+# """
+# function fuse_equal(g::AbstractExGraph; outvars=nothing)
+#     st = Dict{Symbol, Symbol}()
+#     for nd in g.tape
+#         if isa(nd, ExNode{:(=)})
+#             vname = varname(nd)
+#             dep = dependencies(nd)[1]
+#             if istemp(dep)
+#                 # if dependency is a temp var name, replace it with the normal one
+#                 st[dep] = vname
+#             else
+#                 # otherwise replace all future alias occurrences with the original one
+#                 st[vname] = dep
+#             end
+#         end
+#     end
+#     st = prop_subs(st)
+#     new_g = reset_tape(g)
+#     replace_vars = Set(values(st))
+#     for nd in g.tape
+#         vname = varname(nd)
+#         if in(vname, replace_vars)
+#             dep_nd = nd
+#             while isa(dep_nd, ExNode{:(=)}) &&
+#                 haskey(g, dependencies(dep_nd)[1]) &&
+#                 Set(getguards(nd)) == Set(getguards(dep_nd))
+#                 # go through graph to the first non-assignment node
+#                 dep_nd = g[dependencies(dep_nd)[1]]
+#             end
+#             new_nd_ = copy(dep_nd; var=subs(getvar(nd), st))
+#             # TODO: bring back apply_guards for nodes?
+#             new_nd = apply_guards(new_nd_, vcat(getguards(nd), getguards(dep_nd)))
+#             push!(new_g, new_nd)
+#         else
+#             push!(new_g, nd)
+#         end
+#     end
+#     new_g = remove_unused(new_g, outvars == nothing ? [varname(new_g[end])] : outvars)
+#     return new_g
+# end
+
+
+function find_dep_root(g::AbstractExGraph, nd::ExNode{:(=)})
+    dep_nd = nd
+    next_dep = dependencies(dep_nd)[1]
+    while (isa(dep_nd, ExNode{:(=)}) && haskey(g, next_dep) &&
+           Set(getguards(nd)) == Set(getguards(g[next_dep])))
+        # go through graph to the first non-assignment node
+        dep_nd = g[next_dep]
+        next_dep = dependencies(dep_nd)[1]
+    end
+    return dep_nd
+end
+
+
 """
 Collapse unnecessary assignment nodes, rewriting all affected nodes. Example:
 
@@ -318,7 +382,8 @@ function fuse_equal(g::AbstractExGraph; outvars=nothing)
     for nd in g.tape
         if isa(nd, ExNode{:(=)})
             vname = varname(nd)
-            dep = dependencies(nd)[1]
+            dep = varname(find_dep_root(g, nd))
+            dep != vname || continue
             if istemp(dep)
                 # if dependency is a temp var name, replace it with the normal one
                 st[dep] = vname
@@ -334,13 +399,8 @@ function fuse_equal(g::AbstractExGraph; outvars=nothing)
     for nd in g.tape
         vname = varname(nd)
         if in(vname, replace_vars)
-            dep_nd = nd
-            while isa(dep_nd, ExNode{:(=)}) && haskey(g, dependencies(dep_nd)[1])
-                # go through graph to the first non-assignment node
-                dep_nd = g[dependencies(dep_nd)[1]]
-            end
-            new_nd_ = copy(dep_nd; var=subs(getvar(nd), st))
-            new_nd = apply_guards(new_nd_, vcat(getguards(nd), getguards(dep_nd)))
+            dep_nd = find_dep_root(g, nd)
+            new_nd = copy(dep_nd; var=subs(getvar(nd), st))
             push!(new_g, new_nd)
         else
             push!(new_g, nd)
@@ -349,53 +409,3 @@ function fuse_equal(g::AbstractExGraph; outvars=nothing)
     new_g = remove_unused(new_g, outvars == nothing ? [varname(new_g[end])] : outvars)
     return new_g
 end
-
-
-# function fuse_equal!(g::AbstractExGraph)
-#     ext_vars = external_vars(g)
-#     st = Dict{Symbol, Symbol}()
-#     delvars = Set{Symbol}()
-#     for nd in g.tape
-#         setexpr!(nd, subs(getexpr(nd), st))
-#         vidxs = varidxs(nd)
-#         depidxs = get_indices(getexpr(nd))
-#         if isa(nd, ExNode{:(=)}) && !isempty(depidxs) && vidxs == depidxs[1]
-#             vname = varname(nd)
-#             dep = dependencies(nd)[1]
-#             if !in(dep, ext_vars)  # can't remove external vars
-#                 if istemp(dep)
-#                     # if dependency is a temp var name, replace it with the normal one
-#                     st[dep] = vname
-#                     push!(delvars, vname)
-#                 else
-#                     # otherwise replace all future alias occurrences with the original one
-#                     st[vname] = dep
-#                     push!(delvars, vname)
-#                 end
-#             end
-#         end
-#     end
-#     new_tape = Vector{ExNode}()
-#     new_idx = Dict{Symbol, ExNode}()
-#     for nd in g.tape
-#         vname = varname(nd)
-#         if !in(vname, delvars)
-#             if haskey(st, vname)
-#                 new_nd = deepcopy(nd)
-#                 setvar!(new_nd, subs(getvar(nd), st))
-#                 setexpr!(new_nd, subs(getexpr(nd), st))
-#                 push!(new_tape, new_nd)
-#                 new_idx[varname(new_nd)] = new_nd
-#             else
-#                 push!(new_tape, nd)
-#                 new_idx[varname(nd)] = nd
-#             end
-#         end
-#     end
-#     g.tape = new_tape
-#     g.idx = new_idx
-#     return g
-# end
-
-
-# collapse_assignments! = fuse_equal!
