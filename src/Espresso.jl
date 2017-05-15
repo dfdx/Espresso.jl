@@ -31,6 +31,7 @@ export
     forall_indices,
     sum_indices,
     find_guards,
+    with_guards,
     without_guards,
     # ExNode
     ExNode,
