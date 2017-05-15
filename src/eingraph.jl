@@ -83,10 +83,10 @@ function parse!(g::EinGraph, ex::ExH{:(=)})
     ex_ = without_guards(ex)
     var, rhs = ex_.args
     vname, vidxs = split_indexed(var)
-    guards = push_guards!(g.ctx, find_guards(ex))    
+    guards = push_guards!(g.ctx, find_guards(ex))
     dep = parse!(g, rhs)
     depidxs = split_indexed(dep)[2]
-    st, new_guards = reduce_guards(guards; keep=vidxs, used=vcat(vidxs, depidxs))
+    st, new_guards = reduce_guards(guards; keep=vidxs, used=flatten(vcat(vidxs, depidxs)))
     push!(g, ExNode{:(=)}(var, subs(dep, st); guards=new_guards))
     pop_guards!(g.ctx)
     return var
@@ -94,6 +94,8 @@ end
 
 
 function parse!(g::EinGraph, ex::ExH{:ref})
+    # st, _ = reduce_guards(current_guards(g.ctx))
+    # return subs(Expr(ex), st)
     return Expr(ex)
 end
 
@@ -101,16 +103,21 @@ end
 function parse!(g::EinGraph, ex::ExH{:call})
     ex = Expr(ex)
     ex_ = without_guards(ex)
-    op = canonical(g.ctx[:mod], ex_.args[1])
     guards = push_guards!(g.ctx, find_guards(ex))
-    deps = [parse!(g, arg) for arg in ex_.args[2:end]]
-    depnames, depidxs = unzip(map(split_indexed, deps))
-    pex_ = Expr(:call, op, deps...)
-    st, pex_guards = reduce_guards(guards; )
-    pex = subs(pex_, st)
-    vidxs = forall_indices(op, [split_indexed(dep)[2] for dep in deps])
-    var = make_indexed(genname(), vidxs)
-    push!(g, ExNode{:call}(var, pex; guards=pex_guards))
+    if isa(ex_, Expr) && ex_.head == :call
+        # if without guards it's still a call
+        op = canonical(g.ctx[:mod], ex_.args[1])
+        deps = [parse!(g, arg) for arg in ex_.args[2:end]]
+        depnames, depidxs = unzip(map(split_indexed, deps))
+        pex_ = Expr(:call, op, deps...)
+        vidxs = forall_indices(op, [split_indexed(dep)[2] for dep in deps])
+        st, pex_guards = reduce_guards(guards; keep=vidxs, used=flatten(vcat(vidxs..., depidxs...)))
+        pex = subs(pex_, st)
+        var = make_indexed(genname(), vidxs)
+        push!(g, ExNode{:call}(var, pex; guards=pex_guards))
+    else
+        var = parse!(g, ex_)
+    end
     pop_guards!(g.ctx)
     return var
 end
