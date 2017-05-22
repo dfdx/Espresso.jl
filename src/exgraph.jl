@@ -361,7 +361,10 @@ function find_dep_root(g::AbstractExGraph, nd::ExNode{:(=)})
            Set(getguards(nd)) == Set(getguards(g[next_dep])))
         # go through graph to the first non-assignment node
         dep_nd = g[next_dep]
-        next_dep = dependencies(dep_nd)[1]
+        next_deps = dependencies(dep_nd)
+        if length(next_deps) > 0
+            next_dep = dependencies(dep_nd)[1]
+        end
     end
     return dep_nd
 end

@@ -42,7 +42,7 @@ end
 
 
 """Sort graph topologically"""
-function topsort(g::AbstractExGraph, out_vars::Vector{Symbol})
+function topsort(g::AbstractExGraph)
     dpts = dependents(g)
     sorted = Symbol[]
     temp_marked = Set{Symbol}()

@@ -5,17 +5,17 @@ const FROM_EIN_PHS = [:A, :B, :C, :X, :Y, :V, :W, :Z,
                       :i, :j, :k, :l, :m, :n, :p, :q, :r, :s, :t]
 
 const FROM_EINSTEIN_CALL_RULES =
-    OrderedDict(:(Z[j] = I[i] * X[i,j]) => :(Z = squeeze(sum(X,1),1)),
-                :(Z[i] = I[j] * X[i,j]) => :(Z = squeeze(sum(X,2),2)),
-                :(Z[i] = X[i,j] * I[j]) => :(Z = squeeze(sum(X,2),2)),
-                :(Z[j] = X[i,j] * I[i]) => :(Z = squeeze(sum(X,1),1)),
-                :(Z[i,j] = X[i,j,k] * I[k]) => :(Z = squeeze(sum(X,3),3)),
-                :(Z[i,k] = X[i,j,k] * I[j]) => :(Z = squeeze(sum(X,2),2)),
-                :(Z[j,k] = X[i,j,k] * I[i]) => :(Z = squeeze(sum(X,1),1)),
-                :(Z = X[i] * I[i]) => :(Z = sum(X)),
-                :(Z = I[i] * X[i]) => :(Z = sum(X)),
-                :(Z = X[i,j] * I[i,j]) => :(Z = sum(X)),
-                :(Z = I[i,j] * X[i,j]) => :(Z = sum(X)),
+    OrderedDict(# :(Z[j] = I[i] * X[i,j]) => :(Z = squeeze(sum(X,1),1)),
+                # :(Z[i] = I[j] * X[i,j]) => :(Z = squeeze(sum(X,2),2)),
+                # :(Z[i] = X[i,j] * I[j]) => :(Z = squeeze(sum(X,2),2)),
+                # :(Z[j] = X[i,j] * I[i]) => :(Z = squeeze(sum(X,1),1)),
+                # :(Z[i,j] = X[i,j,k] * I[k]) => :(Z = squeeze(sum(X,3),3)),
+                # :(Z[i,k] = X[i,j,k] * I[j]) => :(Z = squeeze(sum(X,2),2)),
+                # :(Z[j,k] = X[i,j,k] * I[i]) => :(Z = squeeze(sum(X,1),1)),
+                # :(Z = X[i] * I[i]) => :(Z = sum(X)),
+                # :(Z = I[i] * X[i]) => :(Z = sum(X)),
+                # :(Z = X[i,j] * I[i,j]) => :(Z = sum(X)),
+                # :(Z = I[i,j] * X[i,j]) => :(Z = sum(X)),
                 # inner and outer product
                 :(Z[i,j] = X[i] * Y[j]) => :(Z = X * Y'),
                 :(Z = X[i] * Y[i]) => :(Z = X'Y),
@@ -26,7 +26,9 @@ const FROM_EINSTEIN_CALL_RULES =
                 :(Z[j] = X[i] * Y[i,j]) => :(Z = Y' * X),
                 :(Z[i] = X[j] * Y[i,j]) => :(Z = Y * X),
                 :(Z[i] = X[i,j] * Y[j]) => :(Z = X * Y),
+                :(Z = X[i,j] * Y[j]) => :(Z = sum(X * Y)),
                 :(Z[j] = X[i,j] * Y[i]) => :(Z = X' * Y),
+                :(Z = X[i,j] * Y[i]) => :(Z = sum(X' * Y)),
                 :(Z[j] = X[i] .* Y[i,j]) => :(Z = Y' * X),
                 :(Z[i] = X[j] .* Y[i,j]) => :(Z = Y * X),
                 :(Z[i] = X[i,j] .* Y[j]) => :(Z = X * Y),
@@ -49,7 +51,7 @@ const FROM_EINSTEIN_CALL_RULES =
                 # special .+ and .*
                 :(Z[i,j] = X[j] .+ Y[i,j]) => :(Z = X' .+ Y),
                 # –> ∑ₖxᵢyⱼₖ == xᵢ∑ₖyⱼₖ   # TODO: seems incorrect, see 2-level rules
-                :(Z[i,j] = X[i] .* Y[j,k]) => :(Z = X .* squeeze(sum(Y,2),2))
+                # :(Z[i,j] = X[i] .* Y[j,k]) => :(Z = X .* squeeze(sum(Y,2),2))
                 )
 
 
@@ -90,19 +92,6 @@ const FROM_EINSTEIN_ASSIGN_2_RULES =
                 )
 
 
-
-function subs_size(ex::Expr, sizes::Dict)
-    size_exs = findex(:(size__(_)), ex)
-    st = Dict{Any,Any}()
-    for size_ex in size_exs
-        var, idxs = split_indexed(size_ex.args[2])
-        subsex = @get(sizes, var, error("Can't find size for $var in $ex"))
-        st[size_ex] = subsex
-    end
-    return subs(ex, st)
-end
-
-subs_size(x, sizes::Dict) = x
 
 
 function to_einsum(ex::Expr)
@@ -228,4 +217,9 @@ function from_einstein(g::EinGraph, nd::ExNode{:bcast})
     vars = findex(:(_x[_i...]), ex)
     st = Dict(var => var.args[1] for var in vars)
     return subs(ex, st)
+end
+
+
+function from_einstein(g::EinGraph, nd::ExNode{:tuple})
+    return without_indices(to_expr(nd))
 end
