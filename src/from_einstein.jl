@@ -5,24 +5,12 @@ const FROM_EIN_PHS = [:A, :B, :C, :X, :Y, :V, :W, :Z,
                       :i, :j, :k, :l, :m, :n, :p, :q, :r, :s, :t]
 
 const FROM_EINSTEIN_CALL_RULES =
-    OrderedDict(# :(Z[j] = I[i] * X[i,j]) => :(Z = squeeze(sum(X,1),1)),
-                # :(Z[i] = I[j] * X[i,j]) => :(Z = squeeze(sum(X,2),2)),
-                # :(Z[i] = X[i,j] * I[j]) => :(Z = squeeze(sum(X,2),2)),
-                # :(Z[j] = X[i,j] * I[i]) => :(Z = squeeze(sum(X,1),1)),
-                # :(Z[i,j] = X[i,j,k] * I[k]) => :(Z = squeeze(sum(X,3),3)),
-                # :(Z[i,k] = X[i,j,k] * I[j]) => :(Z = squeeze(sum(X,2),2)),
-                # :(Z[j,k] = X[i,j,k] * I[i]) => :(Z = squeeze(sum(X,1),1)),
-                # :(Z = X[i] * I[i]) => :(Z = sum(X)),
-                # :(Z = I[i] * X[i]) => :(Z = sum(X)),
-                # :(Z = X[i,j] * I[i,j]) => :(Z = sum(X)),
-                # :(Z = I[i,j] * X[i,j]) => :(Z = sum(X)),
-                # inner and outer product
+    OrderedDict(# inner and outer product
                 :(Z[i,j] = X[i] * Y[j]) => :(Z = X * Y'),
                 :(Z = X[i] * Y[i]) => :(Z = X'Y),
                 :(Z[i,j] = X[i] .* Y[j]) => :(Z = X * Y'),
                 :(Z = X[i] .* Y[i]) => :(Z = X'Y),
                 # matrix-by-vector
-                # TODO: check rules below once again
                 :(Z[j] = X[i] * Y[i,j]) => :(Z = Y' * X),
                 :(Z[i] = X[j] * Y[i,j]) => :(Z = Y * X),
                 :(Z[i] = X[i,j] * Y[j]) => :(Z = X * Y),
@@ -46,10 +34,12 @@ const FROM_EINSTEIN_CALL_RULES =
                 :(Z[i,j] = X[k,i] .* Y[k,j]) => :(Z = X' * Y),
                 :(Z[j,i] = X[i,k] .* Y[j,k]) => :(Z = Y * X'),  # same transposed
                 :(Z[j,i] = X[k,i] .* Y[k,j]) => :(Z = Y' * X),  # same transposed
-                # eye
-                :(Z[i,j] = 1 * (i == j)) => :(eye(size__(Z))[1]),
                 # special .+ and .*
                 :(Z[i,j] = X[j] .+ Y[i,j]) => :(Z = X' .+ Y),
+                :(Z[i,j] = X .* Y[j]) => :(Z = repmat((X .* Y)', size__(Z)[1])),
+                :(Z[j] = X .* Y[i,j]) => :(Z = X .* squeeze(sum(Y,1),1)),
+                # eye
+                :(Z[i,j] = 1 * (i == j)) => :(eye(size__(Z))[1]),
                 # –> ∑ₖxᵢyⱼₖ == xᵢ∑ₖyⱼₖ   # TODO: seems incorrect, see 2-level rules
                 # :(Z[i,j] = X[i] .* Y[j,k]) => :(Z = X .* squeeze(sum(Y,2),2))
                 )
@@ -86,7 +76,7 @@ const FROM_EINSTEIN_ASSIGN_2_RULES =
 
                 :(W[i,k,j] = X[i,k] .* Y[k,j]; Z[i,j] = W[i,k,j]) =>
                 :(Z = X * Y),
-                
+
                 :(W[i,k,j] = X[i,k] .* Y[j,k]; Z[i,j] = W[i,k,j]) =>
                 :(Z = X * Y')
                 )
@@ -111,7 +101,7 @@ function from_einstein(ex::Expr; ctx=Dict(), inputs...)
 end
 
 
-function from_einstein(g::EinGraph)    
+function from_einstein(g::EinGraph)
     sizes = @get(g.ctx, :sizes, Dict())
     res = :(begin end)
     for nd in g.tape
@@ -135,7 +125,7 @@ function from_einstein(g::EinGraph, nd::ExNode{:call})
     for (pat, rpat) in FROM_EINSTEIN_CALL_RULES
         # consider tryrewrite
         rex = tryrewrite(ex, pat, rpat; phs=FROM_EIN_PHS, allow_ex=false)
-        if !isnull(rex)   
+        if !isnull(rex)
             return get(rex)
         end
     end
