@@ -39,9 +39,14 @@ const FROM_EINSTEIN_CALL_RULES =
                 :(Z[i,j] = X .* Y[j]) => :(Z = repmat((X .* Y)', size__(Z)[1])),
                 :(Z[j] = X .* Y[i,j]) => :(Z = X .* squeeze(sum(Y,1),1)),
                 # eye
-                :(Z[i,j] = 1 * (i == j)) => :(eye(size__(Z))[1]),
+                :(Z[i,j] = 1 * (i == j)) => :(Z = eye(size__(Z))[1]),
                 # –> ∑ₖxᵢyⱼₖ == xᵢ∑ₖyⱼₖ   # TODO: seems incorrect, see 2-level rules
                 # :(Z[i,j] = X[i] .* Y[j,k]) => :(Z = X .* squeeze(sum(Y,2),2))
+                # broadcasting + sum
+                :(Z = _f(X[i], Y)) => :(Z = sum(_f.(X, Y))),
+                :(Z = _f(X, Y[i])) => :(Z = sum(_f.(X, Y))),
+                :(Z = _f(X[i], Y[i])) => :(Z = sum(_f.(X, Y))),
+                :(Z = _f(X[i,j], Y[i,j])) => :(Z = sum.(_f(X, Y))),
                 )
 
 
@@ -142,6 +147,8 @@ function from_einstein(g::EinGraph, nd::ExNode{:call})
     if is_bcast_old
         # nearly deprecated syntax, but still actively used in 0.6
         call = Expr(:call, getexpr(nd).args[1], dependencies(nd)...)
+        # TODO: this doesn't cover implicit summation, e.g. `z = x[i] .* y`
+        # we can cover it using rules above or track forall indices
         return Expr(:(=), varname(nd), call)
     elseif is_bcast
         bcast_call = Expr(:., getexpr(nd).args[1], Expr(:tuple, dependencies(nd)...))
