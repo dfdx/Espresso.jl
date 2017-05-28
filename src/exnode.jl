@@ -26,7 +26,7 @@ varname(nd::ExNode)::Symbol = isa(nd.var, Symbol) ? nd.var : nd.var.args[1]
 varidxs(nd::ExNode)::Vector = isa(nd.var, Symbol) ? [] : nd.var.args[2:end]
 
 getexpr(nd::ExNode) = nd.ex
-setexpr!(nd::ExNode, ex) = (nd.ex = ex)
+setexpr!(nd::ExNode, ex::Any) = (nd.ex = ex)
 
 getguards(nd::ExNode) = nd.guards
 setguards!(nd::ExNode, guards::Vector{Expr}) = (nd.guards = guards)

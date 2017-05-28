@@ -168,6 +168,6 @@ function optimize(g::EinGraph)
         end
     end
     new_g = remove_unused(new_g,  varname(new_g[end]))
-    new_g = fuse_equal(new_g)
+    new_g = fuse_assigned(new_g)
     return new_g
 end

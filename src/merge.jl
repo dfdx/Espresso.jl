@@ -1,11 +1,23 @@
 
 function rename!(g::AbstractExGraph, name::Symbol, new_name::Symbol)
-    st = Dict(name => new_name)
+    return rename!(g, Dict(name => new_name))
+end
+
+
+function rename!(g::AbstractExGraph, st::Dict{Symbol,Symbol})
     for nd in g.tape
         setvar!(nd, subs(getvar(nd), st))
         setexpr!(nd, subs(getexpr(nd), st))
     end
     return g
+end
+
+function rename(g::AbstractExGraph, st::Dict{Symbol,Symbol})
+    new_g = reset_tape(g)
+    for nd in g.tape
+        push!(new_g, copy(nd; var=subs(getvar(nd), st), ex=subs(getexpr(nd), st)))
+    end
+    return new_g
 end
 
 

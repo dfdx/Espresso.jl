@@ -57,7 +57,7 @@ export
     parse!,
     evaluate!,
     cat,
-    fuse_equal,
+    fuse_assigned,
     # ExGraph/EinGraph utils
     dependents,
     external_vars,

@@ -37,7 +37,7 @@ const FROM_EINSTEIN_CALL_RULES =
                 # special .+ and .*
                 :(Z[i,j] = X[j] .+ Y[i,j]) => :(Z = X' .+ Y),
                 :(Z[i,j] = X .* Y[j]) => :(Z = repmat((X .* Y)', size__(Z)[1])),
-                :(Z[j] = X .* Y[i,j]) => :(Z = X .* squeeze(sum(Y,1),1)),
+                :(Z[j] = X .* Y[i,j]) => :(Z = X .* squeeze(sum(Y,1),1)),                
                 # eye
                 :(Z[i,j] = 1 * (i == j)) => :(Z = eye(size__(Z))[1]),
                 # –> ∑ₖxᵢyⱼₖ == xᵢ∑ₖyⱼₖ   # TODO: seems incorrect, see 2-level rules
@@ -87,6 +87,10 @@ const FROM_EINSTEIN_ASSIGN_2_RULES =
                 )
 
 
+const FROM_EINSTEIN_CONST_RULES =
+    OrderedDict(:(Z = X) => :(Z = X),
+                :(Z[i...] = X) => :(Z = ones(size__(Z)) * X),)
+
 
 
 function to_einsum(ex::Expr)
@@ -122,7 +126,17 @@ function from_einstein(g::EinGraph)
 end
 
 from_einstein(g::EinGraph, nd::ExNode{:input}) = getexpr(nd)
-from_einstein(g::EinGraph, nd::ExNode{:constant}) = to_expr(nd)
+
+function from_einstein(g::EinGraph, nd::ExNode{:constant})
+    ex = to_expr(nd)
+    for (pat, rpat) in FROM_EINSTEIN_CONST_RULES       
+        rex = tryrewrite(ex, pat, rpat; phs=FROM_EIN_PHS, allow_ex=false)
+        if !isnull(rex)
+            return get(rex)
+        end
+    end
+    throw(ErrorException("Can't convert to vectorized notation constant node: $nd"))
+end
 
 
 function from_einstein(g::EinGraph, nd::ExNode{:call})

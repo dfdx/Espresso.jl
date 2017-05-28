@@ -25,7 +25,7 @@ function ExGraph(ex::Expr; fuse=true, ctx=Dict(), inputs...)
     g.ctx[:expr] = ex
     parse!(g, ex)
     if fuse
-        g = fuse_equal(g)
+        g = fuse_assigned(g)
     end
     return g
 end
@@ -303,70 +303,60 @@ function external_vars(g::AbstractExGraph)
 end
 
 
-# """
-# Collapse unnecessary assignment nodes, rewriting all affected nodes. Example:
-
-#     tmp1 = x * y
-#     z = tmp1
-
-# will be rewritten to
-
-#     z = x * y
-# """
-# function fuse_equal(g::AbstractExGraph; outvars=nothing)
-#     st = Dict{Symbol, Symbol}()
-#     for nd in g.tape
-#         if isa(nd, ExNode{:(=)})
-#             vname = varname(nd)
-#             dep = dependencies(nd)[1]
-#             if istemp(dep)
-#                 # if dependency is a temp var name, replace it with the normal one
-#                 st[dep] = vname
-#             else
-#                 # otherwise replace all future alias occurrences with the original one
-#                 st[vname] = dep
-#             end
-#         end
-#     end
-#     st = prop_subs(st)
-#     new_g = reset_tape(g)
-#     replace_vars = Set(values(st))
-#     for nd in g.tape
-#         vname = varname(nd)
-#         if in(vname, replace_vars)
-#             dep_nd = nd
-#             while isa(dep_nd, ExNode{:(=)}) &&
-#                 haskey(g, dependencies(dep_nd)[1]) &&
-#                 Set(getguards(nd)) == Set(getguards(dep_nd))
-#                 # go through graph to the first non-assignment node
-#                 dep_nd = g[dependencies(dep_nd)[1]]
-#             end
-#             new_nd_ = copy(dep_nd; var=subs(getvar(nd), st))
-#             # TODO: bring back apply_guards for nodes?
-#             new_nd = apply_guards(new_nd_, vcat(getguards(nd), getguards(dep_nd)))
-#             push!(new_g, new_nd)
-#         else
-#             push!(new_g, nd)
-#         end
-#     end
-#     new_g = remove_unused(new_g, outvars == nothing ? [varname(new_g[end])] : outvars)
-#     return new_g
-# end
-
-
-function find_dep_root(g::AbstractExGraph, nd::ExNode{:(=)})
-    dep_nd = nd
-    next_dep = dependencies(dep_nd)[1]
-    while (isa(dep_nd, ExNode{:(=)}) && haskey(g, next_dep) &&
-           Set(getguards(nd)) == Set(getguards(g[next_dep])))
-        # go through graph to the first non-assignment node
-        dep_nd = g[next_dep]
-        next_deps = dependencies(dep_nd)
-        if length(next_deps) > 0
-            next_dep = dependencies(dep_nd)[1]
+function assign_chain!(g::AbstractExGraph, nd::ExNode{:(=)},
+                       guards::Vector{Expr}, chain::Vector{Symbol})
+    if getguards(nd) == guards
+        push!(chain, varname(nd))
+        dep = dependencies(nd)[1]
+        if haskey(g, dep)
+            dep_nd = g[dep]
+            assign_chain!(g, dep_nd, guards, chain)
         end
     end
-    return dep_nd
+    return chain
+end
+
+function assign_chain!{C}(g::AbstractExGraph, nd::ExNode{C},
+                          guards::Vector{Expr}, chain::Vector{Symbol})
+    if getguards(nd) == guards
+        push!(chain, varname(nd))
+    end
+end
+
+
+"""
+Collect all replacable variables from a chain of assignments in a graph.
+Variables `y` and `x` are considered replacable if there's a node `y = x`
+and both variables have the same set of guards.
+Note that this allows nodes to have different sets of indices.
+"""
+assign_chain{C}(g::AbstractExGraph, nd::ExNode{C}) =
+    assign_chain!(g, nd, getguards(nd), Vector{Symbol}())
+
+
+"""
+Find "the best" name in a chain of assigned variables.
+Currently, "the best" is defined as a first non-generated name. This way
+`fuse_assigned` tries to keep names from the original expression intact.
+"""
+function best_name(chain::Vector{Symbol})
+    i = 1
+    while i < length(chain) && istemp(chain[i])
+        i += 1
+    end
+    return chain[i]
+end
+
+
+function replacable_vars(chain::Vector{Symbol})
+    bname = best_name(chain)
+    st = Dict{Symbol,Symbol}()
+    for name in chain
+        if name != bname
+            st[name] = bname
+        end
+    end
+    return st
 end
 
 
@@ -380,35 +370,24 @@ will be rewritten to
 
     z = x * y
 """
-function fuse_equal(g::AbstractExGraph; outvars=nothing)
-    st = Dict{Symbol, Symbol}()
+function fuse_assigned(g::AbstractExGraph; outvars=nothing)
+    new_g = reset_tape(g)
+    # st = Dict{Symbol,Symbol}()
     for nd in g.tape
         if isa(nd, ExNode{:(=)})
-            vname = varname(nd)
-            dep = varname(find_dep_root(g, nd))
-            dep != vname || continue
-            if istemp(dep)
-                # if dependency is a temp var name, replace it with the normal one
-                st[dep] = vname
-            else
-                # otherwise replace all future alias occurrences with the original one
-                st[vname] = dep
-            end
-        end
-    end
-    st = prop_subs(st)
-    new_g = reset_tape(g)
-    replace_vars = Set(values(st))
-    for nd in g.tape
-        vname = varname(nd)
-        if in(vname, replace_vars)
-            dep_nd = find_dep_root(g, nd)
-            new_nd = copy(dep_nd; var=subs(getvar(nd), st))
+            chain = assign_chain(g, nd)
+            # st = merge(st, replacable_vars(chain))
+            root_assign_nd = g[chain[end]]
+            new_nd = copy(root_assign_nd; var=getvar(nd))
             push!(new_g, new_nd)
         else
-            push!(new_g, nd)
+            push!(new_g, copy(nd))
         end
-    end
+    end    
     new_g = remove_unused(new_g, outvars == nothing ? [varname(new_g[end])] : outvars)
+    # new_g = rename(new_g, st)  
     return new_g
+
+    # we may remove unused variables that are still referenced from remade nodes
+    # but if we rename first, we will get several idential nodes 
 end

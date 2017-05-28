@@ -14,107 +14,109 @@ const SIZE_PROP_RULES2 =
 
 
 function subs_size(ex::Expr, sizes::Dict)
-   size_exs = findex(:(size__(_)), ex)
-   st = Dict{Any,Any}()
-   for size_ex in size_exs
-       var, idxs = split_indexed(size_ex.args[2])
-       subsex = @get(sizes, var, error("Can't find size for $var in $ex"))
-       st[size_ex] = subsex
-   end
-   return subs(ex, st)
+    size_exs = findex(:(size__(_)), ex)
+    st = Dict{Any,Any}()
+    for size_ex in size_exs
+        var, idxs = split_indexed(size_ex.args[2])
+        subsex = @get(sizes, var, error("Can't find size for $var in $ex"))
+        st[size_ex] = subsex
+    end
+    return subs(ex, st)
 end
 
 subs_size(x, sizes::Dict) = x
 
 
-function propagate_size!(g::AbstractExGraph, nd::ExNode{:input})
-   sizes = @get_or_create(g.ctx, :sizes, Dict())
-   sizes[varname(nd)] = :(size($(varname(nd))))
+function propagate_size!(g::AbstractExGraph, nd::ExNode{:input})  
+    sizes = @get_or_create(g.ctx, :sizes, Dict())
+    haskey(sizes, varname(nd)) && return
+    sizes[varname(nd)] = :(size($(varname(nd))))
 end
 
 function propagate_size!(g::AbstractExGraph, nd::ExNode{:constant})
-   sizes = @get_or_create(g.ctx, :sizes, Dict())
-   sz = size(getvalue(nd))
-   sizes[varname(nd)] = Expr(:tuple, sz...)
+    sizes = @get_or_create(g.ctx, :sizes, Dict())
+    haskey(sizes, varname(nd)) && return
+    sz = size(getvalue(nd))
+    sizes[varname(nd)] = Expr(:tuple, sz...)
 end
 
 
 function propagated_size(g::AbstractExGraph, nd::ExNode{:(=)})
-   sizes = @get_or_create(g.ctx, :sizes, Dict())
-   dep = dependencies(nd)[1]
-   idxs = get_indices(to_expr(nd))
-   if length(idxs) == 0 || (length(idxs) == 2 && idxs[1] == idxs[2])
-       # not indexed or indices on LHS and RHS are equal
-       return sizes[dep]
-   elseif isempty(varidxs(nd))
-       # special case for scalars (produce nicer expression then the following)
-       return Expr(:tuple)
-   else
-       # perm = indexperm(varidxs(nd), get_indices(expr(nd))[1])
-       perm = [idx for idx in findperm(idxs[1], idxs[2]) if idx != 0]
-       dep_sz = sizes[dep]
-       var_sz_maybe = tryrewrite(dep_sz, :(size(_V)), :(size(_V, $(perm...))))
-       if !isnull(var_sz_maybe)
-           return get(var_sz_maybe)
-       elseif length(perm) == 1
-           # special case - only one index
-           return simplify(:($(dep_sz)[$(perm[1])]))
-       else
-           return simplify(:($(dep_sz)[[$(perm...)]]))
-       end
-   end
+    sizes = @get_or_create(g.ctx, :sizes, Dict())
+    dep = dependencies(nd)[1]
+    idxs = get_indices(to_expr(nd))
+    if length(idxs) == 0 || (length(idxs) == 2 && idxs[1] == idxs[2])
+        # not indexed or indices on LHS and RHS are equal
+        return sizes[dep]
+    elseif isempty(varidxs(nd))
+        # special case for scalars (produce nicer expression then the following)
+        return Expr(:tuple)
+    else
+        # perm = indexperm(varidxs(nd), get_indices(expr(nd))[1])
+        perm = [idx for idx in findperm(idxs[1], idxs[2]) if idx != 0]
+        dep_sz = sizes[dep]
+        var_sz_maybe = tryrewrite(dep_sz, :(size(_V)), :(size(_V, $(perm...))))
+        if !isnull(var_sz_maybe)
+            return get(var_sz_maybe)
+        elseif length(perm) == 1
+            # special case - only one index
+            return simplify(:($(dep_sz)[$(perm[1])]))
+        else
+            return simplify(:($(dep_sz)[[$(perm...)]]))
+        end
+    end
 end
 
 function propagate_size!(g::AbstractExGraph, nd::ExNode{:(=)})
-   sizes = @get_or_create(g.ctx, :sizes, Dict())
-   haskey(sizes, varname(nd)) && return
-   sizes[varname(nd)] = propagated_size(g, nd)
+    sizes = @get_or_create(g.ctx, :sizes, Dict())    
+    haskey(sizes, varname(nd)) && return
+    sizes[varname(nd)] = propagated_size(g, nd)
 end
 
 
 function graph_inputs(g::AbstractExGraph)
-   res = Dict()
-   for nd in g.tape
-       if isa(nd, ExNode{:input})
-           res[varname(nd)] = getvalue(nd)
-       end
-   end
-   return res
+    res = Dict()
+    for nd in g.tape
+        if isa(nd, ExNode{:input})
+            res[varname(nd)] = getvalue(nd)
+        end
+    end
+    return res
 end
 
 function ndims_from_size(g::AbstractExGraph, var::Symbol)
-   inputs = graph_inputs(g)
-   sizes = @get_or_create(g.ctx, :sizes, Dict())
-   evex = subs(sizes[var], inputs)
-   sz = eval(evex)
-   return length(sz)
+    inputs = graph_inputs(g)
+    sizes = @get_or_create(g.ctx, :sizes, Dict())
+    evex = subs(sizes[var], inputs)
+    sz = eval(evex)
+    return length(sz)
 end
 
 
 function infer_perm_size(vidxs::Vector, depidxs::Vector, dep_sz)
-   perm = findperm(vidxs, depidxs)
-   var_sz_maybe = tryrewrite(dep_sz, :(size(_V)), :(size(_V, $(perm...))))
-   if !isnull(var_sz_maybe)
-       return get(var_sz_maybe)
-   elseif length(perm) == 0
-       # special case - scalar
-       return Expr(:tuple)
-   elseif length(perm) == 1
-       # special case - only one index
-       return simplify(:($(dep_sz)[$(perm[1])]))
-   else
-       return simplify(:($(dep_sz)[[$(perm...)]]))
-   end
+    perm = findperm(vidxs, depidxs)
+    var_sz_maybe = tryrewrite(dep_sz, :(size(_V)), :(size(_V, $(perm...))))
+    if !isnull(var_sz_maybe)
+        return get(var_sz_maybe)
+    elseif length(perm) == 0
+        # special case - scalar
+        return Expr(:tuple)
+    elseif length(perm) == 1
+        # special case - only one index
+        return simplify(:($(dep_sz)[$(perm[1])]))
+    else
+        return simplify(:($(dep_sz)[[$(perm...)]]))
+    end
 end
 
 
 function try_rewrite_size(ex::Expr, sizes::Dict)
-   for (pat, rpat) in SIZE_PROP_RULES2
-       rex = tryrewrite(ex, pat, rpat; phs=SIZE_PROP_PHS)
-       if !isnull(rex)
-           sz_ex = subs_size(get(rex), sizes)
-           return Nullable{Expr}(sz_ex)
-       end
+    for (pat, rpat) in SIZE_PROP_RULES2
+        rex = tryrewrite(ex, pat, rpat; phs=SIZE_PROP_PHS)
+        if !isnull(rex)
+            sz_ex = subs_size(get(rex), sizes)
+            return Nullable{Expr}(sz_ex)
+        end
     end
     return Nullable{Expr}()
 end

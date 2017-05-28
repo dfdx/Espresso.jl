@@ -23,7 +23,7 @@ function EinGraph(ex::Expr; fuse=true, ctx=Dict(), inputs...)
     g.ctx[:expr] = ex
     parse!(g, ex)
     if fuse
-        g = fuse_equal(g)
+        g = fuse_assigned(g)
     end
     return g
 end
