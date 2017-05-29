@@ -9,8 +9,7 @@ let
     g = EinGraph(ex; u=rand(3), v=rand(3))
     propagate_size!(g)
 
-    sizes = g.ctx[:sizes]
-    @test sizes[:M] == :((size(u), size(v)))
+    sizes = g.ctx[:sizes]    
     @test sizes[:x] == :((size(u)))
     @test sizes[:z] == :(())
 end

@@ -37,12 +37,16 @@ const FROM_EINSTEIN_CALL_RULES =
                 # special .+ and .*
                 :(Z[i,j] = X[j] .+ Y[i,j]) => :(Z = X' .+ Y),
                 :(Z[i,j] = X .* Y[j]) => :(Z = repmat((X .* Y)', size__(Z)[1])),
-                :(Z[j] = X .* Y[i,j]) => :(Z = X .* squeeze(sum(Y,1),1)),                
+                :(Z[j] = X .* Y[i,j]) => :(Z = X .* squeeze(sum(Y,1),1)),
                 # eye
                 :(Z[i,j] = 1 * (i == j)) => :(Z = eye(size__(Z))[1]),
                 # –> ∑ₖxᵢyⱼₖ == xᵢ∑ₖyⱼₖ   # TODO: seems incorrect, see 2-level rules
                 # :(Z[i,j] = X[i] .* Y[j,k]) => :(Z = X .* squeeze(sum(Y,2),2))
                 # broadcasting + sum
+                :(Z = _f(X[i])) => :(Z = sum(_f.(X))),
+                :(Z = _f(X[i,j])) => :(Z = sum(_f.(X))),
+                :(Z[i] = _f(X[i,j])) => :(Z = squeeze(sum(_f.(X),2),2)),
+                :(Z[j] = _f(X[i,j])) => :(Z = squeeze(sum(_f.(X),1),1)),
                 :(Z = _f(X[i], Y)) => :(Z = sum(_f.(X, Y))),
                 :(Z = _f(X, Y[i])) => :(Z = sum(_f.(X, Y))),
                 :(Z = _f(X[i], Y[i])) => :(Z = sum(_f.(X, Y))),
@@ -129,7 +133,7 @@ from_einstein(g::EinGraph, nd::ExNode{:input}) = getexpr(nd)
 
 function from_einstein(g::EinGraph, nd::ExNode{:constant})
     ex = to_expr(nd)
-    for (pat, rpat) in FROM_EINSTEIN_CONST_RULES       
+    for (pat, rpat) in FROM_EINSTEIN_CONST_RULES
         rex = tryrewrite(ex, pat, rpat; phs=FROM_EIN_PHS, allow_ex=false)
         if !isnull(rex)
             return get(rex)

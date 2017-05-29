@@ -6,11 +6,10 @@ let
         y = t2[i]
     end
     ex = sanitize(from_einstein(iex; W=rand(3,2), x=rand(2)))
-    expected = sanitize(quote 
+    expected = sanitize(quote
         t1 = W * x
-        t2 = exp.(t1)
-        y = sum(t2)
+        y = sum(exp.(t1))
     end)
-    
+
     @test ex == expected
 end

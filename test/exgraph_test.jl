@@ -28,17 +28,16 @@ let
         M[i,j] = exp.(u[i] .* v[j])
         x[i] = M[i,j]
         y[i] = 2 * x[i]
-        z = y[i] * I[i]
+        z = y[i]
     end
     g = EinGraph(ex; u=rand(3), v=rand(3))
     @test getcategory(g[1]) == :input
     @test getcategory(g[3]) == :call
-    @test getcategory(g[4]) == :bcast
-    @test getcategory(g[5]) == :(=)
-    @test getcategory(g[6]) == :constant
+    @test getcategory(g[4]) == :bcast    
+    @test getcategory(g[6]) == :call
 
     # test node access methods
-    @test g[4] == g[:M] && g[:M] == g["M"]
+    @test g[end] == g[:z] && g[:z] == g["z"]
 
     # test variable index inference
     @test varidxs(g[3]) == [:i,:j]

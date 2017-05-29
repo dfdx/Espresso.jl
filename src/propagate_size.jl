@@ -13,6 +13,13 @@ const SIZE_PROP_RULES2 =
     Dict(:(Z[i,j] = X[i,j] .* Y[i]) => :(size__(X)))
 
 
+const SIZE_PROP_BCAST_RULES =
+    Dict(:(Z = _f.(X[i])) => :(()),
+         :(Z = _f.(X[i,j])) => :(()),
+         :(Z[i] = _f.(X[i,j])) => :(size__(X)[1]),
+         :(Z[j] = _f.(X[i,j])) => :(size__(X)[2]),)
+
+
 function subs_size(ex::Expr, sizes::Dict)
     size_exs = findex(:(size__(_)), ex)
     st = Dict{Any,Any}()
@@ -27,7 +34,7 @@ end
 subs_size(x, sizes::Dict) = x
 
 
-function propagate_size!(g::AbstractExGraph, nd::ExNode{:input})  
+function propagate_size!(g::AbstractExGraph, nd::ExNode{:input})
     sizes = @get_or_create(g.ctx, :sizes, Dict())
     haskey(sizes, varname(nd)) && return
     sizes[varname(nd)] = :(size($(varname(nd))))
@@ -68,7 +75,7 @@ function propagated_size(g::AbstractExGraph, nd::ExNode{:(=)})
 end
 
 function propagate_size!(g::AbstractExGraph, nd::ExNode{:(=)})
-    sizes = @get_or_create(g.ctx, :sizes, Dict())    
+    sizes = @get_or_create(g.ctx, :sizes, Dict())
     haskey(sizes, varname(nd)) && return
     sizes[varname(nd)] = propagated_size(g, nd)
 end
@@ -110,9 +117,9 @@ function infer_perm_size(vidxs::Vector, depidxs::Vector, dep_sz)
 end
 
 
-function try_rewrite_size(ex::Expr, sizes::Dict)
-    for (pat, rpat) in SIZE_PROP_RULES2
-        rex = tryrewrite(ex, pat, rpat; phs=SIZE_PROP_PHS)
+function try_rewrite_size(ex::Expr, sizes::Dict; rules=SIZE_PROP_RULES2)
+    for (pat, rpat) in rules
+        rex = tryrewrite(ex, pat, rpat; phs=SIZE_PROP_PHS, allow_ex=false)
         if !isnull(rex)
             sz_ex = subs_size(get(rex), sizes)
             return Nullable{Expr}(sz_ex)
@@ -125,7 +132,7 @@ end
 function propagate_size!(g::AbstractExGraph, nd::ExNode{:call})
     sizes = @get_or_create(g.ctx, :sizes, Dict())
     haskey(sizes, varname(nd)) && return
-    deps = dependencies(nd)    
+    deps = dependencies(nd)
     if !all(dep -> haskey(g, dep), deps)
         error("Can't propagate size of $nd: not all deps present in graph")
     end
@@ -173,18 +180,23 @@ function propagate_size!(g::AbstractExGraph, nd::ExNode{:call})
         i = findmax(dep_dims)[2]
         rhs_sz = sizes[deps[i]]
         sizes[vname] = infer_perm_size(vidxs, depidxs, rhs_sz)
-    end    
+    end
 end
 
 
 function propagate_size!(g::AbstractExGraph, nd::ExNode{:bcast})
     sizes = @get_or_create(g.ctx, :sizes, Dict())
     haskey(sizes, varname(nd)) && return
-    deps = dependencies(nd)
-    dep_dims = [ndims_from_size(g, dep) for dep in deps]
-    i = findmax(dep_dims)[2]
-    size_ex = sizes[deps[i]]
-    sizes[varname(nd)] = size_ex
+    sz_ex_from_rule = try_rewrite_size(to_expr(nd), sizes; rules=SIZE_PROP_BCAST_RULES)
+    if !isnull(sz_ex_from_rule)
+        sizes[varname(nd)] = get(sz_ex_from_rule) |> simplify
+    else
+        deps = dependencies(nd)
+        dep_dims = [ndims_from_size(g, dep) for dep in deps]
+        i = findmax(dep_dims)[2]
+        size_ex = sizes[deps[i]]
+        sizes[varname(nd)] = size_ex
+    end
 end
 
 
