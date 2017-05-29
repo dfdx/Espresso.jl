@@ -12,17 +12,19 @@ function EinGraph(; ctx=Dict(), inputs...)
     @get_or_create(ctx, :mod, current_module())
     g = EinGraph(ExNode[], Dict(), ctx)
     for (var, val) in inputs
-        addnode!(g, :input, var, var; val=val)
+        push!(g, :input, var, var; val=val)
     end
     return g
 end
 
-function EinGraph(ex::Expr; ctx=Dict(), inputs...)
+function EinGraph(ex::Expr; fuse=true, ctx=Dict(), inputs...)
     ctx = to_context(ctx)
     g = EinGraph(;ctx=ctx, inputs...)
     g.ctx[:expr] = ex
     parse!(g, ex)
-    collapse_assignments!(g)
+    if fuse
+        g = fuse_assigned(g)
+    end
     return g
 end
 
@@ -35,33 +37,91 @@ function Base.show(io::IO, g::EinGraph)
 end
 
 
+## utils
+
+# function with_guards_in_context(f::Function, ctx::Dict, new_guards::Vector{Expr})
+#     guards = @get_or_create(ctx, :guards, Expr[])
+#     push!(guards, new_guards...)
+#     f(guards)
+#     for i=1:length(new_guards) pop!(guards) end
+# end
+
+
+function push_guards!(ctx::Dict, new_guards::Vector{Expr})
+    guards = @get_or_create(ctx, :guards, Expr[])
+    push!(guards, new_guards...)
+    last_guard_counts = @get_or_create(ctx, :last_guard_counts, [])
+    push!(last_guard_counts, length(new_guards))
+    return guards
+end
+
+
+function pop_guards!(ctx::Dict)
+    guards = ctx[:guards]
+    last_guard_counts = ctx[:last_guard_counts]
+    for i=1:last_guard_counts[end]
+        pop!(guards)
+    end
+    pop!(last_guard_counts)
+end
+
+
+
+# function apply_guards(nd::ExNode, guards::Vector{Expr})
+#     new_var, var_guards = apply_guards(getvar(nd), guards; anchors=Set(varidxs(nd)))
+#     new_ex, ex_guards = apply_guards(getexpr(nd), guards)
+#     new_guards = unique(vcat(var_guards, ex_guards))
+#     return copy(nd; var=new_var, ex=new_ex, guards=new_guards)
+# end
+
 
 ## parse!
 
 
 function parse!(g::EinGraph, ex::ExH{:(=)})
-    var, rhs = ex.args
-    vname = split_indexed(var)[1]
+    ex = Expr(ex)
+    ex_ = without_guards(ex)
+    var, rhs = ex_.args
+    vname, vidxs = split_indexed(var)
+    guards = push_guards!(g.ctx, find_guards(ex))
     dep = parse!(g, rhs)
-    addnode!(g, :(=), var, dep)
-    return vname
+    depidxs = split_indexed(dep)[2]
+    st, new_guards = reduce_guards(guards; keep=vidxs, used=flatten(vcat(vidxs, depidxs)))
+    push!(g, ExNode{:(=)}(var, subs(dep, st); guards=new_guards))
+    pop_guards!(g.ctx)
+    return var
 end
 
 
 function parse!(g::EinGraph, ex::ExH{:ref})
+    # st, _ = reduce_guards(current_guards(g.ctx))
+    # return subs(Expr(ex), st)
     return Expr(ex)
 end
 
 
 function parse!(g::EinGraph, ex::ExH{:call})
-    op = canonical(g.ctx[:mod], ex.args[1])
-    deps = [parse!(g, arg) for arg in ex.args[2:end]]
-    depnames, depidxs = unzip(map(split_indexed, deps))
-    pex = Expr(:call, op, deps...)
-    vidxs = forall_indices(op, [split_indexed(dep)[2] for dep in deps])
-    var = addnode!(g, :call, make_indexed(genname(), vidxs), pex)
+    ex = Expr(ex)
+    ex_ = without_guards(ex)
+    guards = push_guards!(g.ctx, find_guards(ex))
+    if isa(ex_, Expr) && ex_.head == :call
+        # if without guards it's still a call
+        op = canonical(g.ctx[:mod], ex_.args[1])
+        deps = [parse!(g, arg) for arg in ex_.args[2:end]]
+        depnames, depidxs = unzip(map(split_indexed, deps))
+        pex_ = Expr(:call, op, deps...)
+        vidxs = forall_indices(op, [split_indexed(dep)[2] for dep in deps])
+        st, pex_guards = reduce_guards(guards; keep=vidxs, used=flatten(vcat(vidxs..., depidxs...)))
+        pex = subs(pex_, st)
+        var = make_indexed(genname(), vidxs)
+        push!(g, ExNode{:call}(var, pex; guards=pex_guards))
+    else
+        var = parse!(g, ex_)
+    end
+    pop_guards!(g.ctx)
     return var
 end
+
 
 
 function parse!(g::EinGraph, ex::ExH{:.})
@@ -72,7 +132,7 @@ function parse!(g::EinGraph, ex::ExH{:.})
     # pex = Expr(:call, op, deps...)
     pex = Expr(:., op, Expr(:tuple, deps...))
     vidxs = forall_indices(op, [split_indexed(dep)[2] for dep in deps])
-    var = addnode!(g, :bcast, make_indexed(genname(), vidxs), pex)
+    var = push!(g, :bcast, make_indexed(genname(), vidxs), pex)
     return var
 end
 
@@ -82,7 +142,12 @@ function parse!(g::EinGraph, ex::ExH{Symbol("'")})
 end
 
 
+function parse!(g::EinGraph, ex::ExH{:tuple})
+    deps = [parse!(g, arg) for arg in ex.args]
+    pex = Expr(:tuple, deps...)
+    vname = push!(g, :tuple, genname(), pex)
+end
+
 ## evaluate!
 
 # see exgraph.jl
-

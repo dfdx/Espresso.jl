@@ -2,22 +2,22 @@
 let
     nd = ExNode{:call}(:z, :(x + y))
     
-    @test variable(nd) == :z
+    @test getvar(nd) == :z
     @test varname(nd) == :z
     @test varidxs(nd) == []
-    @test expr(nd) == :(x + y)
-    @test value(nd) == nothing
+    @test getexpr(nd) == :(x + y)
+    @test getvalue(nd) == nothing
 
-    variable!(nd, :(z[i]))
-    @test variable(nd) == :(z[i])
+    setvar!(nd, :(z[i]))
+    @test getvar(nd) == :(z[i])
     @test varname(nd) == :z
     @test varidxs(nd) == [:i]
 
-    expr!(nd, :(x[i] + y[i]))
-    @test expr(nd) == :(x[i] + y[i])
+    setexpr!(nd, :(x[i] + y[i]))
+    @test getexpr(nd) == :(x[i] + y[i])
 
-    value!(nd, [1, 2, 3.])
-    @test value(nd) == [1, 2, 3.]
+    setvalue!(nd, [1, 2, 3.])
+    @test getvalue(nd) == [1, 2, 3.]
 end
 
 

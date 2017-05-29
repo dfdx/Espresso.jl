@@ -1,13 +1,23 @@
 
 function rename!(g::AbstractExGraph, name::Symbol, new_name::Symbol)
-    st = Dict(name => new_name)
+    return rename!(g, Dict(name => new_name))
+end
+
+
+function rename!(g::AbstractExGraph, st::Dict{Symbol,Symbol})
     for nd in g.tape
-        if nd.var == name
-            nd.var = new_name
-        end
-        nd.ex = subs(nd.ex, st)
+        setvar!(nd, subs(getvar(nd), st))
+        setexpr!(nd, subs(getexpr(nd), st))
     end
     return g
+end
+
+function rename(g::AbstractExGraph, st::Dict{Symbol,Symbol})
+    new_g = reset_tape(g)
+    for nd in g.tape
+        push!(new_g, copy(nd; var=subs(getvar(nd), st), ex=subs(getexpr(nd), st)))
+    end
+    return new_g
 end
 
 
@@ -21,7 +31,7 @@ function mergeex(g1::AbstractExGraph, g2::AbstractExGraph)
     need_renaming = Symbol[]
     for nd in g2.tape
         vname = varname(nd)
-        if haskey(g1, vname) && expr(g1[vname]) != expr(nd)
+        if haskey(g1, vname) && getexpr(g1[vname]) != getexpr(nd)
             push!(need_renaming, vname)
         end
     end
@@ -32,11 +42,11 @@ function mergeex(g1::AbstractExGraph, g2::AbstractExGraph)
     end
     # concat graphs
     for nd in g1.tape
-        addnode!(gm, nd)
+        push!(gm, nd)
     end
     for nd in g2.tape
         if !haskey(gm, varname(nd))
-            addnode!(gm, nd)
+            push!(gm, nd)
         end
     end
     return gm

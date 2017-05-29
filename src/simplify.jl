@@ -89,7 +89,6 @@ end
 @simple_rule (1 .* x) x
 @simple_rule (x .^ 1) x
 @simple_rule (a * (b * x)) ((a * b) * x)
-# @simple_rule ((b * x) * a) ((a * b) * x)
 
 @simple_rule (-1 * x) -x
 @simple_rule (x * -1) -x
@@ -107,9 +106,7 @@ end
 @simple_rule (x, y)[[2]] y
 @simple_rule (x, y)[[1,2]] (x, y)
 @simple_rule (x, y)[[2,1]] (y, x)
-# @simple_rule (size(x), size(y))[1] size(x)
-# @simple_rule (size(x), size(y))[[1]] size(x)
-# @simple_rule (size(x), size(y))[2] size(y)
-# @simple_rule (size(x), size(y))[[2]] size(y)
-# @simple_rule (size(x), size(y))[[1,2]] (size(x), size(y))
-# @simple_rule (size(x), size(y))[[2,1]] (size(y), size(x))
+@simple_rule (x, y)[[]] ()
+@simple_rule (size(x)...,) size(x)
+
+# @simple_rule (x,) x

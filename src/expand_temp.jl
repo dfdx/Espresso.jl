@@ -4,20 +4,20 @@
 ## This is an outdated version of expand_deps, remains here
 ## for compatibility with XDiff.jl only
 
-expand_temp(g::AbstractExGraph, nd::ExNode{:input}) = variable(nd)
-expand_temp(g::AbstractExGraph, nd::ExNode{:constant}) = value(nd)
-expand_temp(g::AbstractExGraph, nd::ExNode{:(=)}) = expand_temp(g, expr(nd))
+expand_temp(g::AbstractExGraph, nd::ExNode{:input}) = getvar(nd)
+expand_temp(g::AbstractExGraph, nd::ExNode{:constant}) = getvalue(nd)
+expand_temp(g::AbstractExGraph, nd::ExNode{:(=)}) = expand_temp(g, getexpr(nd))
 
 function expand_temp(g::AbstractExGraph, nd::ExNode{:call})
     deps = dependencies(nd)
     expanded = Dict([(x, expand_temp(g, g[x])) for x in deps])
-    return subs(expr(nd), expanded)
+    return subs(getexpr(nd), expanded)
 end
 
 function expand_temp(g::AbstractExGraph, nd::ExNode{:bcast})
     deps = dependencies(nd)
     expanded = Dict([(x, expand_temp(g, g[x])) for x in deps])
-    return subs(expr(nd), expanded)
+    return subs(getexpr(nd), expanded)
 end
 
 function expand_temp(g::AbstractExGraph, x::Symbol)

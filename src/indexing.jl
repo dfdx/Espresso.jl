@@ -225,19 +225,19 @@ sum_indices(x) = forall_sum_indices(x)[2]
 
 isequality(ex) = isa(ex, Expr) && ex.head == :call && ex.args[1] == :(==)
 
-function get_guards!(guards::Vector{Expr}, ex::Expr)
+function find_guards!(guards::Vector{Expr}, ex::Expr)
     if isequality(ex)
         push!(guards, ex)
     else
         for arg in ex.args
-            get_guards!(guards, arg)
+            find_guards!(guards, arg)
         end
     end
     return guards
 end
 
-get_guards!(guards::Vector{Expr}, x) = guards
-get_guards(ex) = get_guards!(Expr[], ex)
+find_guards!(guards::Vector{Expr}, x) = guards
+find_guards(ex) = find_guards!(Expr[], ex)
 
 
 function without_guards(ex)
@@ -245,21 +245,21 @@ function without_guards(ex)
 end
 
 
-"""
-Translates guarded expression, e.g. :(Y[i,j] = X[i] * (i == j)),
-into the unguarded one, e.g. :(Y[i, i] = X[i])
-"""
-function unguarded(ex::Expr)
-    st = Dict([(grd.args[3], grd.args[2]) for grd in get_guards(ex)])
-    new_ex = without_guards(ex)
-    idxs = @view new_ex.args[1].args[2:end]
-    for i=1:length(idxs)
-        if haskey(st, idxs[i])
-            idxs[i] = st[idxs[i]]
-        end
-    end
-    return new_ex
-end
+# """
+# Translates guarded expression, e.g. :(Y[i,j] = X[i] * (i == j)),
+# into the unguarded one, e.g. :(Y[i, i] = X[i])
+# """
+# function unguarded(ex::Expr)
+#     st = Dict([(grd.args[3], grd.args[2]) for grd in get_guards(ex)])
+#     new_ex = without_guards(ex)
+#     idxs = @view new_ex.args[1].args[2:end]
+#     for i=1:length(idxs)
+#         if haskey(st, idxs[i])
+#             idxs[i] = st[idxs[i]]
+#         end
+#     end
+#     return new_ex
+# end
 
 
 ## index permutations

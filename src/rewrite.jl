@@ -181,8 +181,12 @@ function without(ex::Expr, pat; phs=DEFAULT_PHS[1])
         # pop argument of now-single-valued operation
         # TODO: make more general, e.g. handle (x - y) with x removed
         return new_args[2]
+    elseif ex.head == :call && length(new_args) == 1 && ex.args[1] == :*
+        return 1.0
+    elseif ex.head == :call && length(new_args) == 1 && ex.args[1] == :+
+        return 0.0
     else
-        return Expr(ex.head, new_args...)
+        return Expr(ex.head, new_args...) |> simplify
     end
 end
 

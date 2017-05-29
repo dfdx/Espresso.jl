@@ -58,6 +58,15 @@ function collect_deps(g::AbstractExGraph, x::Symbol, depth::Int=typemax(Int))
 end
 
 
+function collect_deps(g::AbstractExGraph, xs::Vector{Symbol}, depth::Int=typemax(Int))
+    result = Set{Symbol}()
+    for x in xs
+        collect_deps!(g, x, depth, result)
+    end
+    return result
+end
+
+
 collect_deps(g::AbstractExGraph, x, depth::Int=typemax(Int)) = Set{Symbol}()
 
 

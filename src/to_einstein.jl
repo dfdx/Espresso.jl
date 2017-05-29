@@ -42,7 +42,7 @@ function to_einstein(g::ExGraph, nd::ExNode{:call})
     # ex = expand_const_1(g, nd)
     ex = to_expr(nd)
     op = ex.args[2].args[1]
-    dep_dims = [ndims(value(g[dep])) for dep in dependencies(nd) if haskey(g, dep)]
+    dep_dims = [ndims(getvalue(g[dep])) for dep in dependencies(nd) if haskey(g, dep)]
     if haskey(TO_EINSTEIN_RULES, (op, dep_dims))
         rules = TO_EINSTEIN_RULES[(op, dep_dims)]
         for (pat, subs_ex) in rules

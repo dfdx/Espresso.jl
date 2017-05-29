@@ -36,49 +36,66 @@ const OPT_RULES = OrderedDict(
 )
 
 
-function remove_unused(g::AbstractExGraph, output_var::Symbol)
-    deps = collect_deps(g, g[output_var])
+function remove_unused(g::AbstractExGraph, outvars::Vector{Symbol})
+    deps = collect_deps(g, outvars)
+    push!(deps, outvars...)
     gr = reset_tape(g)
     for nd in g.tape
         if in(varname(nd), deps)
-            addnode!(gr, nd)
+            push!(gr, nd)
         end
     end
     return gr
 end
 
 
-# """
-# Removes unused variables from multiline expressions, e.g. in:
+remove_unused(g::AbstractExGraph, outvar::Symbol) = remove_unused(g, [outvar])
 
-#     x = u * v
-#     y = x + 1
-#     z = 2x
 
-# `y` isn't used to compute output variable `z`, so it's removed:
+"""
+Removes unused variables from multiline expressions, e.g. in:
 
-#     x = u * v
-#     z = 2x
+    x = u * v
+    y = x + 1
+    z = 2x
 
-# """
-# function remove_unused(ex::Expr, output_var::Symbol)
-#     ex.head == :block || return ex  # nothing to remove
-#     g = ExGraph(ex)
-#     deps = collect_deps(g, g[output_var])
-#     push!(deps, output_var)
-#     res = quote end
-#     for subex in ex.args
-#         if subex.head == :(=)
-#             vname = split_indexed(subex.args[1])[1]
-#             if in(vname, deps)
-#                 push!(res.args, subex)
-#             end
-#         else
-#             push!(res.args, subex)
-#         end
-#     end
-#     return res
-# end
+`y` isn't used to compute output variable `z`, so it's removed:
+
+    x = u * v
+    z = 2x
+
+"""
+function remove_unused(ex::Expr; output_vars=nothing)
+    ex.head == :block || return ex  # nothing to remove
+    g = ExGraph(ex; fuse=false)
+    output_vars = output_vars != nothing ? output_vars : [varname(g[end])]
+    deps = collect_deps(g, output_vars)
+    for vname in output_vars
+        push!(deps, vname)
+    end
+    res = quote end
+    for subex in ex.args
+        if subex.head == :(=)
+            vname = split_indexed(subex.args[1])[1]
+            if in(vname, deps)
+                push!(res.args, subex)
+            end
+        else
+            push!(res.args, subex)
+        end
+    end
+    return res
+end
+
+
+# TODO: optimize case
+# W[i,j,k] = ...
+# Z[i,j] = W[i,j,k]
+# how?
+# 1. expand_deps(..., 1)
+
+# altavista: update fuse_equal
+
 
 
 function tryoptimize(ex::Expr)
@@ -112,14 +129,14 @@ function remove_pseudoone(g::AbstractExGraph)
     g = deepcopy(g)
     I_pat = :(I[_...])
     for (i, nd) in enumerate(g.tape)
-        ex = expr(nd)
+        ex = getexpr(nd)
         new_ex = without(ex, I_pat)
         if isa(nd, ExNode{:call}) && isa(new_ex, Expr) && new_ex.head != :call
             # after removing I the node changed it's type from :call to :(=)
             new_nd = copy(nd; category=:(=), ex=new_ex)
             g[i] = new_nd
         else
-            expr!(nd, new_ex)
+            setexpr!(nd, new_ex)
         end
     end
     return g
@@ -131,7 +148,7 @@ function optimize(g::EinGraph)
     new_g = reset_tape(g)
     for nd in g.tape
         if isa(nd, ExNode{:input})
-            addnode!(new_g, nd)
+            push!(new_g, nd)
         else
             # try to optimize current node + 1st level dependencies
             ex_1 = expand_deps(g, nd, 1)
@@ -147,10 +164,10 @@ function optimize(g::EinGraph)
                 continue
             end
             # if nothing matched, add node as is
-            addnode!(new_g, copy(nd))
+            push!(new_g, copy(nd))
         end
     end
     new_g = remove_unused(new_g,  varname(new_g[end]))
-    collapse_assignments!(new_g)
+    new_g = fuse_assigned(new_g)
     return new_g
 end

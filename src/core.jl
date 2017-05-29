@@ -8,8 +8,8 @@ using DataStructures
 using Einsum
 using Sugar
 
-include("utils.jl")
 include("types.jl")
+include("utils.jl")
 include("rewrite.jl")
 include("simplify.jl")
 include("funexpr.jl")
@@ -17,6 +17,7 @@ include("indexing.jl")
 include("exnode.jl")
 include("exgraph.jl")
 include("eingraph.jl")
+include("graph_utils.jl")
 include("expand_temp.jl")
 include("expand_deps.jl")
 include("optimize.jl")
