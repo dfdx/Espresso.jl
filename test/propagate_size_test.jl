@@ -10,6 +10,25 @@ let
     propagate_size!(g)
 
     sizes = g.ctx[:sizes]    
-    @test sizes[:x] == :((size(u)))
+    @test sizes[:x] == :(size(u))
     @test sizes[:z] == :(())
+end
+
+
+
+let
+    inputs = [:W => rand(3,4),
+              :T => rand(3,4,5)]
+    
+    ex = quote
+        v[i,k] = T[i,j,k]
+        y[i] = W[i,j]
+        z = W[i,j]
+    end
+    g = EinGraph(ex; inputs...)
+    propagate_size!(g)
+    
+    sizes = g.ctx[:sizes]    
+    @test sizes[:z] == :(())
+   
 end

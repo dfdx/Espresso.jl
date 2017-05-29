@@ -360,6 +360,20 @@ function replacable_vars(chain::Vector{Symbol})
 end
 
 
+function getivar(nd::ExNode{:input})
+    idxs = [:i, :j, :j, :m, :n, :p, :q][1:ndims(getvalue(nd))]
+    return make_indexed(getvar(nd), idxs)
+end
+getivar(nd::ExNode) = getvar(nd)
+
+
+function getiexpr(nd::ExNode{:input})
+    idxs = [:i, :j, :j, :m, :n, :p, :q][1:ndims(getvalue(nd))]
+    return make_indexed(getexpr(nd), idxs)
+end
+getiexpr(nd::ExNode) = getexpr(nd)
+
+
 """
 Collapse unnecessary assignment nodes, rewriting all affected nodes. Example:
 
@@ -372,20 +386,18 @@ will be rewritten to
 """
 function fuse_assigned(g::AbstractExGraph; outvars=nothing)
     new_g = reset_tape(g)
-    # st = Dict{Symbol,Symbol}()
     for nd in g.tape
         if isa(nd, ExNode{:(=)})
-            chain = assign_chain(g, nd)
-            # st = merge(st, replacable_vars(chain))
+            chain = assign_chain(g, nd)           
             root_assign_nd = g[chain[end]]
-            new_nd = copy(root_assign_nd; var=getvar(nd))
+            new_ex = isa(g, ExGraph) ? getexpr(root_assign_nd) : getiexpr(root_assign_nd)
+            new_nd = copy(root_assign_nd; var=getvar(nd), ex=new_ex)
             push!(new_g, new_nd)
         else
             push!(new_g, copy(nd))
         end
     end    
     new_g = remove_unused(new_g, outvars == nothing ? [varname(new_g[end])] : outvars)
-    # new_g = rename(new_g, st)  
     return new_g
 
     # we may remove unused variables that are still referenced from remade nodes

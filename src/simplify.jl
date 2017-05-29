@@ -107,6 +107,6 @@ end
 @simple_rule (x, y)[[1,2]] (x, y)
 @simple_rule (x, y)[[2,1]] (y, x)
 @simple_rule (x, y)[[]] ()
-@simple_rule size(x)... size(x)
+@simple_rule (size(x)...,) size(x)
 
 # @simple_rule (x,) x

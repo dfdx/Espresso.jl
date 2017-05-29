@@ -3,21 +3,45 @@
 
 const SIZE_PROP_PHS = [:X, :Y, :Z, :i, :j, :k]
 
+# const SIZE_PROP_RULES =
+#     Dict((:*, [0, 0]) => :(()),
+#          (:*, [2, 1]) => :((_1[1])),
+#          (:*, [2, 2]) => :((_1[1], _2[2])),
+#          (:.*, [1, 1]) => :((_1..., _2...)))
+
+# const SIZE_PROP_RULES2 =
+#     Dict(:(Z[i,j] = X[i,j] .* Y[i]) => :(size__(X)))
+
+
+# const SIZE_PROP_BCAST_RULES =
+#     Dict(:(Z = _f.(X[i])) => :(()),
+#          :(Z = _f.(X[i,j])) => :(()),
+#          :(Z[i] = _f.(X[i,j])) => :(size__(X)[1]),
+#          :(Z[j] = _f.(X[i,j])) => :(size__(X)[2]),)
+
+
 const SIZE_PROP_RULES =
-    Dict((:*, [0, 0]) => :(()),
-         (:*, [2, 1]) => :((_1[1])),
-         (:*, [2, 2]) => :((_1[1], _2[2])),
-         (:.*, [1, 1]) => :((_1..., _2...)))
-
-const SIZE_PROP_RULES2 =
-    Dict(:(Z[i,j] = X[i,j] .* Y[i]) => :(size__(X)))
-
-
-const SIZE_PROP_BCAST_RULES =
-    Dict(:(Z = _f.(X[i])) => :(()),
-         :(Z = _f.(X[i,j])) => :(()),
-         :(Z[i] = _f.(X[i,j])) => :(size__(X)[1]),
-         :(Z[j] = _f.(X[i,j])) => :(size__(X)[2]),)
+    OrderedDict(# call rules
+                :(Z[i,j] = X[i,j] .* Y[i]) => :(size__(X)),
+                # old call rules, rewritten
+                :(Z = X * Y) => :(()),
+                :(Z[i] = X[i,j] * Y[j]) => :((size__(X)[1],)),
+                :(Z[j] = X[i,j] * Y[i]) => :((size__(X)[2],)),
+                :(Z[i,j] = X[i,k] * Y[k,j]) => :((size__(X)[1], size__(Y)[2])),
+                :(Z[i,j] = X[i] .* Y[j]) => :((size__(X)..., size__(Y)...)),                
+                # broadcast/sum rules
+                :(Z = _f.(X[i])) => :(()),
+                :(Z = _f.(X[i,j])) => :(()),
+                :(Z[i] = _f.(X[i,j])) => :((size__(X)[1],)),
+                :(Z[j] = _f.(X[i,j])) => :((size__(X)[2],)),
+                # input/constant rules
+                :(Z = Z) => :(size(Z)),            # true input
+                :(Z[i...] = Z[i...]) => :(size(Z)),  # true input
+                :(Z = X) => :(size__(X)),
+                :(Z[i...] = X[i...]) => :(size__(X)),
+                :(Z = X[i...]) => :(()),
+                :(Z[i] = X[i,j]) => :(size(X,1)),
+                :(Z[j] = X[i,j]) => :(size(X,2)),)
 
 
 function subs_size(ex::Expr, sizes::Dict)
@@ -25,8 +49,12 @@ function subs_size(ex::Expr, sizes::Dict)
     st = Dict{Any,Any}()
     for size_ex in size_exs
         var, idxs = split_indexed(size_ex.args[2])
-        subsex = @get(sizes, var, error("Can't find size for $var in $ex"))
-        st[size_ex] = subsex
+        if isa(var, Number)
+            st[size_ex] = :(())
+        else            
+            subsex = @get(sizes, var, error("Can't find size for $var in $ex"))
+            st[size_ex] = subsex 
+        end
     end
     return subs(ex, st)
 end
@@ -34,15 +62,27 @@ end
 subs_size(x, sizes::Dict) = x
 
 
-function propagate_size!(g::AbstractExGraph, nd::ExNode{:input})
+function try_rewrite_size(ex::Expr, sizes::Dict; rules=SIZE_PROP_RULES)
+    for (pat, rpat) in rules
+        rex = tryrewrite(ex, pat, rpat; phs=SIZE_PROP_PHS, allow_ex=false)
+        if !isnull(rex)
+            sz_ex = subs_size(get(rex), sizes)
+            return Nullable{Expr}(simplify(sz_ex))
+        end
+    end
+    return Nullable{Expr}()
+end
+
+
+function _propagate_size!(g::AbstractExGraph, nd::ExNode{:input})
     sizes = @get_or_create(g.ctx, :sizes, Dict())
-    haskey(sizes, varname(nd)) && return
+    # haskey(sizes, varname(nd)) && return
     sizes[varname(nd)] = :(size($(varname(nd))))
 end
 
-function propagate_size!(g::AbstractExGraph, nd::ExNode{:constant})
+function _propagate_size!(g::AbstractExGraph, nd::ExNode{:constant})
     sizes = @get_or_create(g.ctx, :sizes, Dict())
-    haskey(sizes, varname(nd)) && return
+    # haskey(sizes, varname(nd)) && return
     sz = size(getvalue(nd))
     sizes[varname(nd)] = Expr(:tuple, sz...)
 end
@@ -74,9 +114,9 @@ function propagated_size(g::AbstractExGraph, nd::ExNode{:(=)})
     end
 end
 
-function propagate_size!(g::AbstractExGraph, nd::ExNode{:(=)})
+function _propagate_size!(g::AbstractExGraph, nd::ExNode{:(=)})
     sizes = @get_or_create(g.ctx, :sizes, Dict())
-    haskey(sizes, varname(nd)) && return
+    # haskey(sizes, varname(nd)) && return
     sizes[varname(nd)] = propagated_size(g, nd)
 end
 
@@ -117,43 +157,32 @@ function infer_perm_size(vidxs::Vector, depidxs::Vector, dep_sz)
 end
 
 
-function try_rewrite_size(ex::Expr, sizes::Dict; rules=SIZE_PROP_RULES2)
-    for (pat, rpat) in rules
-        rex = tryrewrite(ex, pat, rpat; phs=SIZE_PROP_PHS, allow_ex=false)
-        if !isnull(rex)
-            sz_ex = subs_size(get(rex), sizes)
-            return Nullable{Expr}(sz_ex)
-        end
-    end
-    return Nullable{Expr}()
-end
 
-
-function propagate_size!(g::AbstractExGraph, nd::ExNode{:call})
+function _propagate_size!(g::AbstractExGraph, nd::ExNode{:call})
     sizes = @get_or_create(g.ctx, :sizes, Dict())
-    haskey(sizes, varname(nd)) && return
+    # haskey(sizes, varname(nd)) && return
     deps = dependencies(nd)
     if !all(dep -> haskey(g, dep), deps)
         error("Can't propagate size of $nd: not all deps present in graph")
     end
-    dep_dims = [ndims_from_size(g, dep) for dep in deps]
-    sz_key = (getexpr(nd).args[1], dep_dims)
-    vidxs = varidxs(nd)
+    # dep_dims = [ndims_from_size(g, dep) for dep in deps]
+    # sz_key = (getexpr(nd).args[1], dep_dims)    
     vname = varname(nd)
-    depidxs = forall_indices(getexpr(nd))
-    sz_ex_from_rule = try_rewrite_size(to_expr(nd), sizes)
+    vidxs = varidxs(nd)
+    # depidxs = forall_indices(getexpr(nd))
+    # sz_ex_from_rule = try_rewrite_size(to_expr(nd), sizes)
     if isempty(vidxs)
         # special case for scalars (produce nicer expression then the following)
         sizes[vname] = Expr(:tuple)
-    elseif !isnull(sz_ex_from_rule)
-        sizes[vname] = get(sz_ex_from_rule)
-    elseif haskey(SIZE_PROP_RULES, sz_key)
-        rpat = SIZE_PROP_RULES[sz_key]
-        dep_sizes = [sizes[dep] for dep in deps]
-        size_names = [Symbol("_$i") for i=1:length(deps)]
-        st = Dict(zip(size_names, dep_sizes))
-        size_ex = simplify(subs(rpat, st))
-        sizes[varname(nd)] = size_ex
+    # elseif !isnull(sz_ex_from_rule)
+    #    sizes[vname] = get(sz_ex_from_rule)
+    # elseif haskey(SIZE_PROP_RULES, sz_key)
+    #     rpat = SIZE_PROP_RULES[sz_key]
+    #     dep_sizes = [sizes[dep] for dep in deps]
+    #     size_names = [Symbol("_$i") for i=1:length(deps)]
+    #     st = Dict(zip(size_names, dep_sizes))
+    #     size_ex = simplify(subs(rpat, st))
+    #     sizes[varname(nd)] = size_ex
     elseif getexpr(nd).args[1] == :.*
         warn("Not tested!")
         each_dep = get_var_names(getexpr(nd))
@@ -173,7 +202,7 @@ function propagate_size!(g::AbstractExGraph, nd::ExNode{:call})
         end
         sizes[vname] = simplify(Expr(:tuple, sz_parts...))
     elseif all(idxs -> idxs == vidxs, get_indices(getexpr(nd)))
-        # all indices equal - assuming simple broadcasting
+        # all indices equal - assuming elementwise
         sizes[vname] = sizes[deps[1]]
     else
         # assuming broadcasting
@@ -184,7 +213,7 @@ function propagate_size!(g::AbstractExGraph, nd::ExNode{:call})
 end
 
 
-function propagate_size!(g::AbstractExGraph, nd::ExNode{:bcast})
+function _propagate_size!(g::AbstractExGraph, nd::ExNode{:bcast})
     sizes = @get_or_create(g.ctx, :sizes, Dict())
     haskey(sizes, varname(nd)) && return
     sz_ex_from_rule = try_rewrite_size(to_expr(nd), sizes; rules=SIZE_PROP_BCAST_RULES)
@@ -196,6 +225,18 @@ function propagate_size!(g::AbstractExGraph, nd::ExNode{:bcast})
         i = findmax(dep_dims)[2]
         size_ex = sizes[deps[i]]
         sizes[varname(nd)] = size_ex
+    end
+end
+
+
+function propagate_size!{C}(g::AbstractExGraph, nd::ExNode{C})
+    sizes = @get_or_create(g.ctx, :sizes, Dict())
+    haskey(sizes, varname(nd)) && return
+    sz_ex_from_rule = try_rewrite_size(to_expr(nd), sizes)
+    if !isnull(sz_ex_from_rule)
+        sizes[varname(nd)] = get(sz_ex_from_rule)
+    else
+        _propagate_size!(g, nd)
     end
 end
 
