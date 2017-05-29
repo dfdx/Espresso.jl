@@ -160,17 +160,12 @@ end
 
 function _propagate_size!(g::AbstractExGraph, nd::ExNode{:call})
     sizes = @get_or_create(g.ctx, :sizes, Dict())
-    # haskey(sizes, varname(nd)) && return
     deps = dependencies(nd)
     if !all(dep -> haskey(g, dep), deps)
         error("Can't propagate size of $nd: not all deps present in graph")
     end
-    # dep_dims = [ndims_from_size(g, dep) for dep in deps]
-    # sz_key = (getexpr(nd).args[1], dep_dims)    
     vname = varname(nd)
-    vidxs = varidxs(nd)
-    # depidxs = forall_indices(getexpr(nd))
-    # sz_ex_from_rule = try_rewrite_size(to_expr(nd), sizes)
+    vidxs = varidxs(nd)   
     if isempty(vidxs)
         # special case for scalars (produce nicer expression then the following)
         sizes[vname] = Expr(:tuple)
@@ -206,6 +201,8 @@ function _propagate_size!(g::AbstractExGraph, nd::ExNode{:call})
         sizes[vname] = sizes[deps[1]]
     else
         # assuming broadcasting
+        depidxs = forall_indices(getexpr(nd))
+        dep_dims = [ndims_from_size(g, dep) for dep in deps]
         i = findmax(dep_dims)[2]
         rhs_sz = sizes[deps[i]]
         sizes[vname] = infer_perm_size(vidxs, depidxs, rhs_sz)

@@ -390,7 +390,8 @@ function fuse_assigned(g::AbstractExGraph; outvars=nothing)
         if isa(nd, ExNode{:(=)})
             chain = assign_chain(g, nd)           
             root_assign_nd = g[chain[end]]
-            new_ex = isa(g, ExGraph) ? getexpr(root_assign_nd) : getiexpr(root_assign_nd)
+            new_ex_ = isa(g, ExGraph) ? getexpr(root_assign_nd) : getiexpr(root_assign_nd)
+            new_ex = subs(new_ex_, Dict(zip(varidxs(root_assign_nd), varidxs(nd))))
             new_nd = copy(root_assign_nd; var=getvar(nd), ex=new_ex)
             push!(new_g, new_nd)
         else
