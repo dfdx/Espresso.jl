@@ -374,6 +374,26 @@ end
 getiexpr(nd::ExNode) = getexpr(nd)
 
 
+function assign_chain_index_replacements(g::AbstractExGraph, chain::Vector{Symbol})
+    nd = g[chain[1]]
+    st = Dict(zip(varidxs(nd), varidxs(nd)))
+    for i=2:length(chain)
+        prev_idxs = get_indices(getexpr(g[chain[i-1]]))[1]
+        cur_idxs = varidxs(g[chain[i]])
+        pair_st = Dict(zip(prev_idxs, cur_idxs))
+        new_st = Dict()
+        for (k, v) in st
+            if haskey(pair_st, v)
+                # propagate replacements
+                new_st[k] = pair_st[v]
+            end
+        end
+        st = new_st
+    end
+    return Dict(zip(values(st), keys(st)))
+end
+
+
 """
 Collapse unnecessary assignment nodes, rewriting all affected nodes. Example:
 
@@ -388,19 +408,16 @@ function fuse_assigned(g::AbstractExGraph; outvars=nothing)
     new_g = reset_tape(g)
     for nd in g.tape
         if isa(nd, ExNode{:(=)})
-            chain = assign_chain(g, nd)           
+            chain = assign_chain(g, nd)
             root_assign_nd = g[chain[end]]
             new_ex_ = isa(g, ExGraph) ? getexpr(root_assign_nd) : getiexpr(root_assign_nd)
-            new_ex = subs(new_ex_, Dict(zip(varidxs(root_assign_nd), varidxs(nd))))
+            new_ex = subs(new_ex_, assign_chain_index_replacements(g, chain))
             new_nd = copy(root_assign_nd; var=getvar(nd), ex=new_ex)
             push!(new_g, new_nd)
         else
             push!(new_g, copy(nd))
         end
-    end    
+    end
     new_g = remove_unused(new_g, outvars == nothing ? [varname(new_g[end])] : outvars)
     return new_g
-
-    # we may remove unused variables that are still referenced from remade nodes
-    # but if we rename first, we will get several idential nodes 
 end
