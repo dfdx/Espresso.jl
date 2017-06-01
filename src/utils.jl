@@ -420,7 +420,7 @@ end
 function apply_guards(ex::ExH{:(=)}, guards::Vector{Expr}; keep=[])
     ex = Expr(ex)
     lhs, rhs = ex.args
-    used = flatten(get_indices(ex))
+    used = flatten(get_indices(ex; rec=true))
     keep = vcat(keep, flatten(get_indices(lhs)))
     st, new_guards = reduce_guards(guards; keep=keep, used=used)
     new_lhs = subs(lhs, st)
@@ -431,7 +431,7 @@ end
 
 function apply_guards(ex::ExH, guards::Vector{Expr}; keep=[])
     ex = Expr(ex)
-    used = flatten(get_indices(ex))
+    used = flatten(get_indices(ex; rec=true))
     st, new_guards = reduce_guards(guards; keep=keep, used=used)
     new_ex = with_guards(subs(ex, st), new_guards)
     return new_ex

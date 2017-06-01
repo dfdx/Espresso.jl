@@ -169,17 +169,7 @@ function _propagate_size!(g::AbstractExGraph, nd::ExNode{:call})
     if isempty(vidxs)
         # special case for scalars (produce nicer expression then the following)
         sizes[vname] = Expr(:tuple)
-    # elseif !isnull(sz_ex_from_rule)
-    #    sizes[vname] = get(sz_ex_from_rule)
-    # elseif haskey(SIZE_PROP_RULES, sz_key)
-    #     rpat = SIZE_PROP_RULES[sz_key]
-    #     dep_sizes = [sizes[dep] for dep in deps]
-    #     size_names = [Symbol("_$i") for i=1:length(deps)]
-    #     st = Dict(zip(size_names, dep_sizes))
-    #     size_ex = simplify(subs(rpat, st))
-    #     sizes[varname(nd)] = size_ex
-    elseif getexpr(nd).args[1] == :.*
-        warn("Not tested!")
+    elseif getexpr(nd).args[1] == :.*        
         each_dep = get_var_names(getexpr(nd))
         each_dep_idxs = get_indices(getexpr(nd))
         sz_parts = []
