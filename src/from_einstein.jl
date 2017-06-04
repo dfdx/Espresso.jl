@@ -51,6 +51,8 @@ const FROM_EINSTEIN_CALL_RULES =
                 :(Z = _f(X, Y[i])) => :(Z = sum(_f.(X, Y))),
                 :(Z = _f(X[i], Y[i])) => :(Z = sum(_f.(X, Y))),
                 :(Z = _f(X[i,j], Y[i,j])) => :(Z = sum.(_f(X, Y))),
+                # constants
+                :(Z[i...] = _f(X, Y)) => :(Z = ones(size__(Z)) .* _f(X, Y)),
                 )
 
 
@@ -125,7 +127,7 @@ function from_einstein(g::EinGraph)
     end
     # res = remove_unused(res) # can't remove unused because last expression
                                # may not be output var
-    res = sanitize(res)
+    res = subs_bcast_with_dot(sanitize(res))
     return res
 end
 
