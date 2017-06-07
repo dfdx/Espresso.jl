@@ -308,7 +308,7 @@ function assign_chain!(g::AbstractExGraph, nd::ExNode{:(=)},
     if getguards(nd) == guards
         push!(chain, varname(nd))
         dep = dependencies(nd)[1]
-        if haskey(g, dep)
+        if haskey(g, dep) && !isa(g[dep], ExNode{:input})
             dep_nd = g[dep]
             assign_chain!(g, dep_nd, guards, chain)
         end
