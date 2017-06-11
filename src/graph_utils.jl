@@ -57,3 +57,15 @@ function topsort(g::AbstractExGraph)
     return sg
 end
 
+
+"""Expand all constant vars in a given expression"""
+function expand_const(g::AbstractExGraph, ex)
+    st = Dict{Symbol, Any}()
+    vnames = get_var_names(ex)
+    for vname in vnames
+        if haskey(g, vname) && isa(g[vname], ExNode{:constant})
+            st[vname] = g[vname].val
+        end
+    end
+    return subs(ex, st)
+end

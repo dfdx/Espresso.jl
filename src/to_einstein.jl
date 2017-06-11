@@ -16,7 +16,8 @@ const TO_EINSTEIN_RULES =
                 (:*, [1, 2]) => [:(Z = X * Y) => :(Z[j] = X[k] * Y[k,j])],
                 (:*, [2, 2]) => [:(Z = X * Y) => :(Z[i,j] = X[i,k] * Y[k,j])],
                 (:transpose, [1]) => [:(Z = transpose(X)) => :(Z[i] = X[i])],
-                (:transpose, [2]) => [:(Z = transpose(X)) => :(Z[j,i] = X[i,j])])
+                (:transpose, [2]) => [:(Z = transpose(X)) => :(Z[j,i] = X[i,j])],
+                (:conv2, [2, 2]) => [:(Z = conv2(X, W)) => :(Z[i,j] = X[i+m-1, j+n-1] * W[m,n])])
 
 
 function to_einstein(ex::Expr; ctx=Dict(), inputs...)

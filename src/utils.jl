@@ -208,7 +208,7 @@ function canonical(mod::Module, qname)
     name = func_name(f)
     if qname in [:.*, :./, :.+, :.-, :.^]
         return qname  # for Julia 0.6 only
-    elseif mod == Base || mod == Base.Math || mod == Base.LinAlg
+    elseif mod == Base || mod == Base.Math || mod == Base.LinAlg || mod == Base.DSP
         return Symbol(name)
     else
         # there should be a smarter way to do it...

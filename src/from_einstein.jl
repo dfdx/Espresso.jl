@@ -53,6 +53,17 @@ const FROM_EINSTEIN_CALL_RULES =
                 :(Z = _f(X[i,j], Y[i,j])) => :(Z = sum.(_f(X, Y))),
                 # constants
                 :(Z[i...] = _f(X, Y)) => :(Z = ones(size__(Z)) .* _f(X, Y)),
+                # convolution
+                # TODO: test conv rules
+                # direct conv
+                :(Z[i,j] = X[i+m-1, j+n-1] * W[m,n]) => :(Z = conv2(X, W)),
+                :(Z = X[i+m-1, j+n-1] * W[m,n]) => :(Z = sum(conv2(X, W))),
+                # reverse conv
+                :(Z[i,j] = X[p-i+1, q-j+1] * Y[p, q]) => :(Z = conv2(X, flip(X))),
+                :(Z = X[p-i+1, q-j+1] * Y[p, q]) => :(Z = sum(conv2(X, flip(X)))),
+                # conv over ones(...)
+                :(Z[m,n] = X[i+m-1, j+n-1]) => :(Z = conv2(X, ones(size__(Z)))),
+                :(Z[p,q] = X[p-i+1, q-j+1]) => :(Z = conv2(ones(size__(Z)), flip(X))),
                 )
 
 
@@ -146,7 +157,7 @@ end
 
 
 function from_einstein(g::EinGraph, nd::ExNode{:call})
-    ex = to_expr(nd)
+    ex = expand_const(g, to_expr(nd)) |> simplify
     for (pat, rpat) in FROM_EINSTEIN_CALL_RULES
         # consider tryrewrite
         rex = tryrewrite(ex, pat, rpat; phs=FROM_EIN_PHS, allow_ex=false)

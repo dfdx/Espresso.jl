@@ -155,9 +155,8 @@ end
 
 function repeated_non_repeated(depidxs::Vector)
     counts = countdict(flatten(depidxs))
-    repeated = collect(Symbol, keys(filter((idx, c) -> c > 1, counts)))
-    non_repeated = collect(Symbol,
-                           keys(filter((idx, c) -> c == 1, counts)))
+    repeated = collect(keys(filter((idx, c) -> c > 1, counts)))
+    non_repeated = collect(keys(filter((idx, c) -> c == 1, counts)))
     return repeated, non_repeated
 end
 

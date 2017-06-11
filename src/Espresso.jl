@@ -66,6 +66,7 @@ export
     collect_deps,
     expand_deps,
     expand_temp,
+    expand_const,
     remove_unused,
     # expr utils
     mergeex,

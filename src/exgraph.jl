@@ -227,6 +227,12 @@ evaluate!(g::AbstractExGraph, nd::ExNode{:constant}) = getvalue(nd)
 evaluate!(g::AbstractExGraph, nd::ExNode{:input}) = getvalue(nd)
 
 
+function isconv(nd::ExNode)
+    idxs = nd |> getexpr |> get_indices |> flatten
+    return any(i -> isa(i, Expr), idxs)
+end
+
+
 function mk_eval_expr(g::AbstractExGraph, nd::ExNode)
     dep_nodes = [g[dep] for dep in dependencies(nd) if haskey(g, dep)]
     deps_vals = [(varname(nd), getvalue(nd)) for nd in dep_nodes]
@@ -235,7 +241,9 @@ function mk_eval_expr(g::AbstractExGraph, nd::ExNode)
     for (dep, val) in deps_vals
         push!(block.args, :(local $dep = $val))
     end
-    push!(block.args, isindexed(nd) ? to_einsum_expr(nd) : to_expr(nd))
+    # TODO: if indices contain expressions (e.g. x[i+m-1]), transform from einstein    
+    push!(block.args, !isindexed(nd) ? to_expr(nd) :
+          (isconv(nd) ? from_einstein(g, nd) : to_einsum_expr(nd)))
     push!(block.args, varname(nd))
     return eval_ex
 end

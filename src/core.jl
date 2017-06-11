@@ -25,4 +25,4 @@ include("propagate_size.jl")
 include("merge.jl")
 include("to_einstein.jl")
 include("from_einstein.jl")
-
+include("helpers.jl")
