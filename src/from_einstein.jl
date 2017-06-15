@@ -156,8 +156,27 @@ function from_einstein(g::EinGraph, nd::ExNode{:constant})
 end
 
 
+iscall(x) = isa(x, Expr) && x.head == :call
+
+function convert_call(g::EinGraph, nd::ExNode{:call})
+    new_ex = expand_const(g, getexpr(nd)) |> simplify
+    if isa(new_ex, Symbol) || (isa(new_ex, Expr) && new_ex.head == :ref)
+        # convert to assignment
+        return copy(nd; category=:(=), ex=new_ex)
+    elseif isa(new_ex, Number) || isa(new_ex, AbstractArray)
+        # convert to constant
+        return copy(nd; category=:constant, ex=new_ex)
+    else
+        error("Call node $nd is simplified to an unknown non-call $new_ex")
+    end
+end
+
+
 function from_einstein(g::EinGraph, nd::ExNode{:call})
     ex = expand_const(g, to_expr(nd)) |> simplify
+    if !iscall(ex.args[2])
+        return from_einstein(g, convert_call(g, nd))
+    end
     for (pat, rpat) in FROM_EINSTEIN_CALL_RULES
         # consider tryrewrite
         rex = tryrewrite(ex, pat, rpat; phs=FROM_EIN_PHS, allow_ex=false)
