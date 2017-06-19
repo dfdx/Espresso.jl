@@ -68,6 +68,7 @@ export
     expand_temp,
     expand_const,
     remove_unused,
+    eliminate_common,
     # expr utils
     mergeex,
     optimize,

@@ -1,6 +1,8 @@
 
 # indexing.jl - low-level utils for working with indexed expressions
 
+const IDX_NAMES = [:i, :j, :k, :m, :n, :p, :q, :r, :s, :l]
+
 ## utils
 
 isref(ex::Expr) = ex.head == :ref

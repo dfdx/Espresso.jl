@@ -1,9 +1,6 @@
 
 # to_einstein.jl - from vectorized to Einstein notation
 
-const IDX_NAMES = [:i, :j, :k, :m, :n, :p, :q, :r, :s, :l]
-
-
 const TO_EINSTEIN_RULES =
     OrderedDict((:sum, [0]) => [:(Z = sum(X)) => :(Z = X)],
                 (:sum, [1]) => [:(Z = sum(X)) => :(Z = X[i])],

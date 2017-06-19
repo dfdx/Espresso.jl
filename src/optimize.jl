@@ -88,15 +88,6 @@ function remove_unused(ex::Expr; output_vars=nothing)
 end
 
 
-# TODO: optimize case
-# W[i,j,k] = ...
-# Z[i,j] = W[i,j,k]
-# how?
-# 1. expand_deps(..., 1)
-
-# altavista: update fuse_equal
-
-
 
 function tryoptimize(ex::Expr)
     for (pat, subs_ex) in OPT_RULES
@@ -171,3 +162,28 @@ function optimize(g::EinGraph)
     new_g = fuse_assigned(new_g)
     return new_g
 end
+
+
+# common subexpression elimination
+
+function eliminate_common(g::AbstractExGraph)
+    g = reindex_from_beginning(g)
+    new_g = reset_tape(g)
+    existing = Dict()
+    st = Dict{Symbol,Symbol}()
+    for nd in g.tape
+        new_full_ex = subs(to_expr(nd), st)
+        vname, vidxs = split_indexed(new_full_ex.args[1])
+        key = (vidxs, new_full_ex.args[2])
+        if haskey(existing, key)
+            st[vname] = existing[key]
+        else
+            C = getcategory(nd)
+            push!(new_g, ExNode{C}(new_full_ex))
+            existing[key] = vname
+        end
+    end
+    rename!(new_g, st)
+    return new_g
+end
+
