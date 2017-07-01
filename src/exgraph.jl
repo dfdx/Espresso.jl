@@ -205,6 +205,7 @@ end
 
 
 function parse!(g::AbstractExGraph, ex::Union{ExH{:block}, ExH{:body}})
+    # println("ex = $ex")
     deps = [parse!(g, arg) for arg in ex.args]
     return deps[end]
 end

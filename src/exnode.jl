@@ -14,12 +14,12 @@ function ExNode{C}(var::Union{Symbol,Expr}, ex::Any; guards=[], val=nothing) whe
     return ExNode{C}(var, ex, guards, val)
 end
 
-function ExNode{C}(full_ex::Expr) where C
+function ExNode{C}(full_ex::Expr; val=nothing) where C
     @assert full_ex.head == :(=)
     var = full_ex.args[1]
     ex = without_guards(full_ex.args[2])
     guards = find_guards(full_ex.args[2])
-    return ExNode{C}(var, ex; guards = guards)
+    return ExNode{C}(var, ex; guards=guards, val=val)
 end
 
 

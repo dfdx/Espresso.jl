@@ -66,7 +66,8 @@ function expand_const(g::AbstractExGraph, ex)
     vnames = get_var_names(ex)
     for vname in vnames
         if haskey(g, vname) && isa(g[vname], ExNode{:constant})
-            st[vname] = g[vname].val
+            # st[vname] = g[vname].val
+            st[vname] = getvalue(g[vname])
         end
     end
     return subs(ex, st)
@@ -83,7 +84,10 @@ function reindex_from_beginning(g::EinGraph)
         st = Dict(zip(idxs, new_idxs))
         new_full_ex = subs(full_ex, st)
         C = getcategory(nd)
-        push!(new_g, ExNode{C}(new_full_ex))
+        push!(new_g, ExNode{C}(new_full_ex; val=getvalue(nd)))
     end
     return new_g
 end
+
+
+reindex_from_beginning(g::ExGraph) = g

@@ -179,7 +179,7 @@ function eliminate_common(g::AbstractExGraph)
             st[vname] = existing[key]
         else
             C = getcategory(nd)
-            push!(new_g, ExNode{C}(new_full_ex))
+            push!(new_g, ExNode{C}(new_full_ex; val=getvalue(nd)))
             existing[key] = vname
         end
     end
