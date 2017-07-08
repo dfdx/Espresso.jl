@@ -8,7 +8,7 @@ end
 
 let
     g = ExGraph(:(z = (x + y)^2); x=1, y=1)
-    @test length(g.tape) == 5     # check that collapse_assignment!() removed extra var
+    @test length(g.tape) == 5     # check that fuse_assigned() removed extra var
     @test varname(g[5]) == :z
     @test evaluate!(g) == 4
 
@@ -16,7 +16,7 @@ let
     @test evaluate!(g) == [4.0, 4.0, 4.0]
 
     g = EinGraph(:(z = (x[i] .+ y[i]) * I[i]); x=ones(3), y=ones(3))
-    @test length(g.tape) == 4     # check that collapse_assignment!() removed extra var
+    @test length(g.tape) == 4     # check that fuse_assigned() removed extra var
     @test varname(g[4]) == :z
     @test evaluate!(g) == 6.0
 end
@@ -65,4 +65,18 @@ let
     delete!(g, :t2)
     @test length(g) == 4
     
+end
+
+
+let
+    # test graph with :opaque nodes
+    g = ExGraph(:(y = 2x); x=rand(2))
+    push!(g, ExNode{:opaque}(:z, :(x .* 3y)))    
+    rep_g = reparse(g)
+    @test getvar(g[3]) == getvar(rep_g[3])
+    @test evaluate!(g) == evaluate!(rep_g)
+
+    rw_nd = rewrite(g[3], :(Z = X * Y), :(Z = X .* Y'); phs=[:X, :Y, :Z])
+    @test getcategory(rw_nd) == :opaque
+    @test getvalue(rw_nd) == nothing        # value should be cleared
 end

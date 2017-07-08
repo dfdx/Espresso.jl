@@ -72,6 +72,7 @@ export
     # expr utils
     mergeex,
     optimize,
+    blassify,
     sanitize,
     # Einstein conversions
     to_einstein,

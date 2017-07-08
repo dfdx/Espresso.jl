@@ -1,5 +1,16 @@
 
 # exnode.jl - ExNode, the building block of ExGraph
+#
+# There are several categories of ExNodes:
+#
+#  * :call     - single function call, e.g. ExNode{:call}(z = x + y)
+#  * :bcast    - broadcasting, e.g. ExNode{:bcast}(y = exp.(x))
+#  * :(=)      - assignment, e.g. ExNode{:(=)}(y = x)
+#  * :input    - input variable
+#  * :constant - constant, e.g. ExNode{:constant}(x = 42)
+#  * :opaque   - unparsed expression that can contain any subexpression;
+#                a graph with opaque nodes isn't valid for most tasks,
+#                but it may be converted to normalized graph using `reparse(g)`
 
 # exnode
 
@@ -83,6 +94,7 @@ dependencies(nd::ExNode{:(=)}) = get_var_names(getexpr(nd))
 dependencies(nd::ExNode{:call}) = get_var_names(getexpr(nd))
 dependencies(nd::ExNode{:bcast}) = get_var_names(getexpr(nd))
 dependencies(nd::ExNode{:tuple}) = [split_indexed(dep)[1] for dep in getexpr(nd).args]
+dependencies(nd::ExNode{:opaque}) = get_var_names(getexpr(nd); rec=true)
 
 
 function Base.show{C}(io::IO, nd::ExNode{C})
@@ -91,3 +103,14 @@ function Base.show{C}(io::IO, nd::ExNode{C})
 end
 
 isindexed(nd::ExNode) = any(isref, get_vars(getexpr(nd)))
+
+
+## node utils
+
+function rewrite{C}(nd::ExNode{C}, pat, rpat; rw_opts...)
+    full_ex = to_expr(nd)
+    new_full_ex = rewrite(full_ex, pat, rpat; rw_opts...)
+    @assert new_full_ex.head == :(=)
+    var, ex = new_full_ex.args[1:2]
+    return copy(nd; category=:opaque, var=var, ex=ex, val=nothing)
+end
