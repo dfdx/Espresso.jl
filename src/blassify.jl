@@ -1,11 +1,28 @@
 
 const BLASSIFY_PHS = Set([:X, :Y, :Z])
 
+const Arr = AbstractArray
+const Mat = AbstractMatrix
+const Vec = AbstractVector
+const Num = Number
+
 const BLASSIFY_RULES = [
-    [Matrix, Matrix] => :(Z = X * Y) => :(A_mul_B!(Z, X, Y)),
-    [Array] => :(Z = _f.(X)) => :(Z .= _f(X)),
-    [Vector, Vector] => :(Z = _f.(X, Y)) => :(Z .= _f(X, Y)),
-    [Matrix, Matrix] => :(Z = _f.(X, Y)) => :(Z .= _f(X, Y)),
+    [Mat, Mat] => :(Z = X * Y) => :(A_mul_B!(Z, X, Y)),
+    [Mat, Mat] => :(Z = X * Y') => :(A_mul_Bt!(Z, X, Y)),
+    [Mat, Mat] => :(Z = X' * Y) => :(At_mul_B!(Z, X, Y)),
+    [Mat, Vec] => :(Z = X * Y) => :(A_mul_B!(Z, X, Y)),
+    [Mat, Vec] => :(Z = X' * Y) => :(At_mul_B!(Z, X, Y)),
+    [Vec, Mat] => :(Z = X * Y) => :(A_mul_B!(Z, X, Y)),
+    [Vec, Mat] => :(Z = X * Y') => :(A_mul_Bt!(Z, X, Y)),
+    [Mat] => :(Z = transpose(X)) => :(Z = transpose(X)),  # faster w/o .=
+    [Vec] => :(Z = transpose(X)) => :(Z = transpose(X)),  # faster w/o .=
+    [Arr] => :(Z = sum(X)) => :(Z = sum(X)),
+    [Arr] => :(Z = sum(X, _ax)) => :(Z = sum(X, _ax)),
+    [Any] => :(Z = X) => :(Z = X),
+    
+    # [Array] => :(Z = _f.(X)) => :(Z .= _f(X)),
+    # [Vector, Vector] => :(Z = _f.(X, Y)) => :(Z .= _f(X, Y)),
+    # [Matrix, Matrix] => :(Z = _f.(X, Y)) => :(Z .= _f(X, Y)),
 
 ]
 
@@ -13,6 +30,7 @@ const BLASSIFY_RULES = [
 
 function blassify(ex::Expr; inputs...)
     g = ExGraph(ex; inputs...)
+    evaluate!(g)
     # TODO: fuse broadcast chains
     block = Expr(:block)
     for nd in g.tape
@@ -21,7 +39,7 @@ function blassify(ex::Expr; inputs...)
             push!(block.args, subex)
         end
     end
-    return block
+    return block  # TODO: should also return buffer initialization expressions
 end
 
 
@@ -53,4 +71,9 @@ function blassify(g::ExGraph, nd::Union{ExNode{:call}, ExNode{:(=)},
         end
         error("Don't know how to blassify $nd of types $dep_types")
     end
+end
+
+
+function blassify(g::ExGraph, nd::ExNode{:tuple})
+    return to_expr(nd)
 end

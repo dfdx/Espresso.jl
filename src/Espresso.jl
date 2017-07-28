@@ -76,7 +76,8 @@ export
     sanitize,
     # Einstein conversions
     to_einstein,
-    from_einstein
+    from_einstein,
+    to_blas
 
 
 

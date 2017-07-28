@@ -472,7 +472,7 @@ Check if all operations in this expression are broadcasting
 is_bcast(ex::Expr) = is_bcast(ExH(ex))
 
 function is_bcast(ex::ExH{:.})
-    bcast = isa(ex.args[2], Expr) && ex.args[2].head ==:tuple
+    bcast = isa(ex.args[2], Expr) && ex.args[2].head == :tuple
     return bcast && all(map(is_bcast, ex.args))
 end
 
@@ -482,5 +482,7 @@ function is_bcast(ex::ExH{:call})
 end
 
 is_bcast(ex::Symbol) = true
-is_bcast(ex::Number) = true
+is_bcast(ex::Number) = false
 is_bcast(x) = error("Don't know if $x is a broadcast expression")
+
+# also see broadcasting for EinGraph nodes in optimize.jl

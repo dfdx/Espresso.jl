@@ -187,3 +187,61 @@ function eliminate_common(g::AbstractExGraph)
     return new_g
 end
 
+
+# fuse broadcasting
+
+function is_bcast_indexed(nd::Union{ExNode{:call}, ExNode{:opaque}})
+    all_idxs = get_indices(to_expr(nd); rec=true)
+    lhs_idxs = isempty(all_idxs) ? [] : all_idxs[1]
+    return all(idxs == lhs_idxs || isempty(idxs) for idxs in all_idxs)
+end
+
+is_bcast_indexed(nd::ExNode{:bcast}) = true
+is_bcast_indexed(nd::ExNode) = false
+
+
+function get_indices_in_expr(ex::Any, vname::Symbol)
+    vars = get_vars(ex; rec=true)
+    split_vars = [split_indexed(var) for var in vars]
+    targets = [idxs for (x, idxs) in split_vars if x == vname]
+    !isempty(targets) || error("Variable $vname doesn't occur in expression $ex")
+    return targets[1]
+end
+
+
+function fuse_broadcasting_node(g::EinGraph, new_g::EinGraph, nd::ExNode)
+    dep_nds = [new_g[dep] for dep in dependencies(nd)]
+    if any(is_bcast_indexed(dep_nd) for dep_nd in dep_nds)
+        # at least one dependency is broadcasting
+        # transform node to :opaque and expand dep expression
+        st = Dict{Any, Any}()
+        for dep_nd in dep_nds
+            if is_bcast_indexed(dep_nd)
+                # if dependency is broadcasting, replace its name with its expression
+                dep_ex = getexpr(dep_nd)                
+                idx_st = Dict(zip(varidxs(dep_nd),
+                                  get_indices_in_expr(getexpr(nd), varname(dep_nd))))
+                new_dep_ex = subs(dep_ex, idx_st)
+                new_dep_ex = dep_ex
+                st[getvar(dep_nd)] = new_dep_ex            
+            end            
+        end
+        new_ex = subs(getexpr(nd), st)
+        return copy(nd; ex=new_ex, category=:opaque)
+    else
+        return nd
+    end
+end
+
+
+function fuse_broadcasting(g::EinGraph)
+    new_g = reset_tape(g)
+    for nd in g.tape
+        if is_bcast_indexed(nd)
+            push!(new_g, fuse_broadcasting_node(g, new_g, nd))
+        else
+            push!(new_g, nd)
+        end
+    end
+    return remove_unused(new_g, varname(g[end]))
+end

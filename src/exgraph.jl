@@ -260,7 +260,8 @@ function evaluate!(g::AbstractExGraph, nd::ExNode{:(=)})
 end
 
 
-function evaluate!(g::AbstractExGraph, nd::Union{ExNode{:call}, ExNode{:bcast}, ExNode{:opaque}})
+function evaluate!(g::AbstractExGraph, nd::Union{ExNode{:call}, ExNode{:bcast},
+                                                 ExNode{:tuple}, ExNode{:opaque}})
     if (getvalue(nd) != nothing) return getvalue(nd) end
     deps = dependencies(nd)
     for dep in deps
