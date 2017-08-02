@@ -9,10 +9,10 @@ const TO_BLAS_PHS = [:A, :B, :C, :X, :Y, :V, :W, :Z,
                       :i, :j, :k, :l, :m, :n, :p, :q, :r, :s, :t]
 
 const TO_BLAS_CALL_RULES =
-    OrderedDict(# # inner and outer product
-                # :(Z[i,j] = X[i] * Y[j]) => :(Z = X * Y'),
+    OrderedDict(# inner and outer product
+                :(Z[i,j] = X[i] * Y[j]) => :(A_mul_Bt!(Z, X, Y)),
                 # :(Z = X[i] * Y[i]) => :(Z = X'Y),
-                # :(Z[i,j] = X[i] .* Y[j]) => :(Z = X * Y'),
+                :(Z[i,j] = X[i] .* Y[j]) => :(A_mul_Bt!(Z, X, Y)),
                 # :(Z = X[i] .* Y[i]) => :(Z = X'Y),
                 # matrix-by-vector
                 # :(Z[j] = X[i] * Y[i,j]) => :(Z = Y' * X),
@@ -21,7 +21,7 @@ const TO_BLAS_CALL_RULES =
                 # :(Z = X[i,j] * Y[j]) => :(Z = sum(X * Y)),
                 # :(Z[j] = X[i,j] * Y[i]) => :(Z = X' * Y),
                 # :(Z = X[i,j] * Y[i]) => :(Z = sum(X' * Y)),
-                # :(Z[j] = X[i] .* Y[i,j]) => :(Z = Y' * X),
+                :(Z[j] = X[i] .* Y[i,j]) => :(At_mul_B!(Z, Y, X)),
                 # :(Z[i] = X[j] .* Y[i,j]) => :(Z = Y * X),
                 # :(Z[i] = X[i,j] .* Y[j]) => :(Z = X * Y),
                 # :(Z[j] = X[i,j] .* Y[i]) => :(Z = X' * Y),
@@ -61,14 +61,14 @@ const TO_BLAS_CALL_RULES =
                 # :(Z[i...] = _M._f(X[i...], Y)) => :(Z = _M._f.(X, Y)),
                 # :(Z[i...] = _M._f(X, Y[i...])) => :(Z = _M._f.(X, Y)),                
                 # # broadcasting + sum
-                # :(Z = _f(X[i])) => :(Z = sum(_f.(X))),
-                # :(Z = _f(X[i,j])) => :(Z = sum(_f.(X))),
-                # :(Z[i] = _f(X[i,j])) => :(Z = squeeze(sum(_f.(X),2),2)),
-                # :(Z[j] = _f(X[i,j])) => :(Z = squeeze(sum(_f.(X),1),1)),
-                # :(Z = _f(X[i], Y)) => :(Z = sum(_f.(X, Y))),
-                # :(Z = _f(X, Y[i])) => :(Z = sum(_f.(X, Y))),
-                # :(Z = _f(X[i], Y[i])) => :(Z = sum(_f.(X, Y))),
-                # :(Z = _f(X[i,j], Y[i,j])) => :(Z = sum.(_f(X, Y))),
+                :(Z = _f(X[i])) => :(Z = sum(_f.(X))),
+                :(Z = _f(X[i,j])) => :(Z = sum(_f.(X))),
+                :(Z[i] = _f(X[i,j])) => :(Z = squeeze(sum(_f.(X),2),2)),
+                :(Z[j] = _f(X[i,j])) => :(Z = squeeze(sum(_f.(X),1),1)),
+                :(Z = _f(X[i], Y)) => :(Z = sum(_f.(X, Y))),
+                :(Z = _f(X, Y[i])) => :(Z = sum(_f.(X, Y))),
+                :(Z = _f(X[i], Y[i])) => :(Z = sum(_f.(X, Y))),
+                :(Z = _f(X[i,j], Y[i,j])) => :(Z = sum.(_f(X, Y))),
                 # # constants
                 # :(Z[i...] = _f(X, Y)) => :(Z = ones(size__(Z)) .* _f(X, Y)),
                 # # convolution
@@ -110,27 +110,25 @@ const TO_BLAS_CALL_RULES =
 
 
 
-# const TO_BLAS_CONST_RULES =
-#     OrderedDict(:(Z = X) => :(Z = X),
-#                 :(Z[i...] = X) => :(Z = ones(size__(Z)) * X),)
+const TO_BLAS_CONST_RULES =
+    OrderedDict(:(Z = X) => :(Z = X),
+                :(Z[i...] = X) => :(Z = ones(size__(Z)) * X),)
 
 
 
 function to_blas(g::EinGraph)
     evaluate!(g)
-    propagate_size!(g)
     g = fuse_broadcasting(g)
-    sizes = @get(g.ctx, :sizes, Dict())
     res = :(begin end)
     for nd in g.tape
-        if !isa(nd, ExNode{:input})
+        if getcategory(nd) != :input
             vex = to_blas(g, nd)
             # push!(res.args, simplify(subs_size(vex, sizes)))
             push!(res.args, vex)
         end
     end
-    # res = subs_bcast_with_dot(sanitize(res))
-    return res, sizes
+    res = subs_bcast_with_dot(sanitize(res))
+    return res
 end
 
 # to_blas(g::EinGraph, nd::ExNode{:input}) = getexpr(nd)
@@ -147,21 +145,6 @@ function to_blas(g::EinGraph, nd::ExNode{:constant})
 end
 
 
-# iscall(x) = isa(x, Expr) && x.head == :call
-
-# function convert_call(g::EinGraph, nd::ExNode{:call})
-#     new_ex = expand_const(g, getexpr(nd)) |> simplify
-#     if isa(new_ex, Symbol) || (isa(new_ex, Expr) && new_ex.head == :ref)
-#         # convert to assignment
-#         return copy(nd; category=:(=), ex=new_ex)
-#     elseif isa(new_ex, Number) || isa(new_ex, AbstractArray)
-#         # convert to constant
-#         return copy(nd; category=:constant, ex=new_ex)
-#     else
-#         error("Call node $nd is simplified to an unknown non-call $new_ex")
-#     end
-# end
-
 
 function to_blas(g::EinGraph, nd::ExNode{:call})
     ex = expand_const(g, to_expr(nd)) |> simplify
@@ -169,7 +152,7 @@ function to_blas(g::EinGraph, nd::ExNode{:call})
         return to_blas(g, convert_call(g, nd))
     end
     if is_bcast_indexed(nd)        
-        return make_elementwise(to_expr(nd))
+        return make_elementwise(without_indices(to_expr(nd)))
     end
     for (pat, rpat) in TO_BLAS_CALL_RULES
         rex = tryrewrite(ex, pat, rpat; phs=TO_BLAS_PHS, allow_ex=false)
@@ -183,7 +166,7 @@ end
 
 function to_blas(g::EinGraph, nd::ExNode{:opaque})
     if is_bcast_indexed(nd)
-        return make_elementwise(to_expr(nd))
+        return make_elementwise(without_indices(to_expr(nd)))
     else
         return to_expr(nd)
     end

@@ -55,6 +55,7 @@ export
     ExGraph,
     EinGraph,
     parse!,
+    reparse,
     evaluate!,
     cat,
     fuse_assigned,

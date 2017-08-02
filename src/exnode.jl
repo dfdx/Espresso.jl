@@ -97,6 +97,14 @@ dependencies(nd::ExNode{:tuple}) = [split_indexed(dep)[1] for dep in getexpr(nd)
 dependencies(nd::ExNode{:opaque}) = get_var_names(getexpr(nd); rec=true)
 
 
+## node utils
+
+# varsize(nd::ExNode{:tuple}) = map(size, getvalue(nd))
+# varsize(nd::ExNode) = size(getvalue(nd))
+
+# buffer_expr(nd::ExNode{:tuple})
+
+
 function Base.show{C}(io::IO, nd::ExNode{C})
     val = isa(getvalue(nd), AbstractArray) ? "<$(typeof(getvalue(nd)))>" : getvalue(nd)
     print(io, "ExNode{$C}($(to_expr(nd)) | $val)")
@@ -104,8 +112,6 @@ end
 
 isindexed(nd::ExNode) = any(isref, get_vars(getexpr(nd)))
 
-
-## node utils
 
 function rewrite{C}(nd::ExNode{C}, pat, rpat; rw_opts...)
     full_ex = to_expr(nd)
