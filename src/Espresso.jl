@@ -55,6 +55,7 @@ export
     ExGraph,
     EinGraph,
     parse!,
+    reparse,
     evaluate!,
     cat,
     fuse_assigned,
@@ -72,10 +73,12 @@ export
     # expr utils
     mergeex,
     optimize,
+    blassify,
     sanitize,
     # Einstein conversions
     to_einstein,
-    from_einstein
+    from_einstein,
+    to_blas
 
 
 

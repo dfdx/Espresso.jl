@@ -220,12 +220,38 @@ end
 
 ## evaluate!
 
+function remember_size!(g::AbstractExGraph, nd::ExNode)
+    rsizes = @get_or_create(g.ctx, :rsizes, Dict{Symbol,Any}())
+    buff_exprs = @get_or_create(g.ctx, :buff_exprs, Dict{Symbol, Any}())
+    val = getvalue(nd)
+    sz = size(val)
+    rsizes[varname(nd)] = sz    
+    if isa(val, Array)
+        T = eltype(val)
+        buff_expr = :(zeros($T, $sz))
+    else
+        T = typeof(val)
+        buff_expr = :(zero($T))
+    end
+    buff_exprs[varname(nd)] = buff_expr
+end
+
+function remember_size!(g::AbstractExGraph, nd::ExNode{:tuple}) end
+
+
 """
 Evaluate node, i.e. fill its `val` by evaluating node's expression using
 values of its dependencies.
 """
-evaluate!(g::AbstractExGraph, nd::ExNode{:constant}) = getvalue(nd)
-evaluate!(g::AbstractExGraph, nd::ExNode{:input}) = getvalue(nd)
+function evaluate!(g::AbstractExGraph, nd::ExNode{:constant}; force=false)
+    remember_size!(g, nd)
+    return getvalue(nd)
+end
+
+function evaluate!(g::AbstractExGraph, nd::ExNode{:input}; force=false)
+    remember_size!(g, nd)
+    return getvalue(nd)
+end
 
 
 function isconv(nd::ExNode)
@@ -242,7 +268,7 @@ function mk_eval_expr(g::AbstractExGraph, nd::ExNode)
     for (dep, val) in deps_vals
         push!(block.args, :(local $dep = $val))
     end
-    # TODO: if indices contain expressions (e.g. x[i+m-1]), transform from einstein    
+    # TODO: if indices contain expressions (e.g. x[i+m-1]), transform from einstein
     push!(block.args, !isindexed(nd) ? to_expr(nd) :
           (isconv(nd) ? from_einstein(g, nd) : to_einsum_expr(nd)))
     push!(block.args, varname(nd))
@@ -250,48 +276,53 @@ function mk_eval_expr(g::AbstractExGraph, nd::ExNode)
 end
 
 
-function evaluate!(g::AbstractExGraph, nd::ExNode{:(=)})
-    if (getvalue(nd) != nothing) return getvalue(nd) end
+function evaluate!(g::AbstractExGraph, nd::ExNode{:(=)}; force=false)
+    if (!force && getvalue(nd) != nothing) return getvalue(nd) end
     dep = dependencies(nd)[1]
-    evaluate!(g, g[dep])
+    evaluate!(g, g[dep]; force=force)
     evex = mk_eval_expr(g, nd)
     setvalue!(nd, eval(evex))
+    remember_size!(g, nd)
     return getvalue(nd)
 end
 
-function evaluate!(g::AbstractExGraph, nd::ExNode{:call})
-    if (getvalue(nd) != nothing) return getvalue(nd) end
+
+function evaluate!(g::AbstractExGraph,
+                   nd::Union{ExNode{:call}, ExNode{:bcast},
+                             ExNode{:tuple}, ExNode{:opaque}};
+                   force=false)
+    if (!force && getvalue(nd) != nothing) return getvalue(nd) end
     deps = dependencies(nd)
     for dep in deps
         # if dep is not in graph, consider it a global constant (like π)
         if haskey(g.idx, dep)
-            evaluate!(g, g[dep])
+            evaluate!(g, g[dep]; force=force)
         end
     end
     evex = mk_eval_expr(g, nd)
     setvalue!(nd, eval(evex))
+    remember_size!(g, nd)
     return getvalue(nd)
 end
 
 
-function evaluate!(g::AbstractExGraph, nd::ExNode{:bcast})
-    if (getvalue(nd) != nothing) return getvalue(nd) end
-    deps = dependencies(nd)
-    for dep in deps
-        # if dep is not in graph, consider it a global constant (like π)
-        if haskey(g.idx, dep)
-            evaluate!(g, g[dep])
+evaluate!(g::AbstractExGraph, name::Symbol; force=false) = evaluate!(g, g[name]; force=force)
+evaluate!(g::AbstractExGraph; force=false) = evaluate!(g, g[end]; force=force)
+
+
+## reparsing of opaque nodes
+
+function reparse(g::AbstractExGraph)
+    new_g = reset_tape(g)
+    for nd in g.tape
+        if isa(nd, ExNode{:opaque})
+            parse!(new_g, to_expr(nd))
+        else
+            push!(new_g, nd)
         end
     end
-    evex = mk_eval_expr(g, nd)
-    setvalue!(nd, eval(evex))
-    return getvalue(nd)
+    return fuse_assigned(new_g)
 end
-
-
-
-evaluate!(g::AbstractExGraph, name::Symbol) = evaluate!(g, g[name])
-evaluate!(g::AbstractExGraph) = evaluate!(g, g[end])
 
 
 ## graph simlification
@@ -343,45 +374,6 @@ assign_chain{C}(g::AbstractExGraph, nd::ExNode{C}) =
     assign_chain!(g, nd, getguards(nd), Vector{Symbol}())
 
 
-"""
-Find "the best" name in a chain of assigned variables.
-Currently, "the best" is defined as a first non-generated name. This way
-`fuse_assigned` tries to keep names from the original expression intact.
-"""
-function best_name(chain::Vector{Symbol})
-    i = 1
-    while i < length(chain) && istemp(chain[i])
-        i += 1
-    end
-    return chain[i]
-end
-
-
-function replacable_vars(chain::Vector{Symbol})
-    bname = best_name(chain)
-    st = Dict{Symbol,Symbol}()
-    for name in chain
-        if name != bname
-            st[name] = bname
-        end
-    end
-    return st
-end
-
-
-function getivar(nd::ExNode{:input})
-    idxs = [:i, :j, :j, :m, :n, :p, :q][1:ndims(getvalue(nd))]
-    return make_indexed(getvar(nd), idxs)
-end
-getivar(nd::ExNode) = getvar(nd)
-
-
-function getiexpr(nd::ExNode{:input})
-    idxs = [:i, :j, :j, :m, :n, :p, :q][1:ndims(getvalue(nd))]
-    return make_indexed(getexpr(nd), idxs)
-end
-getiexpr(nd::ExNode) = getexpr(nd)
-
 
 function assign_chain_index_replacements(g::AbstractExGraph, chain::Vector{Symbol})
     nd = g[chain[1]]
@@ -419,7 +411,7 @@ function fuse_assigned(g::AbstractExGraph; outvars=nothing)
         if isa(nd, ExNode{:(=)})
             chain = assign_chain(g, nd)
             root_assign_nd = g[chain[end]]
-            new_ex_ = isa(g, ExGraph) ? getexpr(root_assign_nd) : getiexpr(root_assign_nd)
+            new_ex_ = getexpr(root_assign_nd)
             new_ex = subs(new_ex_, assign_chain_index_replacements(g, chain))
             new_nd = copy(root_assign_nd; var=getvar(nd), ex=new_ex)
             push!(new_g, new_nd)
