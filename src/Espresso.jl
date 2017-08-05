@@ -72,8 +72,7 @@ export
     eliminate_common,
     # expr utils
     mergeex,
-    optimize,
-    blassify,
+    optimize,    
     sanitize,
     # Einstein conversions
     to_einstein,

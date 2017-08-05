@@ -1,14 +1,14 @@
 
-# to_blas.jl - transform EinGraph to BLAS/in-place operations
+# to_buffered.jl - transform EinGraph to BLAS/in-place operations
 #
-# Unlike blassify.jl, to_blas.jl works on EinGraph and is more similar
+# Unlike blassify.jl, to_buffered.jl works on EinGraph and is more similar
 # to from_einstein.jl.
-# blassify / to_blas are part of experimental API and may be deprecated.
+# blassify / to_buffered are part of experimental API and may be deprecated.
 
-const TO_BLAS_PHS = [:A, :B, :C, :X, :Y, :V, :W, :Z,
+const TO_BUFFERED_PHS = [:A, :B, :C, :X, :Y, :V, :W, :Z,
                       :i, :j, :k, :l, :m, :n, :p, :q, :r, :s, :t]
 
-const TO_BLAS_CALL_RULES =
+const TO_BUFFERED_CALL_RULES =
     OrderedDict(# inner and outer product
                 :(Z[i,j] = X[i] * Y[j]) => :(A_mul_Bt!(Z, X, Y)),
                 # :(Z = X[i] * Y[i]) => :(Z = X'Y),
@@ -100,7 +100,7 @@ const TO_BLAS_CALL_RULES =
                 )
 
 
-const TO_BLAS_ASSIGN_RULES =
+const TO_BUFFERED_ASSIGN_RULES =
     OrderedDict(# simple assignment
                 :(Z = X) => :(Z = X),
                 :(Z[i...] = X[i...]) => :(Z .= X),
@@ -124,19 +124,19 @@ const TO_BLAS_ASSIGN_RULES =
 
 
 
-const TO_BLAS_CONST_RULES =
+const TO_BUFFERED_CONST_RULES =
     OrderedDict(:(Z = X) => :(Z = X),
                 :(Z[i...] = X) => :(Z = ones(size__(Z)) * X),)
 
 
 
-function to_blas(g::EinGraph)
+function to_buffered(g::EinGraph)
     evaluate!(g)
     g = fuse_broadcasting(g)
     res = :(begin end)
     for nd in g.tape
         if getcategory(nd) != :input
-            vex = to_blas(g, nd)
+            vex = to_buffered(g, nd)
             # push!(res.args, simplify(subs_size(vex, sizes)))
             push!(res.args, vex)
         end
@@ -145,12 +145,12 @@ function to_blas(g::EinGraph)
     return res
 end
 
-# to_blas(g::EinGraph, nd::ExNode{:input}) = getexpr(nd)
+# to_buffered(g::EinGraph, nd::ExNode{:input}) = getexpr(nd)
 
-function to_blas(g::EinGraph, nd::ExNode{:constant})
+function to_buffered(g::EinGraph, nd::ExNode{:constant})
     ex = to_expr(nd)
-    for (pat, rpat) in TO_BLAS_CONST_RULES
-        rex = tryrewrite(ex, pat, rpat; phs=TO_BLAS_PHS, allow_ex=false)
+    for (pat, rpat) in TO_BUFFERED_CONST_RULES
+        rex = tryrewrite(ex, pat, rpat; phs=TO_BUFFERED_PHS, allow_ex=false)
         if !isnull(rex)
             return get(rex)
         end
@@ -160,16 +160,16 @@ end
 
 
 
-function to_blas(g::EinGraph, nd::ExNode{:call})
+function to_buffered(g::EinGraph, nd::ExNode{:call})
     ex = expand_const(g, to_expr(nd)) |> simplify
     if !iscall(ex.args[2])
-        return to_blas(g, convert_call(g, nd))
+        return to_buffered(g, convert_call(g, nd))
     end
     if is_bcast_indexed(nd)
         return make_elementwise(without_indices(to_expr(nd)))
     end
-    for (pat, rpat) in TO_BLAS_CALL_RULES
-        rex = tryrewrite(ex, pat, rpat; phs=TO_BLAS_PHS, allow_ex=false)
+    for (pat, rpat) in TO_BUFFERED_CALL_RULES
+        rex = tryrewrite(ex, pat, rpat; phs=TO_BUFFERED_PHS, allow_ex=false)
         if !isnull(rex)
             return get(rex)
         end
@@ -178,7 +178,7 @@ function to_blas(g::EinGraph, nd::ExNode{:call})
 end
 
 
-function to_blas(g::EinGraph, nd::ExNode{:opaque})
+function to_buffered(g::EinGraph, nd::ExNode{:opaque})
     if is_bcast_indexed(nd)
         return make_elementwise(without_indices(to_expr(nd)))
     else
@@ -190,10 +190,10 @@ end
 make_elementwise(ex) = macroexpand(:(@. $ex))
 
 
-function to_blas(g::EinGraph, nd::ExNode{:(=)})
+function to_buffered(g::EinGraph, nd::ExNode{:(=)})
     ex = to_expr(nd)
-    for (pat, rpat) in TO_BLAS_ASSIGN_RULES
-        rex = tryrewrite(ex, pat, rpat; phs=TO_BLAS_PHS, allow_ex=false)
+    for (pat, rpat) in TO_BUFFERED_ASSIGN_RULES
+        rex = tryrewrite(ex, pat, rpat; phs=TO_BUFFERED_PHS, allow_ex=false)
         if !isnull(rex)
             return get(rex)
         end
@@ -202,7 +202,7 @@ function to_blas(g::EinGraph, nd::ExNode{:(=)})
 end
 
 
-function to_blas(g::EinGraph, nd::ExNode{:bcast})
+function to_buffered(g::EinGraph, nd::ExNode{:bcast})
     ex = to_expr(nd)
     vars = findex(:(_x[_i...]), ex)
     st = Dict(var => var.args[1] for var in vars)
@@ -212,17 +212,7 @@ function to_blas(g::EinGraph, nd::ExNode{:bcast})
 end
 
 
-function to_blas(g::EinGraph, nd::ExNode{:tuple})
+function to_buffered(g::EinGraph, nd::ExNode{:tuple})
     return without_indices(to_expr(nd))
 end
 
-
-
-
-
-
-# function main_813()
-#     inputs = [:W => rand(2,3), :x => rand(3), :b => rand(2)]
-#     g = EinGraph(to_einstein(:(z = log.(exp.(W * x .+ b))); inputs...); inputs...)
-#     bex, sizes = to_blas(g)
-# end
