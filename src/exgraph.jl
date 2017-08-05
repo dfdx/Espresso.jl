@@ -205,7 +205,6 @@ end
 
 
 function parse!(g::AbstractExGraph, ex::Union{ExH{:block}, ExH{:body}})
-    # println("ex = $ex")
     deps = [parse!(g, arg) for arg in ex.args]
     return deps[end]
 end
@@ -225,7 +224,7 @@ function remember_size!(g::AbstractExGraph, nd::ExNode)
     buff_exprs = @get_or_create(g.ctx, :buff_exprs, Dict{Symbol, Any}())
     val = getvalue(nd)
     sz = size(val)
-    rsizes[varname(nd)] = sz    
+    rsizes[varname(nd)] = sz
     if isa(val, Array)
         T = eltype(val)
         buff_expr = :(zeros($T, $sz))
@@ -268,12 +267,47 @@ function mk_eval_expr(g::AbstractExGraph, nd::ExNode)
     for (dep, val) in deps_vals
         push!(block.args, :(local $dep = $val))
     end
-    # TODO: if indices contain expressions (e.g. x[i+m-1]), transform from einstein
-    push!(block.args, !isindexed(nd) ? to_expr(nd) :
-          (isconv(nd) ? from_einstein(g, nd) : to_einsum_expr(nd)))
+    if !isindexed(nd)
+        push!(block.args, to_expr(nd))
+    elseif isconv(nd)
+        push!(block.args, from_einstein(g, nd))
+    elseif getcategory(nd) == :tuple
+        push!(block.args, without_indices(to_expr(nd)))
+    else
+        push!(block.args, to_einsum_expr(nd))
+    end
+    # push!(block.args, !isindexed(nd) ? to_expr(nd) :
+    #       (isconv(nd) ? from_einstein(g, nd) : to_einsum_expr(nd)))
     push!(block.args, varname(nd))
     return eval_ex
 end
+
+# function mk_eval_expr(g::AbstractExGraph, nd::ExNode)
+#     dep_nodes = [g[dep] for dep in dependencies(nd) if haskey(g, dep)]
+#     deps_vals = [(varname(nd), getvalue(nd)) for nd in dep_nodes]
+#     eval_ex = Expr(:block, Expr(:let, Expr(:block)))
+#     block = eval_ex.args[1].args[1]
+#     for (dep, val) in deps_vals
+#         push!(block.args, :(local $dep = $val))
+#     end
+#     if isindexed(nd)
+#         try
+#             # the problem: from_einstein requires inputs to determine size
+#             push!(block.args, from_einstein(g, nd))
+#         catch
+#             println("falling back to Einsum for $nd")
+#             subex = to_einsum_expr(nd)
+#             println("subex = $subex")
+#             push!(block.args, subex)
+#         end
+#     else
+#         push!(block.args, to_expr(nd))
+#     end
+#     # push!(block.args, !isindexed(nd) ? to_expr(nd) :
+#     #       (isconv(nd) ? from_einstein(g, nd) : to_einsum_expr(nd)))
+#     push!(block.args, varname(nd))
+#     return eval_ex
+# end
 
 
 function evaluate!(g::AbstractExGraph, nd::ExNode{:(=)}; force=false)

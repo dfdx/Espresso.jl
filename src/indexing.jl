@@ -100,6 +100,13 @@ function get_vars!(ex::ExH{:(=)}, rec::Bool, result::Vector{Union{Symbol, Expr}}
 end
 
 
+function get_vars!(ex::ExH{:tuple}, rec::Bool, result::Vector{Union{Symbol, Expr}})
+    for arg in ex.args
+        get_vars!(arg, rec, result)
+    end
+end
+
+
 function get_vars!(ex::ExH{:block}, rec::Bool, result::Vector{Union{Symbol, Expr}})
     for subex in ex.args
         get_vars!(subex, rec, result)

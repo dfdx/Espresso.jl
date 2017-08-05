@@ -91,3 +91,15 @@ function to_einstein(g::ExGraph, nd::ExNode{:(=)})
     rhs = make_indexed(dep, vidxs)
     return Expr(:(=), lhs, rhs)
 end
+
+
+function to_einstein(g::ExGraph, nd::ExNode{:tuple})
+    depnames = dependencies(nd)
+    dep_dims = [ndims(getvalue(g[dep])) for dep in depnames if haskey(g, dep)]
+    depidxs = [IDX_NAMES[1:dims] for dims in dep_dims]
+    deps = [make_indexed(depname, idxs)
+            for (depname, idxs) in zip(depnames, depidxs)]
+    tuple_ex = Expr(:tuple, deps...)
+    var = Expr(:ref, varname(nd), :)
+    return Expr(:(=), var, tuple_ex)
+end

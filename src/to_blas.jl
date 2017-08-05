@@ -19,7 +19,7 @@ const TO_BLAS_CALL_RULES =
                 # :(Z[i] = X[j] * Y[i,j]) => :(Z = Y * X),
                 :(Z[i] = X[i,j] * Y[j]) => :(A_mul_B!(Z, X, Y)),
                 # :(Z = X[i,j] * Y[j]) => :(Z = sum(X * Y)),
-                # :(Z[j] = X[i,j] * Y[i]) => :(Z = X' * Y),
+                :(Z[j] = X[i,j] * Y[i]) => :(At_mul_B!(Z, X, Y)),
                 # :(Z = X[i,j] * Y[i]) => :(Z = sum(X' * Y)),
                 :(Z[j] = X[i] .* Y[i,j]) => :(At_mul_B!(Z, Y, X)),
                 # :(Z[i] = X[j] .* Y[i,j]) => :(Z = Y * X),
@@ -32,43 +32,58 @@ const TO_BLAS_CALL_RULES =
                 :(Z[i,j] = Y[k,j] * X[i,k]) => :(A_mul_B!(Z, X, Y)),
                 :(Z[i,j] = X[i,k] .* Y[k,j]) => :(A_mul_B!(Z, X, Y)),
                 :(Z[i,j] = Y[k,j] .* X[i,k]) => :(A_mul_B!(Z, X, Y)),
-                :(Z[i,j] = Y[i,j] .* X[j,i]) => :(Z = X * Y'),
+                :(Z[i,j] = Y[i,j] .* X[j,i]) => :(A_mul_Bt!(Z, X, Y)),
                 # # matrix-by-matrix: 3-index rule
-                # :(Z[i,j] = X[i,k] .* Y[j,k]) => :(Z = X * Y'),
-                # :(Z[i,j] = X[k,i] .* Y[k,j]) => :(Z = X' * Y),
-                # :(Z[j,i] = X[i,k] .* Y[j,k]) => :(Z = Y * X'),  # same transposed
-                # :(Z[j,i] = X[k,i] .* Y[k,j]) => :(Z = Y' * X),  # same transposed
+                :(Z[i,j] = X[i,k] .* Y[j,k]) => :(A_mul_Bt!(Z, X, Y)),
+                :(Z[i,j] = X[k,i] .* Y[k,j]) => :(At_mul_B!(Z, X, Y)),
+                :(Z[j,i] = X[i,k] .* Y[j,k]) => :(A_mul_Bt!(Z, Y, X)),  # same transposed
+                :(Z[j,i] = X[k,i] .* Y[k,j]) => :(At_mul_B!(Z, Y, X)),  # same transposed
                 # # special .+ and .*
-                # :(Z[i,j] = X[j] .+ Y[i,j]) => :(Z = X' .+ Y),
+                :(Z[i,j] = X[i,j] .+ Y[i]) => :(Z .= X .+ Y),
+                :(Z[i,j] = X[i] .+ Y[i,j]) => :(Z .= X .+ Y),
+                # :(Z[i,j] = X[j] .+ Y[i,j]) => :(Z .= X' .+ Y),   # can it happen
                 # :(Z[i,j] = X .* Y[j]) => :(Z = repmat((X .* Y)', size__(Z)[1])),
-                # :(Z[j] = X .* Y[i,j]) => :(Z = X .* squeeze(sum(Y,1),1)),                
+                # :(Z[j] = X .* Y[i,j]) => :(Z = X .* squeeze(sum(Y,1),1)),
                 # # eye
                 # :(Z[i,j] = 1 * (i == j)) => :(Z = eye(size__(Z))[1]),
                 # # –> ∑ₖxᵢyⱼₖ == xᵢ∑ₖyⱼₖ   # TODO: seems incorrect, see 2-level rules
                 # # :(Z[i,j] = X[i] .* Y[j,k]) => :(Z = X .* squeeze(sum(Y,2),2))
                 # # broadcasting
-                # :(Z = _f(X)) => :(Z = _f(X)),
-                # :(Z = _f(X, Y)) => :(Z = _f(X, Y)),
-                # :(Z[i...] = _f(X[i...])) => :(Z = _f.(X)),
-                # :(Z[i...] = _f(X[i...], Y[i...])) => :(Z = _f.(X, Y)),
-                # :(Z[i...] = _f(X[i...], Y)) => :(Z = _f.(X, Y)),
-                # :(Z[i...] = _f(X, Y[i...])) => :(Z = _f.(X, Y)),
-                # # broadcasting with module
-                # :(Z = _M._f(X)) => :(Z = _M._f(X)),
-                # :(Z = _M._f(X, Y)) => :(Z = _M._f(X, Y)),
-                # :(Z[i...] = _M._f(X[i...])) => :(Z = _M._f.(X)),
-                # :(Z[i...] = _M._f(X[i...], Y[i...])) => :(Z = _M._f.(X, Y)),
-                # :(Z[i...] = _M._f(X[i...], Y)) => :(Z = _M._f.(X, Y)),
-                # :(Z[i...] = _M._f(X, Y[i...])) => :(Z = _M._f.(X, Y)),                
-                # # broadcasting + sum
-                :(Z = _f(X[i])) => :(Z = sum(_f.(X))),
-                :(Z = _f(X[i,j])) => :(Z = sum(_f.(X))),
+                :(Z = _f(X)) => :(Z = _f(X)),
+                :(Z = _f(X, Y)) => :(Z = _f(X, Y)),
+                :(Z[i...] = _f(X[i...])) => :(Z .= _f.(X)),
+                :(Z[i...] = _f(X[i...], Y[i...])) => :(Z .= _f.(X, Y)),
+                :(Z[i...] = _f(X[i...], Y)) => :(Z .= _f.(X, Y)),
+                :(Z[i...] = _f(X, Y[i...])) => :(Z .= _f.(X, Y)),
+                # broadcasting with module
+                :(Z = _M._f(X)) => :(Z = _M._f(X)),
+                :(Z = _M._f(X, Y)) => :(Z = _M._f(X, Y)),
+                :(Z[i...] = _M._f(X[i...])) => :(Z .= _M._f.(X)),
+                :(Z[i...] = _M._f(X[i...], Y[i...])) => :(Z .= _M._f.(X, Y)),
+                :(Z[i...] = _M._f(X[i...], Y)) => :(Z .= _M._f.(X, Y)),
+                :(Z[i...] = _M._f(X, Y[i...])) => :(Z .= _M._f.(X, Y)),
+                # broadcasting + sum
+                :(Z = _f(X[i...])) => :(Z = sum(_f.(X))),
                 :(Z[i] = _f(X[i,j])) => :(Z = squeeze(sum(_f.(X),2),2)),
                 :(Z[j] = _f(X[i,j])) => :(Z = squeeze(sum(_f.(X),1),1)),
-                :(Z = _f(X[i], Y)) => :(Z = sum(_f.(X, Y))),
-                :(Z = _f(X, Y[i])) => :(Z = sum(_f.(X, Y))),
-                :(Z = _f(X[i], Y[i])) => :(Z = sum(_f.(X, Y))),
-                :(Z = _f(X[i,j], Y[i,j])) => :(Z = sum.(_f(X, Y))),
+                :(Z[i] = _f(X[i,j], Y[i,j])) => :(Z = squeeze(sum(_f.(X, Y),2),2)),
+                :(Z[j] = _f(X[i,j])) => :(Z = squeeze(sum(_f.(X),1),1)),
+                :(Z[j] = _f(X[i,j], Y[i,j])) => :(Z = squeeze(sum(_f.(X, Y),1),1)),
+                :(Z = _f(X[i...], Y)) => :(Z = sum(_f.(X, Y))),
+                :(Z = _f(X, Y[i...])) => :(Z = sum(_f.(X, Y))),
+                :(Z = _f(X[i...], Y[i...])) => :(Z = sum(_f.(X, Y))),
+                # :(Z = _f(X[i,j], Y[i,j])) => :(Z = sum.(_f(X, Y))),
+                # broadcasting + sum with module
+                :(Z = _M._f(X[i...])) => :(Z = sum(_M._f.(X))),
+                :(Z[i] = _M._f(X[i,j])) => :(Z = squeeze(sum(_M._f.(X),2),2)),
+                :(Z[j] = _M._f(X[i,j])) => :(Z = squeeze(sum(_M._f.(X),1),1)),
+                :(Z[i] = _M._f(X[i,j], Y[i,j])) => :(Z = squeeze(sum(_M._f.(X, Y),2),2)),
+                :(Z[j] = _M._f(X[i,j])) => :(Z = squeeze(sum(_M._f.(X),1),1)),
+                :(Z[j] = _M._f(X[i,j], Y[i,j])) => :(Z = squeeze(sum(_M._f.(X, Y),1),1)),
+                :(Z = _M._f(X[i...], Y)) => :(Z = sum(_M._f.(X, Y))),
+                :(Z = _M._f(X, Y[i...])) => :(Z = sum(_M._f.(X, Y))),
+                :(Z = _M._f(X[i...], Y[i...])) => :(Z = sum(_M._f.(X, Y))),
+                # :(Z = _M._f(X[i,j], Y[i,j])) => :(Z = sum.(_M._f(X, Y))),
                 # # constants
                 # :(Z[i...] = _f(X, Y)) => :(Z = ones(size__(Z)) .* _f(X, Y)),
                 # # convolution
@@ -85,28 +100,27 @@ const TO_BLAS_CALL_RULES =
                 )
 
 
-# const TO_BLAS_ASSIGN_RULES =
-#     OrderedDict(# simple assignment
-#                 :(Z = X) => :(Z = X),
-#                 :(Z[i...] = X[i...]) => :(Z = X),
-#                 # summation
-#                 :(Z = X[i]) => :(Z = sum(X)),
-#                 :(Z = X[i,j]) => :(Z = sum(X)),
-#                 :(Z = X[i,j,k]) => :(Z = sum(X)),
-#                 :(Z[i] = X[i,j]) => :(Z = squeeze(sum(X,2),2)),
-#                 :(Z[j] = X[i,j]) => :(Z = squeeze(sum(X,1),1)),                
-#                 :(Z[i,j] = X[i,j,k]) => :(Z = squeeze(sum(X,3),3)),
-#                 :(Z[i,k] = X[i,j,k]) => :(Z = squeeze(sum(X,2),2)),
-#                 :(Z[j,k] = X[i,j,k]) => :(Z = squeeze(sum(X,1),1)),
-#                 # repmat
-#                 :(Z[i,j] = X[j]) => :(Z = repmat(X', size__(Z)[1])),
-#                 :(Z[i,j] = X[i]) => :(Z = repmat(X, 1, size__(Z)[2])),
-#                 # eye
-#                 :(Z[i,j] = 1 * (i == j)) => :(Z = eye(size__(Z))[1]),
-#                 # constant
-#                 :(Z[i...] = X) => :(Z = ones(size__(Z)) * X),
-#                 # other cases
-#                 :(Z[i,j] = X[j,k]) => :(Z = repmat(squeeze(sum(X, 2), 2)', size__(Z)[1])))
+const TO_BLAS_ASSIGN_RULES =
+    OrderedDict(# simple assignment
+                :(Z = X) => :(Z = X),
+                :(Z[i...] = X[i...]) => :(Z .= X),
+                # summation
+                :(Z = X[i...]) => :(Z = sum(X)),
+                :(Z[i] = X[i,j]) => :(Z .= squeeze(sum(X,2),2)),
+                :(Z[j] = X[i,j]) => :(Z .= squeeze(sum(X,1),1)),
+                :(Z[i,j] = X[i,j,k]) => :(Z .= squeeze(sum(X,3),3)),
+                :(Z[i,k] = X[i,j,k]) => :(Z .= squeeze(sum(X,2),2)),
+                :(Z[j,k] = X[i,j,k]) => :(Z .= squeeze(sum(X,1),1)),
+                # repmat
+                # :(Z[i,j] = X[j]) => :(Z = repmat(X', size__(Z)[1])),
+                # :(Z[i,j] = X[i]) => :(Z = repmat(X, 1, size__(Z)[2])),
+                # eye
+                # :(Z[i,j] = 1 * (i == j)) => :(Z = eye(size__(Z))[1]),
+                # constant
+                # :(Z[i...] = X) => :(Z = ones(size__(Z)) * X),
+                # other cases
+                #:(Z[i,j] = X[j,k]) => :(Z = repmat(squeeze(sum(X, 2), 2)', size__(Z)[1]))
+                )
 
 
 
@@ -151,7 +165,7 @@ function to_blas(g::EinGraph, nd::ExNode{:call})
     if !iscall(ex.args[2])
         return to_blas(g, convert_call(g, nd))
     end
-    if is_bcast_indexed(nd)        
+    if is_bcast_indexed(nd)
         return make_elementwise(without_indices(to_expr(nd)))
     end
     for (pat, rpat) in TO_BLAS_CALL_RULES

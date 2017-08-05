@@ -35,6 +35,7 @@ is_calculable(x::Symbol) = false
 is_calculable(ex::Expr) = (ex.head == :call
                            && reduce(&, [is_calculable(arg)
                                          for arg in ex.args[2:end]]))
+is_calculable(c::Colon) = false
 
 tryeval(ex) = is_calculable(ex) ? Nullable(eval(ex)) : Nullable()
 
