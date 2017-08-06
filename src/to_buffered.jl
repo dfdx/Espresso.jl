@@ -167,7 +167,8 @@ function to_buffered(g::EinGraph, nd::ExNode{:call})
         return to_buffered(g, convert_call(g, nd))
     end
     if is_bcast_indexed(nd)
-        return make_elementwise(without_indices(to_expr(nd)))
+        return make_elementwise(without_indices(to_expr(nd));
+                                lhs_is_scalar=isempty(varidxs(nd)))
     end
     for (pat, rpat) in TO_BUFFERED_CALL_RULES
         rex = tryrewrite(ex, pat, rpat; phs=TO_BUFFERED_PHS, allow_ex=false)
@@ -181,18 +182,21 @@ end
 
 function to_buffered(g::EinGraph, nd::ExNode{:opaque})
     if is_bcast_indexed(nd)
-        new_ex = make_elementwise(without_indices(to_expr(nd)))
-        if isempty(varidxs(nd))
-            new_ex.head = :(=)  # can't use :.= if LHS is scalar
-        end
-        return new_ex
+        return make_elementwise(without_indices(to_expr(nd));
+                                lhs_is_scalar=isempty(varidxs(nd)))
     else
         return to_expr(nd)
     end
 end
 
 
-make_elementwise(ex) = macroexpand(:(@. $ex))
+function make_elementwise(ex; lhs_is_scalar=false)
+    new_ex = macroexpand(:(@. $ex))
+    if isa(new_ex, Expr) && new_ex.head == :.= && lhs_is_scalar
+        new_ex.head = :(=)  # can't use :.= if LHS is scalar
+    end
+    return new_ex
+end
 
 
 function to_buffered(g::EinGraph, nd::ExNode{:(=)})
@@ -220,4 +224,3 @@ end
 function to_buffered(g::EinGraph, nd::ExNode{:tuple})
     return without_indices(to_expr(nd))
 end
-
