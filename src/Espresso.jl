@@ -77,7 +77,7 @@ export
     # Einstein conversions
     to_einstein,
     from_einstein,
-    to_blas
+    to_buffered
 
 
 

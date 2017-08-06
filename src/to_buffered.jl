@@ -126,7 +126,8 @@ const TO_BUFFERED_ASSIGN_RULES =
 
 const TO_BUFFERED_CONST_RULES =
     OrderedDict(:(Z = X) => :(Z = X),
-                :(Z[i...] = X) => :(Z = ones(size__(Z)) * X),)
+                # :(Z[i...] = X) => :(Z = ones(size__(Z)) * X),
+                )
 
 
 
@@ -180,7 +181,11 @@ end
 
 function to_buffered(g::EinGraph, nd::ExNode{:opaque})
     if is_bcast_indexed(nd)
-        return make_elementwise(without_indices(to_expr(nd)))
+        new_ex = make_elementwise(without_indices(to_expr(nd)))
+        if isempty(varidxs(nd))
+            new_ex.head = :(=)  # can't use :.= if LHS is scalar
+        end
+        return new_ex
     else
         return to_expr(nd)
     end
@@ -207,7 +212,7 @@ function to_buffered(g::EinGraph, nd::ExNode{:bcast})
     vars = findex(:(_x[_i...]), ex)
     st = Dict(var => var.args[1] for var in vars)
     vex = subs(ex, st)
-    vex.head = :.=
+    vex.head = isempty(varidxs(nd)) ? :(=) : :.=
     return vex
 end
 
