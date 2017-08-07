@@ -37,7 +37,13 @@ const FROM_EINSTEIN_CALL_RULES =
                 # special .+ and .*
                 :(Z[i,j] = X[j] .+ Y[i,j]) => :(Z = X' .+ Y),
                 :(Z[i,j] = X .* Y[j]) => :(Z = repmat((X .* Y)', size__(Z)[1])),
-                :(Z[j] = X .* Y[i,j]) => :(Z = X .* squeeze(sum(Y,1),1)),                
+                :(Z[j] = X .* Y[i,j]) => :(Z = X .* squeeze(sum(Y,1),1)),
+                # old broadcasting
+                :(Z[i...] = X[i...] .+ Y[i...]) => :(Z = X .+ Y),
+                :(Z[i...] = X[i...] .* Y[i...]) => :(Z = X .* Y),
+                :(Z[i...] = X[i...] .- Y[i...]) => :(Z = X .- Y),
+                :(Z[i...] = X[i...] ./ Y[i...]) => :(Z = X ./ Y),
+                :(Z[i...] = X[i...] .^ Y[i...]) => :(Z = X .^ Y),
                 # eye
                 :(Z[i,j] = 1 * (i == j)) => :(Z = eye(size__(Z))[1]),
                 # –> ∑ₖxᵢyⱼₖ == xᵢ∑ₖyⱼₖ   # TODO: seems incorrect, see 2-level rules
@@ -55,7 +61,7 @@ const FROM_EINSTEIN_CALL_RULES =
                 :(Z[i...] = _M._f(X[i...])) => :(Z = _M._f.(X)),
                 :(Z[i...] = _M._f(X[i...], Y[i...])) => :(Z = _M._f.(X, Y)),
                 :(Z[i...] = _M._f(X[i...], Y)) => :(Z = _M._f.(X, Y)),
-                :(Z[i...] = _M._f(X, Y[i...])) => :(Z = _M._f.(X, Y)),                
+                :(Z[i...] = _M._f(X, Y[i...])) => :(Z = _M._f.(X, Y)),
                 # broadcasting + sum
                 :(Z = _f(X[i])) => :(Z = sum(_f.(X))),
                 :(Z = _f(X[i,j])) => :(Z = sum(_f.(X))),
@@ -90,7 +96,7 @@ const FROM_EINSTEIN_ASSIGN_RULES =
                 :(Z = X[i,j]) => :(Z = sum(X)),
                 :(Z = X[i,j,k]) => :(Z = sum(X)),
                 :(Z[i] = X[i,j]) => :(Z = squeeze(sum(X,2),2)),
-                :(Z[j] = X[i,j]) => :(Z = squeeze(sum(X,1),1)),                
+                :(Z[j] = X[i,j]) => :(Z = squeeze(sum(X,1),1)),
                 :(Z[i,j] = X[i,j,k]) => :(Z = squeeze(sum(X,3),3)),
                 :(Z[i,k] = X[i,j,k]) => :(Z = squeeze(sum(X,2),2)),
                 :(Z[j,k] = X[i,j,k]) => :(Z = squeeze(sum(X,1),1)),
@@ -186,22 +192,20 @@ function from_einstein(g::EinGraph, nd::ExNode{:call})
             return get(rex)
         end
     end
-    # if length(varidxs(nd)) >= 3
-    #     error("Can't convert to vectorized notation a tensor of " *
-    #           "$(length(varidxs(nd))) dimensions: $(to_expr(nd))")
-    # end
-    # if no pattern matches, try broadcasting
-    is_bcast_old = in(ex.args[2].args[1], Set([:.*, :.+, :.-, :./, :.^]))
-    if is_bcast_old
-        # nearly deprecated syntax, but still actively used in 0.6
-        call = Expr(:call, getexpr(nd).args[1], dependencies(nd)...)
-        # TODO: this doesn't cover implicit summation, e.g. `z = x[i] .* y`
-        # we can cover it using rules above or track forall indices
-        return Expr(:(=), varname(nd), call)
-    else
-        error("Neither pattern found, nor broadcasting is applicable when transforming from " *
+    error("Neither pattern found, nor broadcasting is applicable when transforming from " *
               "Einstein notation, expression: $ex")
-    end
+    # # if no pattern matches, try broadcasting
+    # is_bcast_old = in(ex.args[2].args[1], Set([:.*, :.+, :.-, :./, :.^]))
+    # if is_bcast_old
+    #     # nearly deprecated syntax, but still actively used in 0.6
+    #     call = Expr(:call, getexpr(nd).args[1], dependencies(nd)...)
+    #     # TODO: this doesn't cover implicit summation, e.g. `z = x[i] .* y`
+    #     # we can cover it using rules above or track forall indices
+    #     return Expr(:(=), varname(nd), call)
+    # else
+    #     error("Neither pattern found, nor broadcasting is applicable when transforming from " *
+    #           "Einstein notation, expression: $ex")
+    # end
 end
 
 

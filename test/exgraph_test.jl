@@ -15,9 +15,9 @@ let
     g = ExGraph(:(z = (x .+ y).^2); x=ones(3), y=ones(3))
     @test evaluate!(g) == [4.0, 4.0, 4.0]
 
-    g = EinGraph(:(z = (x[i] .+ y[i]) * I[i]); x=ones(3), y=ones(3))
-    @test length(g.tape) == 4     # check that fuse_assigned() removed extra var
-    @test varname(g[4]) == :z
+    g = EinGraph(:(z = x[i] .+ y[i]); x=ones(3), y=ones(3))
+    @test length(g.tape) == 3     # check that fuse_assigned() removed extra var
+    @test varname(g[3]) == :z
     @test evaluate!(g) == 6.0
 end
 

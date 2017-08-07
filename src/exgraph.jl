@@ -258,7 +258,7 @@ function isconv(nd::ExNode)
 end
 
 
-function mk_eval_expr(g::AbstractExGraph, nd::ExNode)
+function mk_eval_expr(g::ExGraph, nd::ExNode)
     dep_nodes = [g[dep] for dep in dependencies(nd) if haskey(g, dep)]
     deps_vals = [(varname(nd), getvalue(nd)) for nd in dep_nodes]
     eval_ex = Expr(:block, Expr(:let, Expr(:block)))
@@ -266,17 +266,45 @@ function mk_eval_expr(g::AbstractExGraph, nd::ExNode)
     for (dep, val) in deps_vals
         push!(block.args, :(local $dep = $val))
     end
-    if !isindexed(nd)
-        push!(block.args, to_expr(nd))
-    elseif isconv(nd)
-        push!(block.args, from_einstein(g, nd))
-    elseif getcategory(nd) == :tuple
-        push!(block.args, without_indices(to_expr(nd)))
-    else
-        push!(block.args, to_einsum_expr(nd))
+    push!(block.args, to_expr(nd))
+    push!(block.args, varname(nd))
+    return eval_ex
+end
+
+
+function mk_eval_expr(g::AbstractExGraph, nd::ExNode)   # for EinGraph
+    rsizes = @get_or_create(g.ctx, :rsizes, Dict{Symbol,Any}())
+    dep_nodes = [g[dep] for dep in dependencies(nd) if haskey(g, dep)]
+    deps_vals = [(varname(nd), getvalue(nd)) for nd in dep_nodes]
+    eval_ex = Expr(:block, Expr(:let, Expr(:block)))
+    block = eval_ex.args[1].args[1]
+    for (dep, val) in deps_vals
+        push!(block.args, :(local $dep = $val))
     end
-    # push!(block.args, !isindexed(nd) ? to_expr(nd) :
-    #       (isconv(nd) ? from_einstein(g, nd) : to_einsum_expr(nd)))
+    try
+        # try to convert to vectorized notation for speed and to cover things like `x[i,j] = 1.0`
+        subex = from_einstein(g, nd)
+        subex = subs_size(subex, rsizes)
+        subex = subs_bcast_with_dot(subex)
+        push!(block.args, subex)
+    catch
+        if !isindexed(nd)
+            push!(block.args, to_expr(nd))
+        elseif isconv(nd)
+            push!(block.args, from_einstein(g, nd))
+        elseif getcategory(nd) == :tuple
+            push!(block.args, without_indices(to_expr(nd)))
+        else
+            vname = varname(nd)
+            if haskey(rsizes, vname)
+                # provide size if available
+                push!(block.args, to_einsum_expr(nd, rsizes[vname]).args...)
+            else
+                # otherwise let Einsum to try to infer the size
+                push!(block.args, to_einsum_expr(nd).args...)
+            end
+        end
+    end
     push!(block.args, varname(nd))
     return eval_ex
 end

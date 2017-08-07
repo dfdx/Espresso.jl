@@ -79,9 +79,20 @@ end
 Convert ExNode to a fortmat compatible with Einsum.jl
 """
 function to_einsum_expr(nd::ExNode)
-    ex_without_I = without(getexpr(nd), :(I[_...]))
-    assign_ex = Expr(:(:=), getvar(nd), ex_without_I)
-    return Expr(:macrocall, Symbol("@einsum"), assign_ex)
+    ex = getexpr(nd)
+    v = varname(nd)
+    assign_ex = Expr(:(:=), getvar(nd), ex)
+    macrocall_ex = Expr(:macrocall, Symbol("@einsum"), assign_ex)
+    return Expr(:block, macrocall_ex)
+end
+
+function to_einsum_expr(nd::ExNode, var_size)
+    ex = getexpr(nd)
+    v = varname(nd)
+    init_ex = :($v = zeros($(var_size)))  # TODO: handle data types other than Float64
+    assign_ex = Expr(:(=), getvar(nd), ex)
+    macrocall_ex = Expr(:macrocall, Symbol("@einsum"), assign_ex)
+    return Expr(:block, init_ex, macrocall_ex)
 end
 
 
@@ -110,7 +121,7 @@ function Base.show{C}(io::IO, nd::ExNode{C})
     print(io, "ExNode{$C}($(to_expr(nd)) | $val)")
 end
 
-isindexed(nd::ExNode) = any(isref, get_vars(getexpr(nd)))
+isindexed(nd::ExNode) = any(isref, get_vars(to_expr(nd)))
 
 
 function rewrite{C}(nd::ExNode{C}, pat, rpat; rw_opts...)
