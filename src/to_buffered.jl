@@ -1,9 +1,5 @@
 
-# to_buffered.jl - transform EinGraph to BLAS/in-place operations
-#
-# Unlike blassify.jl, to_buffered.jl works on EinGraph and is more similar
-# to from_einstein.jl.
-# blassify / to_buffered are part of experimental API and may be deprecated.
+# to_buffered.jl - transform EinGraph to buffered/in-place operations
 
 const TO_BUFFERED_PHS = [:A, :B, :C, :X, :Y, :V, :W, :Z,
                       :i, :j, :k, :l, :m, :n, :p, :q, :r, :s, :t]
@@ -72,7 +68,7 @@ const TO_BUFFERED_CALL_RULES =
                 :(Z = _f(X[i...], Y)) => :(Z = sum(_f.(X, Y))),
                 :(Z = _f(X, Y[i...])) => :(Z = sum(_f.(X, Y))),
                 :(Z = _f(X[i...], Y[i...])) => :(Z = sum(_f.(X, Y))),
-                # :(Z = _f(X[i,j], Y[i,j])) => :(Z = sum.(_f(X, Y))),
+                # :(Z = _f(X[i,j], Y[i,j])) => :(Z = sum(_f(X, Y))),
                 # broadcasting + sum with module
                 :(Z = _M._f(X[i...])) => :(Z = sum(_M._f.(X))),
                 :(Z[i] = _M._f(X[i,j])) => :(Z = squeeze(sum(_M._f.(X),2),2)),
@@ -83,7 +79,7 @@ const TO_BUFFERED_CALL_RULES =
                 :(Z = _M._f(X[i...], Y)) => :(Z = sum(_M._f.(X, Y))),
                 :(Z = _M._f(X, Y[i...])) => :(Z = sum(_M._f.(X, Y))),
                 :(Z = _M._f(X[i...], Y[i...])) => :(Z = sum(_M._f.(X, Y))),
-                # :(Z = _M._f(X[i,j], Y[i,j])) => :(Z = sum.(_M._f(X, Y))),
+                # :(Z = _M._f(X[i,j], Y[i,j])) => :(Z = sum(_M._f(X, Y))),
                 # # constants
                 # :(Z[i...] = _f(X, Y)) => :(Z = ones(size__(Z)) .* _f(X, Y)),
                 # # convolution
@@ -126,7 +122,7 @@ const TO_BUFFERED_ASSIGN_RULES =
 
 const TO_BUFFERED_CONST_RULES =
     OrderedDict(:(Z = X) => :(Z = X),
-                # :(Z[i...] = X) => :(Z = ones(size__(Z)) * X),
+                :(Z[i...] = X) => :(Z = ones(size__(Z)) * X),
                 )
 
 
@@ -149,14 +145,15 @@ end
 # to_buffered(g::EinGraph, nd::ExNode{:input}) = getexpr(nd)
 
 function to_buffered(g::EinGraph, nd::ExNode{:constant})
+    rsizes = @get_or_create(g.ctx, :rsizes, Dict())
     ex = to_expr(nd)
     for (pat, rpat) in TO_BUFFERED_CONST_RULES
         rex = tryrewrite(ex, pat, rpat; phs=TO_BUFFERED_PHS, allow_ex=false)
         if !isnull(rex)
-            return get(rex)
+            return subs_size(get(rex), rsizes)
         end
     end
-    error("Can't convert to BLAS node: $nd")
+    error("Can't convert to buffered node: $nd")
 end
 
 
@@ -176,7 +173,7 @@ function to_buffered(g::EinGraph, nd::ExNode{:call})
             return get(rex)
         end
     end
-    error("Can't convert to BLAS node: $nd")
+    error("Can't convert to buffered node: $nd")
 end
 
 
@@ -207,7 +204,7 @@ function to_buffered(g::EinGraph, nd::ExNode{:(=)})
             return get(rex)
         end
     end
-    error("Can't convert to BLAS node: $nd")
+    error("Can't convert to buffered node: $nd")
 end
 
 

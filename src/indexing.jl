@@ -143,6 +143,16 @@ function get_indices(ex; rec::Bool=false)
 end
 
 
+"""
+find_vars(ex; rec=true)
+
+Same as `get_vars()`, but recursive by default
+"""
+find_vars(ex; rec::Bool=true) = get_vars(ex; rec=rec)
+find_var_names(ex; rec::Bool=true) = get_var_names(ex; rec=rec)
+find_indices(ex; rec::Bool=true) = get_indices(ex; rec=rec)
+
+
 function longest_index{T}(idxs_list::Vector{Vector{T}})
     if isempty(idxs_list)
         return []

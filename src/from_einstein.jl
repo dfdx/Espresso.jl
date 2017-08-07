@@ -70,7 +70,7 @@ const FROM_EINSTEIN_CALL_RULES =
                 :(Z = _f(X[i], Y)) => :(Z = sum(_f.(X, Y))),
                 :(Z = _f(X, Y[i])) => :(Z = sum(_f.(X, Y))),
                 :(Z = _f(X[i], Y[i])) => :(Z = sum(_f.(X, Y))),
-                :(Z = _f(X[i,j], Y[i,j])) => :(Z = sum.(_f(X, Y))),
+                :(Z = _f(X[i,j], Y[i,j])) => :(Z = sum(_f(X, Y))),
                 # constants
                 :(Z[i...] = _f(X, Y)) => :(Z = ones(size__(Z)) .* _f(X, Y)),
                 # convolution
