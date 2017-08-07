@@ -64,9 +64,8 @@ Base.setindex!(g::AbstractExGraph, nd::ExNode, i::Integer) =
 indexof(g::AbstractExGraph, vname::Symbol) = findfirst(map(varname, g.tape), vname)
 
 
-function Base.cat(g1::AbstractExGraph, g2::AbstractExGraph)
-    @assert typeof(g1) == typeof(g2)
-    return typeof(g1)(vcat(g1.tape, g2.tape), merge(g1.idx, g2.idx), merge(g1.ctx, g2.ctx))
+function Base.cat(g1::T, g2::T) where T<:AbstractExGraph
+    return T(vcat(g1.tape, g2.tape), merge(g1.idx, g2.idx), merge(g1.ctx, g2.ctx))
 end
 
 
