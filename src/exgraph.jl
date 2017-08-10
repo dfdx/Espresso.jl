@@ -62,6 +62,8 @@ Base.setindex!(g::AbstractExGraph, nd::ExNode, i::Integer) =
     (g.tape[i] = nd; g.idx[varname(nd)] = nd)
 
 indexof(g::AbstractExGraph, vname::Symbol) = findfirst(map(varname, g.tape), vname)
+getsize(g::AbstractExGraph, vname::Symbol) = g.ctx[:rsizes][vname]
+getsize(g::AbstractExGraph, nd::ExNode) = getsize(g, varname(nd))
 
 
 function Base.cat(g1::T, g2::T) where T<:AbstractExGraph
@@ -215,132 +217,6 @@ function parse!(g::ExGraph, ex::ExH{:tuple})
     vname = push!(g, :tuple, genname(), pex)
 end
 
-
-## evaluate!
-
-function remember_size!(g::AbstractExGraph, nd::ExNode)
-    rsizes = @get_or_create(g.ctx, :rsizes, Dict{Symbol,Any}())
-    buff_exprs = @get_or_create(g.ctx, :buff_exprs, Dict{Symbol, Any}())
-    val = getvalue(nd)
-    sz = size(val)
-    rsizes[varname(nd)] = sz
-    if isa(val, Array)
-        T = eltype(val)
-        buff_expr = :(zeros($T, $sz))
-    else
-        T = typeof(val)
-        buff_expr = :(zero($T))
-    end
-    buff_exprs[varname(nd)] = buff_expr
-end
-
-function remember_size!(g::AbstractExGraph, nd::ExNode{:tuple}) end
-
-
-"""
-Evaluate node, i.e. fill its `val` by evaluating node's expression using
-values of its dependencies.
-"""
-function evaluate!(g::AbstractExGraph, nd::ExNode{:constant}; force=false)
-    remember_size!(g, nd)
-    return getvalue(nd)
-end
-
-function evaluate!(g::AbstractExGraph, nd::ExNode{:input}; force=false)
-    remember_size!(g, nd)
-    return getvalue(nd)
-end
-
-
-function isconv(nd::ExNode)
-    idxs = nd |> getexpr |> get_indices |> flatten
-    return any(i -> isa(i, Expr), idxs)
-end
-
-
-function mk_eval_expr(g::AbstractExGraph, nd::ExNode)
-    dep_nodes = [g[dep] for dep in dependencies(nd) if haskey(g, dep)]
-    deps_vals = [(varname(nd), getvalue(nd)) for nd in dep_nodes]
-    eval_ex = Expr(:block, Expr(:let, Expr(:block)))
-    block = eval_ex.args[1].args[1]
-    for (dep, val) in deps_vals
-        push!(block.args, :(local $dep = $val))
-    end
-    if !isindexed(nd)
-        push!(block.args, to_expr(nd))
-    elseif isconv(nd)
-        push!(block.args, from_einstein(g, nd))
-    elseif getcategory(nd) == :tuple
-        push!(block.args, without_indices(to_expr(nd)))
-    else
-        push!(block.args, to_einsum_expr(nd))
-    end
-    # push!(block.args, !isindexed(nd) ? to_expr(nd) :
-    #       (isconv(nd) ? from_einstein(g, nd) : to_einsum_expr(nd)))
-    push!(block.args, varname(nd))
-    return eval_ex
-end
-
-# function mk_eval_expr(g::AbstractExGraph, nd::ExNode)
-#     dep_nodes = [g[dep] for dep in dependencies(nd) if haskey(g, dep)]
-#     deps_vals = [(varname(nd), getvalue(nd)) for nd in dep_nodes]
-#     eval_ex = Expr(:block, Expr(:let, Expr(:block)))
-#     block = eval_ex.args[1].args[1]
-#     for (dep, val) in deps_vals
-#         push!(block.args, :(local $dep = $val))
-#     end
-#     if isindexed(nd)
-#         try
-#             # the problem: from_einstein requires inputs to determine size
-#             push!(block.args, from_einstein(g, nd))
-#         catch
-#             println("falling back to Einsum for $nd")
-#             subex = to_einsum_expr(nd)
-#             println("subex = $subex")
-#             push!(block.args, subex)
-#         end
-#     else
-#         push!(block.args, to_expr(nd))
-#     end
-#     # push!(block.args, !isindexed(nd) ? to_expr(nd) :
-#     #       (isconv(nd) ? from_einstein(g, nd) : to_einsum_expr(nd)))
-#     push!(block.args, varname(nd))
-#     return eval_ex
-# end
-
-
-function evaluate!(g::AbstractExGraph, nd::ExNode{:(=)}; force=false)
-    if (!force && getvalue(nd) != nothing) return getvalue(nd) end
-    dep = dependencies(nd)[1]
-    evaluate!(g, g[dep]; force=force)
-    evex = mk_eval_expr(g, nd)
-    setvalue!(nd, eval(evex))
-    remember_size!(g, nd)
-    return getvalue(nd)
-end
-
-
-function evaluate!(g::AbstractExGraph,
-                   nd::Union{ExNode{:call}, ExNode{:bcast},
-                             ExNode{:tuple}, ExNode{:opaque}};
-                   force=false)
-    if (!force && getvalue(nd) != nothing) return getvalue(nd) end
-    deps = dependencies(nd)
-    for dep in deps
-        # if dep is not in graph, consider it a global constant (like π)
-        if haskey(g.idx, dep)
-            evaluate!(g, g[dep]; force=force)
-        end
-    end
-    evex = mk_eval_expr(g, nd)
-    setvalue!(nd, eval(evex))
-    remember_size!(g, nd)
-    return getvalue(nd)
-end
-
-
-evaluate!(g::AbstractExGraph, name::Symbol; force=false) = evaluate!(g, g[name]; force=force)
-evaluate!(g::AbstractExGraph; force=false) = evaluate!(g, g[end]; force=force)
 
 
 ## reparsing of opaque nodes
