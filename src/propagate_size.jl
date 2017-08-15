@@ -216,7 +216,7 @@ function _propagate_size!(g::AbstractExGraph, nd::ExNode{:bcast})
 end
 
 
-function propagate_size!{C}(g::AbstractExGraph, nd::ExNode{C})
+function propagate_size!(g::AbstractExGraph, nd::ExNode{C}) where C
     sizes = @get_or_create(g.ctx, :sizes, Dict())
     haskey(sizes, varname(nd)) && return
     sz_ex_from_rule = try_rewrite_size(to_expr(nd), sizes)

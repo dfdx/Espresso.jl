@@ -153,7 +153,7 @@ find_var_names(ex; rec::Bool=true) = get_var_names(ex; rec=rec)
 find_indices(ex; rec::Bool=true) = get_indices(ex; rec=rec)
 
 
-function longest_index{T}(idxs_list::Vector{Vector{T}})
+function longest_index(idxs_list::Vector{Vector{T}}) where T
     if isempty(idxs_list)
         return []
     else

@@ -265,8 +265,8 @@ function assign_chain!(g::AbstractExGraph, nd::ExNode{:(=)},
     return chain
 end
 
-function assign_chain!{C}(g::AbstractExGraph, nd::ExNode{C},
-                          guards::Vector{Expr}, chain::Vector{Symbol})
+function assign_chain!(g::AbstractExGraph, nd::ExNode{C},
+                       guards::Vector{Expr}, chain::Vector{Symbol}) where C
     if getguards(nd) == guards
         push!(chain, varname(nd))
     end
@@ -279,7 +279,7 @@ Variables `y` and `x` are considered replacable if there's a node `y = x`
 and both variables have the same set of guards.
 Note that this allows nodes to have different sets of indices.
 """
-assign_chain{C}(g::AbstractExGraph, nd::ExNode{C}) =
+assign_chain(g::AbstractExGraph, nd::ExNode{C}) where {C} =
     assign_chain!(g, nd, getguards(nd), Vector{Symbol}())
 
 

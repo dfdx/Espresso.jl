@@ -113,10 +113,10 @@ end
 
 """Flattenx vector of vectors"""
 flatten(a::Vector) = flatten!([], a)
-flatten{T}(::Type{T}, a::Vector) = convert(Vector{T}, flatten(a))
+flatten(::Type{T}, a::Vector) where {T} = convert(Vector{T}, flatten(a))
 
 """Flatten one level of nested vectors"""
-function flatten1{T}(a::Vector{Vector{T}})
+function flatten1(a::Vector{Vector{T}}) where T
     result = Array(T, 0)
     for xs in a
         for x in xs
@@ -127,7 +127,7 @@ function flatten1{T}(a::Vector{Vector{T}})
 end
 
 
-function countdict{T}(a::AbstractArray{T})
+function countdict(a::AbstractArray{T}) where T
     counts = OrderedDict{T, Int}()
     for x in a
         if haskey(counts, x)
@@ -165,14 +165,9 @@ end
 
 ## package-specific stuff
 
-if VERSION < v"0.5-"
-    func_name(f) = f.env.name
-    func_mod(f) = f.env.module
-else
-    func_name(f) = Base.function_name(f)
-    # func_mod(f) = Base.function_module(f)
-    func_mod(f) = Base.datatype_module(typeof(f))
-end
+func_name(f) = Base.function_name(f)
+# func_mod(f) = Base.function_module(f)
+func_mod(f) = Base.datatype_module(typeof(f))
 
 
 """
@@ -233,7 +228,7 @@ canonical_calls(mod::Module, x) = x
 
 # context
 
-function to_context{K,V}(d::Union{Dict{K,V},Vector{Pair{K,V}}})
+function to_context(d::Union{Dict{K,V},Vector{Pair{K,V}}}) where {K,V}
     ctx = Dict{Any,Any}()
     for (k, v) in d
         ctx[k] = to_context(v)
@@ -247,7 +242,7 @@ to_context(x) = x
 # guards
 
 """create cross-reference dict of cliques"""
-function cliqueset{T}(pairs::Vector{Tuple{T,T}})
+function cliqueset(pairs::Vector{Tuple{T,T}}) where T
     cliques = Dict{T, Set{T}}()
     for (x1, x2) in pairs
         has_x1 = haskey(cliques, x1)
@@ -268,7 +263,7 @@ function cliqueset{T}(pairs::Vector{Tuple{T,T}})
 end
 
 
-function crosspairs{T}(pairs::Vector{Tuple{T,T}})
+function crosspairs(pairs::Vector{Tuple{T,T}}) where T
     cliques = cliqueset(pairs)
     xpairs = Set{Tuple{T,T}}()
     for (x, ys) in cliques
@@ -283,7 +278,7 @@ function crosspairs{T}(pairs::Vector{Tuple{T,T}})
 end
 
 
-function reduce_equalities{T}(pairs::Vector{Tuple{T,T}}, anchors::Set{T}; replace_anchors=true)
+function reduce_equalities(pairs::Vector{Tuple{T,T}}, anchors::Set{T}; replace_anchors=true) where T
     # Q: Why do we need prop_subs here?
     # cliques = cliqueset([(k, v) for (k, v) in prop_subs(Dict(pairs))])
     cliques = cliqueset(pairs)
