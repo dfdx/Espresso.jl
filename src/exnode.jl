@@ -36,7 +36,7 @@ end
 
 ## accessors
 
-getcategory{C}(nd::ExNode{C}) = C
+getcategory(nd::ExNode{C}) where {C} = C
 
 getvar(nd::ExNode) = nd.var
 setvar!(nd::ExNode, var::Union{Symbol,Expr}) = (nd.var = var)
@@ -53,7 +53,7 @@ setguards!(nd::ExNode, guards::Vector{Expr}) = (nd.guards = guards)
 getvalue(nd::ExNode) = nd.val
 setvalue!(nd::ExNode, val) = (nd.val = val)
 
-Base.copy{C}(nd::ExNode{C}; category=C, var=nd.var, ex=nd.ex,  guards=nd.guards, val=nd.val) =
+Base.copy(nd::ExNode{C}; category=C, var=nd.var, ex=nd.ex,  guards=nd.guards, val=nd.val) where {C} =
     ExNode{category}(var, ex, guards, val)
 
 
@@ -116,7 +116,7 @@ dependencies(nd::ExNode{:opaque}) = get_var_names(getexpr(nd); rec=true)
 # buffer_expr(nd::ExNode{:tuple})
 
 
-function Base.show{C}(io::IO, nd::ExNode{C})
+function Base.show(io::IO, nd::ExNode{C}) where C
     val = isa(getvalue(nd), AbstractArray) ? "<$(typeof(getvalue(nd)))>" : getvalue(nd)
     print(io, "ExNode{$C}($(to_expr(nd)) | $val)")
 end
@@ -124,7 +124,7 @@ end
 isindexed(nd::ExNode) = any(isref, get_vars(to_expr(nd)))
 
 
-function rewrite{C}(nd::ExNode{C}, pat, rpat; rw_opts...)
+function rewrite(nd::ExNode{C}, pat, rpat; rw_opts...) where C
     full_ex = to_expr(nd)
     new_full_ex = rewrite(full_ex, pat, rpat; rw_opts...)
     @assert new_full_ex.head == :(=)

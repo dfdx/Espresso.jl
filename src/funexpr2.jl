@@ -17,7 +17,7 @@ function sanitize(ex::ExH{:block})
     return length(new_args) == 1 ? new_args[1] : Expr(ex.head, new_args...)
 end
 
-function sanitize{H}(ex::ExH{H})
+function sanitize(ex::ExH{H}) where H
     sanitized_args = [sanitize(arg) for arg in ex.args]
     new_args = filter(arg -> arg != nothing, sanitized_args)
     return Expr(H, new_args...)
@@ -58,7 +58,7 @@ function findfun(ex::ExH{:function}, name::Symbol, types::Tuple{DataType})
     end
 end
 
-function findfun{N}(ex::ExH{:(=)}, name::Symbol, types::NTuple{N,DataType})
+function findfun(ex::ExH{:(=)}, name::Symbol, types::NTuple{N,DataType}) where N
     if ex.args[1].head == :call && ex.args[1].args[1] == name && types == funtypes(ex)
         return Nullable(ex)
     else
@@ -66,7 +66,7 @@ function findfun{N}(ex::ExH{:(=)}, name::Symbol, types::NTuple{N,DataType})
     end
 end
 
-function findfun{N}(ex::ExH{:macrocall}, name::Symbol, types::NTuple{N,DataType})
+function findfun(ex::ExH{:macrocall}, name::Symbol, types::NTuple{N,DataType}) where N
     if is_doc_macro(ex.args[1])
         return findfun(ex.args[3], name, types)
     else
@@ -74,7 +74,7 @@ function findfun{N}(ex::ExH{:macrocall}, name::Symbol, types::NTuple{N,DataType}
     end
 end
 
-function findfun{N}(ex::ExH{:module}, name::Symbol, types::NTuple{N,DataType})
+function findfun(ex::ExH{:module}, name::Symbol, types::NTuple{N,DataType}) where N
     for subex in ex.args[3].args
         nullex = findfun(subex, name, types)
         if !isnull(nullex)
