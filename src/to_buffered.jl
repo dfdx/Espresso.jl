@@ -163,6 +163,11 @@ function to_buffered(g::EinGraph, nd::ExNode{:call})
     if !iscall(ex.args[2])
         return to_buffered(g, convert_call(g, nd))
     end
+    if is_special_expr(getexpr(nd))
+        # not buffered version, will improve when semantics
+        # for special functions gets more clear
+        return from_einstein(g, nd)
+    end
     if is_bcast_indexed(nd)
         return make_elementwise(without_indices(to_expr(nd));
                                 lhs_is_scalar=isempty(varidxs(nd)))

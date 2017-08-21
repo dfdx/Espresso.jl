@@ -254,7 +254,7 @@ end
 
 function assign_chain!(g::AbstractExGraph, nd::ExNode{:(=)},
                        guards::Vector{Expr}, chain::Vector{Symbol})
-    if getguards(nd) == guards
+    if getguards(nd) == guards #  && !is_special_expr(getexpr(nd))
         push!(chain, varname(nd))
         dep = dependencies(nd)[1]
         if haskey(g, dep) && !isa(g[dep], ExNode{:input})
