@@ -9,6 +9,7 @@ export
     to_block,
     # rewrite
     matchex,
+    matchingex,
     findex,
     subs,
     rewrite,

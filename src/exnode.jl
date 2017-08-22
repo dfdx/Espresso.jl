@@ -118,7 +118,9 @@ dependencies(nd::ExNode{:opaque}) = get_var_names(getexpr(nd); rec=true)
 
 function Base.show(io::IO, nd::ExNode{C}) where C
     val = isa(getvalue(nd), AbstractArray) ? "<$(typeof(getvalue(nd)))>" : getvalue(nd)
-    print(io, "ExNode{$C}($(to_expr(nd)) | $val)")
+    ex_str = "ExNode{$C}($(to_expr(nd)) | $val)"
+    # print(io, replace(ex_str, "Colon()", ":"))
+    print(io, ex_str)
 end
 
 isindexed(nd::ExNode) = any(isref, get_vars(to_expr(nd)))

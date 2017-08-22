@@ -1,8 +1,6 @@
 
 # expand_deps.jl - collect & expand all dependencies of a variable in  AbstractExGraph
 
-# TODO: do we really need both - collect_deps and expand_deps?
-
 ## collect_deps
 
 function collect_deps!(g::AbstractExGraph, nd::ExNode, depth::Int, result::Set{Symbol})

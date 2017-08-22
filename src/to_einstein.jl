@@ -17,10 +17,14 @@ const TO_EINSTEIN_RULES =
                 (:conv2, [2, 2]) => [:(Z = conv2(X, W)) => :(Z[i,j] = X[i+m-1, j+n-1] * W[m,n])])
 
 
+"""
+to_einstein(ex::Expr; ctx=Dict(), inputs...)
+
+Transform expression `ex` to Einstein indexing notation.
+"""
 function to_einstein(ex::Expr; ctx=Dict(), inputs...)
     g = ExGraph(ex; ctx=to_context(ctx), inputs...)
-    evaluate!(g, g.tape[end].var)
-    # propagate_size!(g) -- should/can we use propagate_size in vector notation? 
+    evaluate!(g)
     res = :(begin end)
     for nd in g.tape
         if !isa(nd, ExNode{:input})
@@ -41,7 +45,14 @@ function to_einstein(g::ExGraph, nd::ExNode{:call})
     ex = to_expr(nd)
     op = ex.args[2].args[1]
     dep_dims = [ndims(getvalue(g[dep])) for dep in dependencies(nd) if haskey(g, dep)]
-    if haskey(TO_EINSTEIN_RULES, (op, dep_dims))
+    if op in SPECIAL_FUNCS
+        rhs = getexpr(nd)
+        vnames = find_vars(rhs)
+        vars = [:($vname[:]) for vname in vnames]
+        new_rhs = subs(rhs, Dict(zip(vnames, vars)))
+        new_lhs = with_indices(varname(nd), ndims(getvalue(nd)))
+        return :($new_lhs = $new_rhs)
+    elseif haskey(TO_EINSTEIN_RULES, (op, dep_dims))
         rules = TO_EINSTEIN_RULES[(op, dep_dims)]
         for (pat, subs_ex) in rules
             matched = tryrewrite(ex, pat, subs_ex; phs=FROM_EIN_PHS)
