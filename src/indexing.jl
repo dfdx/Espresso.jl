@@ -294,3 +294,51 @@ function without_indices(ex::Expr)
 end
 
 without_indices(x) = x
+
+
+
+
+# index replacement
+
+"""
+Given a set of existing indices and current position of iterator,
+find the next index not in the set.
+"""
+function next_index(existing::Set{T}, pos::Int) where T
+    while pos <= length(IDX_NAMES) && in(IDX_NAMES[pos], existing)
+        pos += 1
+    end
+    if pos <= length(IDX_NAMES)
+        return IDX_NAMES[pos], pos + 1
+    else
+        throw(BoundsError("IDX_NAMES"))
+    end
+end
+
+
+function next_indices(existing::Set{T}, pos::Int, count::Int) where T
+    new_indices = Array{Symbol}(0)
+    for i=1:count
+        new_idx, pos = next_index(existing, pos)
+        push!(new_indices, new_idx)
+    end
+    return new_indices
+end
+
+
+"""
+Given a set of existing indicies and possible duplicates, find for each duplicate
+a replacement - index from IDX_NAMES that is not used yet.
+"""
+function index_replacements(existing::Set{T}, maybedups::Vector{T}) where T
+    repls = Dict{Symbol,Symbol}()
+    pos = 1
+    for idx in maybedups
+        # maybedups should also be included in existing index set
+        all_existing = union(existing, Set(maybedups), Set(keys(repls)))
+        if in(idx, existing) && !in(idx, keys(repls))
+            repls[idx], pos = next_index(all_existing, pos)
+        end
+    end
+    return repls
+end

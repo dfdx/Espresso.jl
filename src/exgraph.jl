@@ -286,6 +286,7 @@ assign_chain(g::AbstractExGraph, nd::ExNode{C}) where {C} =
 
 function assign_chain_index_replacements(g::AbstractExGraph, chain::Vector{Symbol})
     nd = g[chain[1]]
+    root_nd = g[chain[end]]
     st = Dict(zip(varidxs(nd), varidxs(nd)))
     for i=2:length(chain)
         prev_idxs = get_indices(getexpr(g[chain[i-1]]))[1]
@@ -300,7 +301,12 @@ function assign_chain_index_replacements(g::AbstractExGraph, chain::Vector{Symbo
         end
         st = new_st
     end
-    return Dict(zip(values(st), keys(st)))
+    # indices that occur in RHS of the root assignment node, but not on its LHS
+    root_free_idxs_ = find_indices(to_expr(root_nd)) |> flatten |> Set
+    root_free_idxs = Any[idx for idx in root_free_idxs_ if !in(idx, values(st))]
+    free_st = index_replacements(Set(keys(st)), root_free_idxs)
+    rev_st = Dict(zip(values(st), keys(st)))
+    return merge(rev_st, free_st)
 end
 
 
@@ -321,7 +327,8 @@ function fuse_assigned(g::AbstractExGraph; outvars=nothing)
             chain = assign_chain(g, nd)
             root_assign_nd = g[chain[end]]
             new_ex_ = getexpr(root_assign_nd)
-            new_ex = subs(new_ex_, assign_chain_index_replacements(g, chain))
+            st = assign_chain_index_replacements(g, chain)
+            new_ex = subs(new_ex_, st)
             new_nd = copy(root_assign_nd; var=getvar(nd), ex=new_ex)
             push!(new_g, new_nd)
         else

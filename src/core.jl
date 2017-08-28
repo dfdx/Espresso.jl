@@ -10,6 +10,7 @@ using Sugar
 
 include("types.jl")
 include("utils.jl")
+# include("sparsearr.jl")
 include("rewrite.jl")
 include("simplify.jl")
 include("funexpr.jl")
