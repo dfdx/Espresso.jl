@@ -36,6 +36,8 @@ const FROM_EINSTEIN_CALL_RULES =
                 :(Z[j,i] = X[k,i] .* Y[k,j]) => :(Z = Y' * X),  # same transposed
                 # special .+ and .*
                 :(Z[i,j] = X[j] .+ Y[i,j]) => :(Z = X' .+ Y),
+                :(Z[i,j] = X[i,j] .* Y[i]) => :(Z = X .* Y),
+                :(Z[i,j] = X[i] .* Y[i,j]) => :(Z = X .* Y),
                 :(Z[i,j] = X .* Y[j]) => :(Z = repmat((X .* Y)', size__(Z)[1])),
                 :(Z[j] = X .* Y[i,j]) => :(Z = X .* squeeze(sum(Y,1),1)),
                 # special functions (should go before broadcasting)

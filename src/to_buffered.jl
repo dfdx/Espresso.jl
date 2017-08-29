@@ -29,14 +29,16 @@ const TO_BUFFERED_CALL_RULES =
                 :(Z[i,j] = X[i,k] .* Y[k,j]) => :(A_mul_B!(Z, X, Y)),
                 :(Z[i,j] = Y[k,j] .* X[i,k]) => :(A_mul_B!(Z, X, Y)),
                 :(Z[i,j] = Y[i,j] .* X[j,i]) => :(A_mul_Bt!(Z, X, Y)),
-                # # matrix-by-matrix: 3-index rule
+                # matrix-by-matrix: 3-index rule
                 :(Z[i,j] = X[i,k] .* Y[j,k]) => :(A_mul_Bt!(Z, X, Y)),
                 :(Z[i,j] = X[k,i] .* Y[k,j]) => :(At_mul_B!(Z, X, Y)),
                 :(Z[j,i] = X[i,k] .* Y[j,k]) => :(A_mul_Bt!(Z, Y, X)),  # same transposed
                 :(Z[j,i] = X[k,i] .* Y[k,j]) => :(At_mul_B!(Z, Y, X)),  # same transposed
-                # # special .+ and .*
+                # special .+ and .*
                 :(Z[i,j] = X[i,j] .+ Y[i]) => :(Z .= X .+ Y),
                 :(Z[i,j] = X[i] .+ Y[i,j]) => :(Z .= X .+ Y),
+                :(Z[i,j] = X[i,j] .* Y[i]) => :(Z .= X .* Y),
+                :(Z[i,j] = X[i] .* Y[i,j]) => :(Z .= X .* Y),
                 # :(Z[i,j] = X[j] .+ Y[i,j]) => :(Z .= X' .+ Y),   # can it happen
                 # :(Z[i,j] = X .* Y[j]) => :(Z = repmat((X .* Y)', size__(Z)[1])),
                 # :(Z[j] = X .* Y[i,j]) => :(Z = X .* squeeze(sum(Y,1),1)),
