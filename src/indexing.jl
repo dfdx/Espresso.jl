@@ -202,10 +202,12 @@ function forall_sum_indices(op::Symbolic, depidxs::Vector)
     if op == :*
         repeated, non_repeated = repeated_non_repeated(depidxs)
         return non_repeated, repeated
+    elseif op == :length
+        return [], unique(flatten(depidxs))
     elseif bcast
         return longest_idx, []
     else
-        return unique(flatten(depidxs)), Symbol[]
+        return unique(flatten(depidxs)), []
     end
 end
 

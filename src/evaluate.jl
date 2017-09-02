@@ -85,6 +85,13 @@ Evaluate node, i.e. fill its `val` by evaluating node's expression using
 values of its dependencies.
 """
 function evaluate!(g::ExGraph, nd::ExNode{:constant}; force=false)
+    ex = getexpr(nd)
+    if getvalue(nd) == nothing && (isa(ex, Symbol) || isa(ex, Expr))
+        # constant expression - need to evaluate it
+        evex = mk_eval_expr(g, nd)
+        val = eval(g.ctx[:mod], evex)
+        setvalue!(nd, val)
+    end
     remember_size!(g, nd)
     return getvalue(nd)
 end

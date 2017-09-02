@@ -34,6 +34,12 @@ const FROM_EINSTEIN_CALL_RULES =
                 :(Z[i,j] = X[k,i] .* Y[k,j]) => :(Z = X' * Y),
                 :(Z[j,i] = X[i,k] .* Y[j,k]) => :(Z = Y * X'),  # same transposed
                 :(Z[j,i] = X[k,i] .* Y[k,j]) => :(Z = Y' * X),  # same transposed
+                :(Z[i] = X[j, k] .* Y[j, i]) => :(Z = squeeze(sum(X' * Y, 1)', 2)),
+                :(Z[k] = X[j, k] .* Y[j, i]) => :(Z = squeeze(sum(X' * Y, 2), 2)),
+                # other 3-index rules
+                :(Z[i,j] = X[j,k] .* Y) => :(Z = Y .* repmat(sum(X,2)', size__(Z)[1])),
+                :(Z[i,j] = Y .* X[j,k]) => :(Z = Y .* repmat(sum(X,2)', size__(Z)[1])),
+                :(Z[i,j] = -X[j,k]) => :(Z = -repmat(sum(X,2)', size__(Z)[1])),
                 # special .+ and .*
                 :(Z[i,j] = X[j] .+ Y[i,j]) => :(Z = X' .+ Y),
                 :(Z[i,j] = X[i,j] .* Y[i]) => :(Z = X .* Y),
@@ -111,6 +117,8 @@ const FROM_EINSTEIN_CALL_RULES =
                 :(Z = _f(X[i,j], Y[i,j])) => :(Z = sum(_f(X, Y))),
                 # constants
                 :(Z[i...] = _f(X, Y)) => :(Z = ones(size__(Z)) .* _f(X, Y)),
+                # full tensor operations
+                # :(Z[i...] = X[i...] / Y[:]) => :(Z = )
                 # convolution
                 # TODO: test conv rules
                 # direct conv

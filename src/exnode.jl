@@ -100,7 +100,7 @@ end
 
 """Get names of dependenices of this node"""
 dependencies(nd::ExNode{:input}) = Symbol[]
-dependencies(nd::ExNode{:constant}) = Symbol[]
+dependencies(nd::ExNode{:constant}) = get_var_names(getexpr(nd))
 dependencies(nd::ExNode{:(=)}) = get_var_names(getexpr(nd))
 dependencies(nd::ExNode{:call}) = get_var_names(getexpr(nd))
 dependencies(nd::ExNode{:bcast}) = get_var_names(getexpr(nd))

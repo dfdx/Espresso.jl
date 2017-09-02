@@ -114,7 +114,8 @@ function parse!(g::EinGraph, ex::ExH{:call})
         st, pex_guards = reduce_guards(guards; keep=vidxs, used=flatten(vcat(vidxs..., depidxs...)))
         pex = subs(pex_, st)
         var = make_indexed(genname(), vidxs)
-        push!(g, ExNode{:call}(var, pex; guards=pex_guards))
+        C = in(op, CONST_OPS) ? :constant : :call
+        push!(g, ExNode{C}(var, pex; guards=pex_guards))
     else
         var = parse!(g, ex_)
     end

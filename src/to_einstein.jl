@@ -7,6 +7,11 @@ const TO_EINSTEIN_RULES =
                 (:sum, [2]) => [:(Z = sum(X)) => :(Z = X[i,j])],
                 (:sum, [2, 0]) => [:(Z = sum(X, 1)) => :(Z[j] = X[i,j]),
                                    :(Z = sum(X, 2)) => :(Z[i] = X[i,j])],
+                (:mean, [0]) => [:(Z = mean(X)) => :(Z = X)],
+                (:mean, [1]) => [:(Z = mean(X)) => :(Z = X[i] / length(X[:]))],
+                (:mean, [2]) => [:(Z = mean(X)) => :(Z = X[i,j] / length(X[:]))],
+                (:mean, [2, 0]) => [:(Z = mean(X, 1)) => :(Z[j] = X[i,j] / length(X[:])),
+                                    :(Z = mean(X, 2)) => :(Z[i] = X[i,j] / length(X[:])),],
                 (:*, [0, 0]) => [:(Z = X * Y) => :(Z = X * Y)],
                 # (:*, [1, 1]) => [(:(X * Y), :(X[i] * Y[i]))], -- invalid?
                 (:*, [2, 1]) => [:(Z = X * Y) => :(Z[i] = X[i,k] * Y[k])],
@@ -53,6 +58,7 @@ function to_einstein(g::ExGraph, nd::ExNode{:call})
         new_lhs = with_indices(varname(nd), ndims(getvalue(nd)))
         return :($new_lhs = $new_rhs)
     elseif haskey(TO_EINSTEIN_RULES, (op, dep_dims))
+        ex = expand_const(g, ex)
         rules = TO_EINSTEIN_RULES[(op, dep_dims)]
         for (pat, subs_ex) in rules
             matched = tryrewrite(ex, pat, subs_ex; phs=FROM_EIN_PHS)

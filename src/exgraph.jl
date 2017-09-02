@@ -176,11 +176,18 @@ function parse!(g::ExGraph, ex::ExH{:ref})
 end
 
 
+# operations that are guaranted to never change their value
+const CONST_OPS = Set([:length])
+
 function parse!(g::ExGraph, ex::ExH{:call})
     op = canonical(g.ctx[:mod], ex.args[1])
     deps = [parse!(g, arg) for arg in ex.args[2:end]]
     pex = Expr(:call, op, deps...)
-    var = push!(g, :call, genname(), pex)
+    if op in CONST_OPS
+        var = push!(g, :constant, genname(), pex)
+    else
+        var = push!(g, :call, genname(), pex)
+    end
     return var
 end
 

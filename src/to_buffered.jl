@@ -1,6 +1,8 @@
 
 # to_buffered.jl - transform EinGraph to buffered/in-place operations
 
+using DataStructures
+
 const TO_BUFFERED_PHS = [:A, :B, :C, :X, :Y, :V, :W, :Z,
                       :i, :j, :k, :l, :m, :n, :p, :q, :r, :s, :t]
 
@@ -34,6 +36,12 @@ const TO_BUFFERED_CALL_RULES =
                 :(Z[i,j] = X[k,i] .* Y[k,j]) => :(At_mul_B!(Z, X, Y)),
                 :(Z[j,i] = X[i,k] .* Y[j,k]) => :(A_mul_Bt!(Z, Y, X)),  # same transposed
                 :(Z[j,i] = X[k,i] .* Y[k,j]) => :(At_mul_B!(Z, Y, X)),  # same transposed
+                :(Z[i] = X[j, k] .* Y[j, i]) => :(Z .= squeeze(sum(X' * Y, 1)', 2)),
+                :(Z[k] = X[j, k] .* Y[j, i]) => :(Z .= squeeze(sum(X' * Y, 2), 2)),
+                # other 3-index rules
+                :(Z[i,j] = X[j,k] .* Y) => :(Z .= Y .* sum(X,2)'),
+                :(Z[i,j] = Y .* X[j,k]) => :(Z .= Y .* sum(X,2)'),
+                :(Z[i,j] = -X[j,k]) => :(Z .= -sum(X, 2)'),
                 # special .+ and .*
                 :(Z[i,j] = X[i,j] .+ Y[i]) => :(Z .= X .+ Y),
                 :(Z[i,j] = X[i] .+ Y[i,j]) => :(Z .= X .+ Y),
@@ -80,7 +88,7 @@ const TO_BUFFERED_CALL_RULES =
                 :(Z[j] = _M._f(X[i,j], Y[i,j])) => :(Z = squeeze(sum(_M._f.(X, Y),1),1)),
                 :(Z = _M._f(X[i...], Y)) => :(Z = sum(_M._f.(X, Y))),
                 :(Z = _M._f(X, Y[i...])) => :(Z = sum(_M._f.(X, Y))),
-                :(Z = _M._f(X[i...], Y[i...])) => :(Z = sum(_M._f.(X, Y))),
+                :(Z = _M._f(X[i...], Y[i...])) => :(Z = sum(_M._f.(X, Y))),                
                 # :(Z = _M._f(X[i,j], Y[i,j])) => :(Z = sum(_M._f(X, Y))),
                 # # constants
                 # :(Z[i...] = _f(X, Y)) => :(Z = ones(size__(Z)) .* _f(X, Y)),
@@ -125,6 +133,8 @@ const TO_BUFFERED_ASSIGN_RULES =
 const TO_BUFFERED_CONST_RULES =
     OrderedDict(:(Z = X) => :(Z = X),
                 :(Z[i...] = X) => :(Z = ones(size__(Z)) * X),
+                # constant expressions
+                :(Z = length(X[:])) => :(Z = length(X)),
                 )
 
 
