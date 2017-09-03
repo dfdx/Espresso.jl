@@ -5,7 +5,12 @@ const FROM_EIN_PHS = [:A, :B, :C, :X, :Y, :V, :W, :Z,
                       :i, :j, :k, :l, :m, :n, :p, :q, :r, :s, :t]
 
 const FROM_EINSTEIN_CALL_RULES =
-    OrderedDict(# inner and outer product
+    OrderedDict(# sum_n
+                :(Z[i,j] = sum_1(X[i,j])) => :(Z = sum(X, 1)),
+                :(Z[i,j] = Espresso.sum_1(X[i,j])) => :(Z = sum(X, 1)),
+                :(Z[i,j] = sum_2(X[i,j])) => :(Z = sum(X, 2)),
+                :(Z[i,j] = Espresso.sum_2(X[i,j])) => :(Z = sum(X, 2)),
+                # inner and outer product
                 :(Z[i,j] = X[i] * Y[j]) => :(Z = X * Y'),
                 :(Z = X[i] * Y[i]) => :(Z = X'Y),
                 :(Z[i,j] = X[i] .* Y[j]) => :(Z = X * Y'),
@@ -45,7 +50,7 @@ const FROM_EINSTEIN_CALL_RULES =
                 :(Z[i,j] = X[i,j] .* Y[i]) => :(Z = X .* Y),
                 :(Z[i,j] = X[i] .* Y[i,j]) => :(Z = X .* Y),
                 :(Z[i,j] = X .* Y[j]) => :(Z = repmat((X .* Y)', size__(Z)[1])),
-                :(Z[j] = X .* Y[i,j]) => :(Z = X .* squeeze(sum(Y,1),1)),
+                :(Z[j] = X .* Y[i,j]) => :(Z = X .* squeeze(sum(Y,1),1)),                
                 # special functions (should go before broadcasting)
                 :(Z[:] = _f(X[:])) => :(Z = _f(X)),
                 :(Z[:] = _f(X[:], Y[:])) => :(Z = _f(X, Y)),
@@ -54,7 +59,7 @@ const FROM_EINSTEIN_CALL_RULES =
                 :(Z[i...] = _f(X[:])) => :(Z = _f(X)),
                 :(Z[i...] = _f(X[:], Y[:])) => :(Z = _f(X, Y)),
                 :(Z[i...] = _f(X[:], Y)) => :(Z = _f(X, Y)),
-                :(Z[i...] = _f(X, Y[:])) => :(Z = _f(X, Y)),
+                :(Z[i...] = _f(X, Y[:])) => :(Z = _f(X, Y)),                
                 # sum is safe, but isn't exactly correct here
                 # :(Z = _f(X[:])) => :(Z = sum(_f(X))),
                 # :(Z = _f(X[:], Y[:])) => :(Z = sum(_f(X, Y))),
@@ -117,8 +122,6 @@ const FROM_EINSTEIN_CALL_RULES =
                 :(Z = _f(X[i,j], Y[i,j])) => :(Z = sum(_f(X, Y))),
                 # constants
                 :(Z[i...] = _f(X, Y)) => :(Z = ones(size__(Z)) .* _f(X, Y)),
-                # full tensor operations
-                # :(Z[i...] = X[i...] / Y[:]) => :(Z = )
                 # convolution
                 # TODO: test conv rules
                 # direct conv

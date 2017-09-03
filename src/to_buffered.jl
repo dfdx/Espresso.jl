@@ -7,7 +7,12 @@ const TO_BUFFERED_PHS = [:A, :B, :C, :X, :Y, :V, :W, :Z,
                       :i, :j, :k, :l, :m, :n, :p, :q, :r, :s, :t]
 
 const TO_BUFFERED_CALL_RULES =
-    OrderedDict(# inner and outer product
+    OrderedDict(# sum_n
+                :(Z[i,j] = sum_1(X[i,j])) => :(Z .= sum(X, 1)),
+                :(Z[i,j] = Espresso.sum_1(X[i,j])) => :(Z .= sum(X, 1)),
+                :(Z[i,j] = sum_2(X[i,j])) => :(Z .= sum(X, 2)),
+                :(Z[i,j] = Espresso.sum_2(X[i,j])) => :(Z .= sum(X, 2)),
+                # inner and outer product
                 :(Z[i,j] = X[i] * Y[j]) => :(A_mul_Bt!(Z, X, Y)),
                 # :(Z = X[i] * Y[i]) => :(Z = X'Y),
                 :(Z[i,j] = X[i] .* Y[j]) => :(A_mul_Bt!(Z, X, Y)),
@@ -46,7 +51,7 @@ const TO_BUFFERED_CALL_RULES =
                 :(Z[i,j] = X[i,j] .+ Y[i]) => :(Z .= X .+ Y),
                 :(Z[i,j] = X[i] .+ Y[i,j]) => :(Z .= X .+ Y),
                 :(Z[i,j] = X[i,j] .* Y[i]) => :(Z .= X .* Y),
-                :(Z[i,j] = X[i] .* Y[i,j]) => :(Z .= X .* Y),
+                :(Z[i,j] = X[i] .* Y[i,j]) => :(Z .= X .* Y),                
                 # :(Z[i,j] = X[j] .+ Y[i,j]) => :(Z .= X' .+ Y),   # can it happen
                 # :(Z[i,j] = X .* Y[j]) => :(Z = repmat((X .* Y)', size__(Z)[1])),
                 # :(Z[j] = X .* Y[i,j]) => :(Z = X .* squeeze(sum(Y,1),1)),
@@ -160,6 +165,7 @@ function to_buffered(g::EinGraph, nd::ExNode{:constant})
     rsizes = @get_or_create(g.ctx, :rsizes, Dict())
     ex = to_expr(nd)
     for (pat, rpat) in TO_BUFFERED_CONST_RULES
+        pat = sanitize(pat)
         rex = tryrewrite(ex, pat, rpat; phs=TO_BUFFERED_PHS, allow_ex=false)
         if !isnull(rex)
             return subs_size(get(rex), rsizes)
@@ -179,16 +185,17 @@ function to_buffered(g::EinGraph, nd::ExNode{:call})
         # not buffered version, will improve when semantics
         # for special functions gets more clear
         return from_einstein(g, nd)
-    end
-    if is_bcast_indexed(nd)
-        return make_elementwise(without_indices(to_expr(nd));
-                                lhs_is_scalar=isempty(varidxs(nd)))
-    end
+    end    
     for (pat, rpat) in TO_BUFFERED_CALL_RULES
+        pat = sanitize(pat)
         rex = tryrewrite(ex, pat, rpat; phs=TO_BUFFERED_PHS, allow_ex=false)
         if !isnull(rex)
             return get(rex)
         end
+    end
+    if is_bcast_indexed(nd)
+        return make_elementwise(without_indices(to_expr(nd));
+                                lhs_is_scalar=isempty(varidxs(nd)))
     end
     error("Can't convert to buffered node: $nd")
 end
@@ -216,6 +223,7 @@ end
 function to_buffered(g::EinGraph, nd::ExNode{:(=)})
     ex = to_expr(nd)
     for (pat, rpat) in TO_BUFFERED_ASSIGN_RULES
+        pat = sanitize(pat)
         rex = tryrewrite(ex, pat, rpat; phs=TO_BUFFERED_PHS, allow_ex=false)
         if !isnull(rex)
             return get(rex)

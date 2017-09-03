@@ -81,7 +81,13 @@ export
     # Einstein conversions
     to_einstein,
     from_einstein,
-    to_buffered
+    to_buffered,
+    # helpers
+    sum_1,
+    sum_2,
+    squeeze_sum,
+    squeeze_sum_1,
+    squeeze_sum_2
 
 
 

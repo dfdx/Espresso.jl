@@ -17,11 +17,18 @@ function sanitize(ex::ExH{:block})
     return length(new_args) == 1 ? new_args[1] : Expr(ex.head, new_args...)
 end
 
+
+function sanitize(ex::ExH{:quote})
+    return length(ex.args) == 1 ? QuoteNode(ex.args[1]) : ex
+end
+
+
 function sanitize(ex::ExH{H}) where H
     sanitized_args = [sanitize(arg) for arg in ex.args]
     new_args = filter(arg -> arg != nothing, sanitized_args)
     return Expr(H, new_args...)
 end
+
 
 function sanitize(ref::GlobalRef)
     # mod = Main # module doesn't actually matter since GlobalRef contains it anyway
@@ -44,9 +51,13 @@ function replace_slots(ex::Expr, slotnames::Vector)
     new_ex = Expr(ex.head, new_args...)
     return new_ex
 end
+
+
 function arg_names(sig::Expr)
     return [isa(arg,  Symbol) ? arg : arg.args[1] for arg in sig.args[2:end]]
 end
+
+
 function to_expr(src::CodeInfo)
     if isa(src.code, Array{Any,1})
         slotnames = [Symbol(name) for name in Base.sourceinfo_slotnames(src)]
@@ -57,6 +68,8 @@ function to_expr(src::CodeInfo)
         error("Can't convert CodeInfo to expression: CodeInfo is compressed: $src")
     end
 end
+
+
 function funexpr(f::Function, types::NTuple{N,DataType}) where N
     method = Sugar.get_method(f, types)
     file = string(method.file)
