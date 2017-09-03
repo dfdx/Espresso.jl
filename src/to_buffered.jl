@@ -8,10 +8,15 @@ const TO_BUFFERED_PHS = [:A, :B, :C, :X, :Y, :V, :W, :Z,
 
 const TO_BUFFERED_CALL_RULES =
     OrderedDict(# sum_n
-                :(Z[i,j] = sum_1(X[i,j])) => :(Z .= sum(X, 1)),
-                :(Z[i,j] = Espresso.sum_1(X[i,j])) => :(Z .= sum(X, 1)),
-                :(Z[i,j] = sum_2(X[i,j])) => :(Z .= sum(X, 2)),
-                :(Z[i,j] = Espresso.sum_2(X[i,j])) => :(Z .= sum(X, 2)),
+                :(Z[i,j] = sum_1(X[:,j])) => :(Z .= sum(X, 1)),
+                :(Z[i,j] = Espresso.sum_1(X[:,j])) => :(Z .= sum(X, 1)),
+                :(Z[i,j] = sum_2(X[i,:])) => :(Z .= sum(X, 2)),
+                :(Z[i,j] = Espresso.sum_2(X[i,:])) => :(Z .= sum(X, 2)),
+                # sum_n + sum
+                :(Z = sum_1(X[:,j])) => :(Z .= sum(sum(X, 1))),
+                :(Z = Espresso.sum_1(X[:,j])) => :(Z .= sum(sum(X, 1))),
+                :(Z = sum_2(X[i,:])) => :(Z .= sum(sum(X, 2))),
+                :(Z = Espresso.sum_2(X[i,:])) => :(Z .= sum(sum(X, 2))), 
                 # inner and outer product
                 :(Z[i,j] = X[i] * Y[j]) => :(A_mul_Bt!(Z, X, Y)),
                 # :(Z = X[i] * Y[i]) => :(Z = X'Y),
@@ -46,12 +51,14 @@ const TO_BUFFERED_CALL_RULES =
                 # other 3-index rules
                 :(Z[i,j] = X[j,k] .* Y) => :(Z .= Y .* sum(X,2)'),
                 :(Z[i,j] = Y .* X[j,k]) => :(Z .= Y .* sum(X,2)'),
+                :(Z[i,j] = X[k,j] .* Y) => :(Z .= Y .* sum(X, 1)),
+                :(Z[i,j] = Y .* X[k,j]) => :(Z .= Y .* sum(X, 1)),
                 :(Z[i,j] = -X[j,k]) => :(Z .= -sum(X, 2)'),
                 # special .+ and .*
                 :(Z[i,j] = X[i,j] .+ Y[i]) => :(Z .= X .+ Y),
                 :(Z[i,j] = X[i] .+ Y[i,j]) => :(Z .= X .+ Y),
                 :(Z[i,j] = X[i,j] .* Y[i]) => :(Z .= X .* Y),
-                :(Z[i,j] = X[i] .* Y[i,j]) => :(Z .= X .* Y),                
+                :(Z[i,j] = X[i] .* Y[i,j]) => :(Z .= X .* Y),
                 # :(Z[i,j] = X[j] .+ Y[i,j]) => :(Z .= X' .+ Y),   # can it happen
                 # :(Z[i,j] = X .* Y[j]) => :(Z = repmat((X .* Y)', size__(Z)[1])),
                 # :(Z[j] = X .* Y[i,j]) => :(Z = X .* squeeze(sum(Y,1),1)),
@@ -93,7 +100,7 @@ const TO_BUFFERED_CALL_RULES =
                 :(Z[j] = _M._f(X[i,j], Y[i,j])) => :(Z = squeeze(sum(_M._f.(X, Y),1),1)),
                 :(Z = _M._f(X[i...], Y)) => :(Z = sum(_M._f.(X, Y))),
                 :(Z = _M._f(X, Y[i...])) => :(Z = sum(_M._f.(X, Y))),
-                :(Z = _M._f(X[i...], Y[i...])) => :(Z = sum(_M._f.(X, Y))),                
+                :(Z = _M._f(X[i...], Y[i...])) => :(Z = sum(_M._f.(X, Y))),
                 # :(Z = _M._f(X[i,j], Y[i,j])) => :(Z = sum(_M._f(X, Y))),
                 # # constants
                 # :(Z[i...] = _f(X, Y)) => :(Z = ones(size__(Z)) .* _f(X, Y)),
@@ -139,7 +146,7 @@ const TO_BUFFERED_CONST_RULES =
     OrderedDict(:(Z = X) => :(Z = X),
                 :(Z[i...] = X) => :(Z = ones(size__(Z)) * X),
                 # constant expressions
-                :(Z = length(X[:])) => :(Z = length(X)),
+                :(Z = length(X[::])) => :(Z = length(X)),
                 )
 
 
@@ -185,7 +192,7 @@ function to_buffered(g::EinGraph, nd::ExNode{:call})
         # not buffered version, will improve when semantics
         # for special functions gets more clear
         return from_einstein(g, nd)
-    end    
+    end
     for (pat, rpat) in TO_BUFFERED_CALL_RULES
         pat = sanitize(pat)
         rex = tryrewrite(ex, pat, rpat; phs=TO_BUFFERED_PHS, allow_ex=false)

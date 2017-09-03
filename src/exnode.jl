@@ -43,6 +43,7 @@ setvar!(nd::ExNode, var::Union{Symbol,Expr}) = (nd.var = var)
 
 varname(nd::ExNode)::Symbol = isa(nd.var, Symbol) ? nd.var : nd.var.args[1]
 varidxs(nd::ExNode)::Vector = isa(nd.var, Symbol) ? [] : nd.var.args[2:end]
+varidxs(nd::ExNode{:input})::Vector = IDX_NAMES[1:ndims(getvalue(nd))]
 
 getexpr(nd::ExNode) = nd.ex
 setexpr!(nd::ExNode, ex::Any) = (nd.ex = ex)
@@ -117,9 +118,13 @@ dependencies(nd::ExNode{:opaque}) = get_var_names(getexpr(nd); rec=true)
 
 
 function Base.show(io::IO, nd::ExNode{C}) where C
-    val = isa(getvalue(nd), AbstractArray) ? "<$(typeof(getvalue(nd)))>" : getvalue(nd)
+    val = getvalue(nd)
+    if isa(getvalue(nd), AbstractArray)
+        val = "<$(typeof(val))>"
+    elseif isa(getvalue(nd), Tuple)
+        val = ([isa(v, AbstractArray) ?  "<$(typeof(v))>" : v for v in val]...)
+    end
     ex_str = "ExNode{$C}($(to_expr(nd)) | $val)"
-    # print(io, replace(ex_str, "Colon()", ":"))
     print(io, ex_str)
 end
 

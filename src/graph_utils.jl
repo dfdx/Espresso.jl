@@ -80,7 +80,7 @@ function reindex_from_beginning(g::EinGraph)
     for nd in g.tape
         full_ex = to_expr(nd)
         idxs = unique(flatten(get_indices(full_ex)))
-        idxs = [idx for idx in idxs if idx != :(:)]  # skip [:] indices
+        idxs = [idx for idx in idxs if idx != :(:) && idx != :(::)]  # skip [:] indices
         new_idxs = IDX_NAMES[1:length(idxs)]
         st = Dict(zip(idxs, new_idxs))
         new_full_ex = subs(full_ex, st)

@@ -18,7 +18,7 @@ let
     x = rand(3, 4)
     inputs = [:x => x]
     iex = to_einstein(ex; inputs...)
-    @test iex.args[3] == :(y[i, j] = sum_1(x[i, j]))
+    @test iex.args[3] == :(y[i, j] = sum_1(x[:, j]))
 end
 
 
@@ -30,5 +30,5 @@ let
     x = rand(3, 4)
     inputs = [:x => x]
     iex = to_einstein(ex; inputs...)
-    @test iex.args[3] == :(y[i, j] = sum_1(x[i, j]) / length(x[:]))
+    @test iex.args[3] == :(y[i, j] = sum_2(x[i, :]) / length(x[::]))
 end

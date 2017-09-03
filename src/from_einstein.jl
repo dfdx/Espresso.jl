@@ -6,10 +6,17 @@ const FROM_EIN_PHS = [:A, :B, :C, :X, :Y, :V, :W, :Z,
 
 const FROM_EINSTEIN_CALL_RULES =
     OrderedDict(# sum_n
-                :(Z[i,j] = sum_1(X[i,j])) => :(Z = sum(X, 1)),
-                :(Z[i,j] = Espresso.sum_1(X[i,j])) => :(Z = sum(X, 1)),
-                :(Z[i,j] = sum_2(X[i,j])) => :(Z = sum(X, 2)),
-                :(Z[i,j] = Espresso.sum_2(X[i,j])) => :(Z = sum(X, 2)),
+                :(Z[i,j] = sum_1(X[:,j])) => :(Z = sum(X, 1)),
+                :(Z[i,j] = Espresso.sum_1(X[:,j])) => :(Z = sum(X, 1)),
+                :(Z[i,j] = sum_2(X[i,:])) => :(Z = sum(X, 2)),
+                :(Z[i,j] = Espresso.sum_2(X[i,:])) => :(Z = sum(X, 2)),
+                # sum_n + sum
+                :(Z = sum_1(X[:,j])) => :(Z = sum(sum(X, 1))),
+                :(Z = Espresso.sum_1(X[:,j])) => :(Z = sum(sum(X, 1))),
+                :(Z = sum_2(X[i,:])) => :(Z = sum(sum(X, 2))),
+                :(Z = Espresso.sum_2(X[i,:])) => :(Z = sum(sum(X, 2))),
+                # length
+                :(Z = length(X[::])) => :(Z = length(X)),
                 # inner and outer product
                 :(Z[i,j] = X[i] * Y[j]) => :(Z = X * Y'),
                 :(Z = X[i] * Y[i]) => :(Z = X'Y),
@@ -163,7 +170,8 @@ const FROM_EINSTEIN_ASSIGN_RULES =
 
 const FROM_EINSTEIN_CONST_RULES =
     OrderedDict(:(Z = X) => :(Z = X),
-                :(Z[i...] = X) => :(Z = ones(size__(Z)) * X),)
+                :(Z[i...] = X) => :(Z = ones(size__(Z)) * X),
+                :(Z = length(X[::])) => :(Z = length(X)),)
 
 
 
