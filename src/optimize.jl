@@ -169,13 +169,13 @@ end
 function eliminate_common(g::AbstractExGraph)
     g = reindex_from_beginning(g)
     new_g = reset_tape(g)
-    existing = Dict()
-    st = Dict{Symbol,Symbol}()
+    existing = Dict()             # index of existing expressions
+    st = Dict{Symbol,Symbol}()    # later var -> previous var with the same expression
     for nd in g.tape
         new_full_ex = subs(to_expr(nd), st)
         vname, vidxs = split_indexed(new_full_ex.args[1])
         key = (vidxs, new_full_ex.args[2])
-        if haskey(existing, key)
+        if haskey(existing, key) && (g[vname] |> getvalue |> size) == (g[existing[key]] |> getvalue |> size)
             st[vname] = existing[key]
         else
             C = getcategory(nd)

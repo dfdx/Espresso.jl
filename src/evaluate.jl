@@ -64,6 +64,7 @@ function mk_eval_expr(g::AbstractExGraph, nd::ExNode)   # for EinGraph
         elseif getcategory(nd) == :tuple
             push!(block.args, without_indices(to_expr(nd)))
         else
+            warn("Using @einsum to evaluate node: $nd")
             vname = varname(nd)
             if haskey(rsizes, vname)
                 # provide size if available

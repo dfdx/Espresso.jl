@@ -39,13 +39,6 @@ end
 
 ## utils
 
-# function with_guards_in_context(f::Function, ctx::Dict, new_guards::Vector{Expr})
-#     guards = @get_or_create(ctx, :guards, Expr[])
-#     push!(guards, new_guards...)
-#     f(guards)
-#     for i=1:length(new_guards) pop!(guards) end
-# end
-
 
 function push_guards!(ctx::Dict, new_guards::Vector{Expr})
     guards = @get_or_create(ctx, :guards, Expr[])
@@ -64,15 +57,6 @@ function pop_guards!(ctx::Dict)
     end
     pop!(last_guard_counts)
 end
-
-
-
-# function apply_guards(nd::ExNode, guards::Vector{Expr})
-#     new_var, var_guards = apply_guards(getvar(nd), guards; anchors=Set(varidxs(nd)))
-#     new_ex, ex_guards = apply_guards(getexpr(nd), guards)
-#     new_guards = unique(vcat(var_guards, ex_guards))
-#     return copy(nd; var=new_var, ex=new_ex, guards=new_guards)
-# end
 
 
 ## parse!
