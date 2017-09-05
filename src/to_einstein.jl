@@ -12,6 +12,8 @@ const TO_EINSTEIN_RULES =
                 (:mean, [2]) => [:(Z = mean(X)) => :(Z = X[i,j] / length(X[::]))],
                 (:mean, [2, 0]) => [:(Z = mean(X, 1)) => :(Z[i, j] = sum_1(X[:,j]) / length(X[::])),
                                     :(Z = mean(X, 2)) => :(Z[i, j] = sum_2(X[i,:]) / length(X[::])),],
+                (:length, [1]) => [:(Z = length(X)) => :(Z = length(X[::]))],
+                (:length, [2]) => [:(Z = length(X)) => :(Z = length(X[::]))],
                 (:*, [0, 0]) => [:(Z = X * Y) => :(Z = X * Y)],
                 (:*, [2, 1]) => [:(Z = X * Y) => :(Z[i] = X[i,k] * Y[k])],
                 (:*, [1, 2]) => [:(Z = X * Y) => :(Z[j] = X[k] * Y[k,j])],
