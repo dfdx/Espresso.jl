@@ -307,3 +307,6 @@ Example:
 function rewrite_all(ex::Symbolic, pat::Symbolic, rpat; phs=DEFAULT_PHS[1], allow_ex=true)
     return rewrite_all(ex, [pat => rpat]; phs=phs, allow_ex=allow_ex)
 end
+
+rewrite_all(x, pat, rpat; opts...) = x
+rewrite_all(x, rules; opts...) = x

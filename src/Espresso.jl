@@ -14,6 +14,7 @@ export
     subs,
     rewrite,
     tryrewrite,
+    rewrite_all,
     without,
     set_default_placeholders,
     # simplification
