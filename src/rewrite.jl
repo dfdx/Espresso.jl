@@ -76,7 +76,7 @@ end
 
 """
 Match expression `ex` to a pattern `pat`, return nullable dictionary of matched
-symbols or subexpressions.
+symbols or rpatpressions.
 Example:
 
 ```
@@ -134,6 +134,35 @@ function matchingex(pat, ex; phs=DEFAULT_PHS[1], allow_ex=true)
     return !isnull(matchex(pat, ex; phs=phs, allow_ex=allow_ex))
 end
 
+
+## find rpatpression
+
+function findex!(res::Vector, pat, ex; phs=DEFAULT_PHS[1])
+    if matchingex(pat, ex; phs=phs)
+        push!(res, ex)
+    elseif expr_like(ex)
+        for arg in ex.args
+            findex!(res, pat, arg; phs=phs)
+        end
+    end
+end
+
+
+"""
+Find sub-expressions matching a pattern. Example:
+
+    ex = :(a * f(x) + b * f(y))
+    pat = :(f(_))
+    findex(pat, ex)   # ==> [:(f(x)), :(f(y))]
+
+"""
+function findex(pat, ex; phs=DEFAULT_PHS[1])
+    res = Any[]
+    findex!(res, pat, ex; phs=phs)
+    return res
+end
+
+
 ## substitution
 
 """
@@ -141,18 +170,21 @@ Substitute symbols in `ex` according to substitute table `st`.
 Example:
 
     ex = :(x ^ n)
-    subs(ex, x=2)  # ==> :(2 ^ n)
+    subs(ex, x=2)            # ==> :(2 ^ n)
+
+alternatively:
+
+    subs(ex, Dict(:x => 2))  # ==> :(2 ^ n)
 """
 function subs(ex::Expr, st::Dict)
     if haskey(st, ex)
         return st[ex]
     else
-        # new_args = [isa(arg, Expr) ? subs(arg, st) : get(st, arg, arg)
-        #             for arg in ex.args]
         new_args = [subs(arg, st) for arg in ex.args]
         return Expr(ex.head, new_args...)
     end
 end
+
 
 function subs(s::Symbol, st::Dict)
     return haskey(st, s) ? st[s] : s
@@ -163,10 +195,10 @@ subs(x::Any, st::Dict) = x
 subs(ex; st...) = subs(ex, Dict(st))
 
 
-## remove subexpression
+## remove rpatpression
 
 """
-Remove subexpression conforming to a pattern.
+Remove rpatpression conforming to a pattern.
 Example:
 
     ex = :(x * (m == n))
@@ -192,62 +224,86 @@ end
 
 without(x, pat; phs=DEFAULT_PHS[1]) = x
 
+
 ## rewriting
 
 """
+rewrite(ex, pat, rpat)
+
 Rewrite expression `ex` according to a transform from pattern `pat`
-to a substituting expression `subex`.
+to a substituting expression `rpat`.
 Example (derivative of x^n):
 
     ex = :(u ^ v)
     pat = :(_x ^ _n)
-    subex = :(_n * _x ^ (_n - 1))
-    rewrite(ex, pat, subex) # ==> :(v * u ^ (v - 1))
+    rpat = :(_n * _x ^ (_n - 1))
+    rewrite(ex, pat, rpat) # ==> :(v * u ^ (v - 1))
 """
-function rewrite(ex::Symbolic, pat::Symbolic, subex::Any; phs=DEFAULT_PHS[1], allow_ex=true)
+function rewrite(ex::Symbolic, pat::Symbolic, rpat::Any; phs=DEFAULT_PHS[1], allow_ex=true)
     st = matchex(pat, ex; phs=phs, allow_ex=allow_ex)
     if isnull(st)
         error("Expression $ex doesn't match pattern $pat")
     else
-        return subs(subex, get(st))
+        return subs(rpat, get(st))
     end
 end
+
 
 """
 Same as rewrite, but returns Nullable{Expr} and doesn't throw an error
 when expression doesn't match pattern
 """
-function tryrewrite(ex::Symbolic, pat::Symbolic, subex::Any; phs=DEFAULT_PHS[1], allow_ex=true)
+function tryrewrite(ex::Symbolic, pat::Symbolic, rpat::Any; phs=DEFAULT_PHS[1], allow_ex=true)
     st = matchex(pat, ex; phs=phs, allow_ex=allow_ex)
     if isnull(st)
         return Nullable{Expr}()
     else
-        return Nullable(subs(subex, get(st)))
+        return Nullable(subs(rpat, get(st)))
     end
 end
 
 
-function findex!(res::Vector, pat, ex; phs=DEFAULT_PHS[1])
-    if matchingex(pat, ex; phs=phs)
-        push!(res, ex)
-    elseif expr_like(ex)
-        for arg in ex.args
-            findex!(res, pat, arg; phs=phs)
+
+"""
+rewrite_all(ex, rules)
+
+Recursively rewrite an expression according to a list of rules like [pat => rpat]
+Example:
+
+    ex = :(foo(bar(foo(A))))
+    rules = [:(foo(x)) => :(quux(x)),
+             :(bar(x)) => :(baz(x))]
+    rewrite_all(ex, rules; phs=[:x])
+    # ==> :(quux(baz(quux(A))))
+"""
+function rewrite_all(ex::Symbolic, rules; phs=DEFAULT_PHS[1], allow_ex=true)
+    new_ex = ex
+    if isa(ex, Expr)
+        new_args = [rewrite_all(arg, rules; phs=phs, allow_ex=allow_ex)
+                    for arg in ex.args]
+        new_ex = Expr(ex.head, new_args...)
+    end
+    for (pat, rpat) in rules
+        if matchingex(pat, new_ex; phs=phs, allow_ex=allow_ex)
+            new_ex = rewrite(new_ex, pat, rpat; phs=phs, allow_ex=allow_ex)
         end
     end
+    return new_ex
 end
 
 
 """
-Find sub-expressions matching a pattern. Example:
+rewrite_all(ex, pat, rpat)
 
-    ex = :(a * f(x) + b * f(y))
-    pat = :(f(_))
-    findex(pat, ex)   # ==> [:(f(x)), :(f(y))]
+Recursively rewrite all occurrences of a pattern in an expression.
+Example:
 
+    ex = :(foo(bar(foo(A))))
+    pat = :(foo(x))
+    rpat = :(quux(x))
+    rewrite_all(ex, pat, rpat; phs=[:x])
+    # ==> :(quux(bar(quux(A))))
 """
-function findex(pat, ex; phs=DEFAULT_PHS[1])
-    res = Any[]
-    findex!(res, pat, ex; phs=phs)
-    return res
+function rewrite_all(ex::Symbolic, pat::Symbolic, rpat; phs=DEFAULT_PHS[1], allow_ex=true)
+    return rewrite_all(ex, [pat => rpat]; phs=phs, allow_ex=allow_ex)
 end

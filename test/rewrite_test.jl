@@ -24,3 +24,13 @@ set_default_placeholders(Set(Symbol[]))
 phs = Set([:x, :I])
 @test get(matchex(:(x[I...]), :(A[i,j,k]); phs=phs)) == Dict(:x => :A, :I => [:i, :j, :k])
 @test get(matchex(:(foo(_args...)), :(foo(x, y)))) == Dict(:_args => [:x, :y])
+
+ex = :(foo(bar(foo(A))))
+rules = [:(foo(x)) => :(quux(x)),
+         :(bar(x)) => :(baz(x))]
+@test rewrite_all(ex, rules; phs=[:x]) == :(quux(baz(quux(A))))
+
+ex = :(foo(bar(foo(A))))
+pat = :(foo(x))
+rpat = :(quux(x))
+@test rewrite_all(ex, pat, rpat; phs=[:x]) == :(quux(bar(quux(A))))

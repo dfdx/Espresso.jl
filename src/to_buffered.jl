@@ -16,7 +16,7 @@ const TO_BUFFERED_CALL_RULES =
                 :(Z = sum_1(X[:,j])) => :(Z .= sum(sum(X, 1))),
                 :(Z = Espresso.sum_1(X[:,j])) => :(Z .= sum(sum(X, 1))),
                 :(Z = sum_2(X[i,:])) => :(Z .= sum(sum(X, 2))),
-                :(Z = Espresso.sum_2(X[i,:])) => :(Z .= sum(sum(X, 2))), 
+                :(Z = Espresso.sum_2(X[i,:])) => :(Z .= sum(sum(X, 2))),
                 # inner and outer product
                 :(Z[i,j] = X[i] * Y[j]) => :(A_mul_Bt!(Z, X, Y)),
                 # :(Z = X[i] * Y[i]) => :(Z = X'Y),
@@ -53,6 +53,9 @@ const TO_BUFFERED_CALL_RULES =
                 :(Z[i,j] = Y .* X[j,k]) => :(Z .= Y .* sum(X,2)'),
                 :(Z[i,j] = X[k,j] .* Y) => :(Z .= Y .* sum(X, 1)),
                 :(Z[i,j] = Y .* X[k,j]) => :(Z .= Y .* sum(X, 1)),
+                :(Z[i,j] = -X[k,i]) => :(Z .= sum(X, 1)'),
+                :(Z[i,j] = -X[k,j]) => :(Z .= -sum(X, 1)),
+                :(Z[i,j] = -X[i,k]) => :(Z .= -sum(X, 2)),
                 :(Z[i,j] = -X[j,k]) => :(Z .= -sum(X, 2)'),
                 # special .+ and .*
                 :(Z[i,j] = X[i,j] .+ Y[i]) => :(Z .= X .+ Y),
@@ -89,7 +92,14 @@ const TO_BUFFERED_CALL_RULES =
                 :(Z[j] = _f(X[i,j], Y[i,j])) => :(Z = squeeze(sum(_f.(X, Y),1),1)),
                 :(Z = _f(X[i...], Y)) => :(Z = sum(_f.(X, Y))),
                 :(Z = _f(X, Y[i...])) => :(Z = sum(_f.(X, Y))),
-                :(Z = _f(X[i...], Y[i...])) => :(Z = sum(_f.(X, Y))),
+
+                # causing problems?
+                # :(Z = _f(X[i...], Y[i...])) => :(Z = sum(_f.(X, Y))),
+                # :(Z[i] = _f(X[i,j], Y[i,j])) => :(Z .= sum(_f(X, Y), 2)),
+                # :(Z[j] = _f(X[i,j], Y[i,j])) => :(Z .= sum(_f(X, Y), 1)),
+                # :(Z[i] = _M._f(X[i,j], Y[i,j])) => :(Z .= sum(_M._f(X, Y), 2)),
+                # :(Z[j] = _M._f(X[i,j], Y[i,j])) => :(Z .= sum(_M._f(X, Y), 1)),
+
                 # :(Z = _f(X[i,j], Y[i,j])) => :(Z = sum(_f(X, Y))),
                 # broadcasting + sum with module
                 :(Z = _M._f(X[i...])) => :(Z = sum(_M._f.(X))),
