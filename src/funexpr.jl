@@ -58,6 +58,9 @@ function arg_names(sig::Expr)
 end
 
 
+func_name(f::Function) = (methods(f) |> first).name
+
+
 function to_expr(src::CodeInfo)
     if isa(src.code, Array{Any,1})
         slotnames = [Symbol(name) for name in Base.sourceinfo_slotnames(src)]
@@ -70,7 +73,7 @@ function to_expr(src::CodeInfo)
 end
 
 
-function funexpr(f::Function, types::NTuple{N,DataType}) where N
+function func_expr(f::Function, types::NTuple{N,DataType}) where N
     method = Sugar.get_method(f, types)
     file = string(method.file)
     linestart = method.line
@@ -87,3 +90,5 @@ function funexpr(f::Function, types::NTuple{N,DataType}) where N
         end
     end
 end
+
+@deprecate funexpr func_expr

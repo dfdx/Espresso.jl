@@ -49,9 +49,14 @@ const FROM_EINSTEIN_CALL_RULES =
                 :(Z[i] = X[j, k] .* Y[j, i]) => :(Z = squeeze(sum(X' * Y, 1)', 2)),
                 :(Z[k] = X[j, k] .* Y[j, i]) => :(Z = squeeze(sum(X' * Y, 2), 2)),
                 # other 3-index rules
-                :(Z[i,j] = X[j,k] .* Y) => :(Z = Y .* repmat(sum(X,2)', size__(Z)[1])),
-                :(Z[i,j] = Y .* X[j,k]) => :(Z = Y .* repmat(sum(X,2)', size__(Z)[1])),
-                :(Z[i,j] = -X[j,k]) => :(Z = -repmat(sum(X,2)', size__(Z)[1])),
+                :(Z[i,j] = X[j,k] .* Y) => :(Z = Y .* sum(X,2)'),
+                :(Z[i,j] = Y .* X[j,k]) => :(Z = Y .* sum(X,2)'),
+                :(Z[i,j] = X[k,j] .* Y) => :(Z = Y .* sum(X, 1)),
+                :(Z[i,j] = Y .* X[k,j]) => :(Z = Y .* sum(X, 1)),
+                :(Z[i,j] = -X[k,i]) => :(Z = sum(X, 1)'),
+                :(Z[i,j] = -X[k,j]) => :(Z = -sum(X, 1)),
+                :(Z[i,j] = -X[i,k]) => :(Z = -sum(X, 2)),
+                :(Z[i,j] = -X[j,k]) => :(Z = -sum(X, 2)'),
                 # special .+ and .*
                 :(Z[i,j] = X[j] .+ Y[i,j]) => :(Z = X' .+ Y),
                 :(Z[i,j] = X[i,j] .* Y[i]) => :(Z = X .* Y),
@@ -59,6 +64,21 @@ const FROM_EINSTEIN_CALL_RULES =
                 :(Z[i,j] = X .* Y[j]) => :(Z = repmat((X .* Y)', size__(Z)[1])),
                 :(Z[j] = X .* Y[i,j]) => :(Z = X .* squeeze(sum(Y,1),1)),
                 :(Z[i,j] = X[i,j] .+ Y[i]) => :(Z = X .+ Y),
+                :(Z = X[i] .* Y[i]) => :(Z = dot(X, Y)),
+                # old broadcasting + sum
+                :(Z = X[i...] .+ Y[i...]) => :(Z = sum(X .+ Y)),
+                :(Z = X[i...] .* Y[i...]) => :(Z = sum(X .* Y)),
+                :(Z = X[i...] .- Y[i...]) => :(Z = sum(X .- Y)),
+                :(Z = X[i...] ./ Y[i...]) => :(Z = sum(X ./ Y)),
+                :(Z = X[i...] .+ Y) => :(Z = sum(X .+ Y)),
+                :(Z = X[i...] .* Y) => :(Z = sum(X .* Y)),
+                :(Z = X[i...] .- Y) => :(Z = sum(X .- Y)),
+                :(Z = X[i...] ./ Y) => :(Z = sum(X ./ Y)),
+                :(Z = X .+ Y[i...]) => :(Z = sum(X .+ Y)),
+                :(Z = X .* Y[i...]) => :(Z = sum(X .* Y)),
+                :(Z = X .- Y[i...]) => :(Z = sum(X .- Y)),
+                :(Z = X ./ Y[i...]) => :(Z = sum(X ./ Y)),
+                :(Z = X[i...] / Y) => :(Z = sum(X / Y)),
                 # special functions (should go before broadcasting)
                 :(Z[:] = _f(X[:])) => :(Z = _f(X)),
                 :(Z[:] = _f(X[:], Y[:])) => :(Z = _f(X, Y)),
@@ -101,10 +121,6 @@ const FROM_EINSTEIN_CALL_RULES =
                 :(Z[i...] = X[i...] .- Y[i...]) => :(Z = X .- Y),
                 :(Z[i...] = X[i...] ./ Y[i...]) => :(Z = X ./ Y),
                 :(Z[i...] = X[i...] .^ Y[i...]) => :(Z = X .^ Y),
-                # eye
-                :(Z[i,j] = 1 * (i == j)) => :(Z = eye(size__(Z))[1]),
-                # –> ∑ₖxᵢyⱼₖ == xᵢ∑ₖyⱼₖ   # TODO: seems incorrect, see 2-level rules
-                # :(Z[i,j] = X[i] .* Y[j,k]) => :(Z = X .* squeeze(sum(Y,2),2))
                 # broadcasting
                 :(Z = _f(X)) => :(Z = _f(X)),
                 :(Z = _f(X, Y)) => :(Z = _f(X, Y)),
@@ -250,13 +266,11 @@ function from_einstein(g::EinGraph, nd::ExNode{:call})
     if !iscall(ex.args[2])
         return from_einstein(g, convert_call(g, nd))
     end
-    # if is_special_expr(ex)
-    #     return without_indices(ex)
-    # end
-    for (pat, rpat) in FROM_EINSTEIN_CALL_RULES
-        # consider tryrewrite
+    for (pat, rpat) in FROM_EINSTEIN_CALL_RULES        
         rex = tryrewrite(ex, pat, rpat; phs=FROM_EIN_PHS, allow_ex=false)
         if !isnull(rex)
+            println(pat)
+            println(rpat)
             return get(rex)
         end
     end

@@ -22,6 +22,8 @@ export
     @simple_rule,
     # funexpr
     funexpr,
+    func_expr,
+    func_name,
     # indexing
     split_indexed,
     make_indexed,
@@ -83,6 +85,11 @@ export
     to_einstein,
     from_einstein,
     to_buffered,
+    # struct utils
+    make_func_expr,
+    isstruct,
+    field_values,
+    named_field_values,
     # helpers
     sum_1,
     sum_2,
