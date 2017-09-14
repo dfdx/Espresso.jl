@@ -34,3 +34,7 @@ ex = :(foo(bar(foo(A))))
 pat = :(foo(x))
 rpat = :(quux(x))
 @test rewrite_all(ex, pat, rpat; phs=[:x]) == :(quux(bar(quux(A))))
+
+
+@test matchingex(:(_x + _y), :(a + a))
+@test !matchingex(:(_x + _y), :(a + a); exact=true)

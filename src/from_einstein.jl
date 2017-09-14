@@ -236,7 +236,7 @@ from_einstein(g::EinGraph, nd::ExNode{:input}) = getexpr(nd)
 function from_einstein(g::EinGraph, nd::ExNode{:constant})
     ex = to_expr(nd)
     for (pat, rpat) in FROM_EINSTEIN_CONST_RULES
-        rex = tryrewrite(ex, pat, rpat; phs=FROM_EIN_PHS, allow_ex=false)
+        rex = tryrewrite(ex, pat, rpat; phs=FROM_EIN_PHS, exact=true)
         if !isnull(rex)
             return get(rex)
         end
@@ -267,10 +267,8 @@ function from_einstein(g::EinGraph, nd::ExNode{:call})
         return from_einstein(g, convert_call(g, nd))
     end
     for (pat, rpat) in FROM_EINSTEIN_CALL_RULES        
-        rex = tryrewrite(ex, pat, rpat; phs=FROM_EIN_PHS, allow_ex=false)
-        if !isnull(rex)
-            println(pat)
-            println(rpat)
+        rex = tryrewrite(ex, pat, rpat; phs=FROM_EIN_PHS, exact=true)
+        if !isnull(rex)            
             return get(rex)
         end
     end
@@ -281,7 +279,7 @@ end
 function from_einstein(g::EinGraph, nd::ExNode{:(=)})
     ex = to_expr(nd)
     for (pat, rpat) in FROM_EINSTEIN_ASSIGN_RULES
-        rex = tryrewrite(ex, pat, rpat; phs=FROM_EIN_PHS, allow_ex=false)
+        rex = tryrewrite(ex, pat, rpat; phs=FROM_EIN_PHS, exact=true)
         if !isnull(rex)
             return get(rex)
         end
