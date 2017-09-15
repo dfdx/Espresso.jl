@@ -62,14 +62,22 @@ const TO_BUFFERED_CALL_RULES =
                 :(Z[i,j] = X[i] .+ Y[i,j]) => :(Z .= X .+ Y),
                 :(Z[i,j] = X[i,j] .* Y[i]) => :(Z .= X .* Y),
                 :(Z[i,j] = X[i] .* Y[i,j]) => :(Z .= X .* Y),
-                # :(Z[i,j] = X[j] .+ Y[i,j]) => :(Z .= X' .+ Y),   # can it happen
-                # :(Z[i,j] = X .* Y[j]) => :(Z = repmat((X .* Y)', size__(Z)[1])),
-                # :(Z[j] = X .* Y[i,j]) => :(Z = X .* squeeze(sum(Y,1),1)),
-                # # eye
-                # :(Z[i,j] = 1 * (i == j)) => :(Z = eye(size__(Z))[1]),
-                # # –> ∑ₖxᵢyⱼₖ == xᵢ∑ₖyⱼₖ   # TODO: seems incorrect, see 2-level rules
-                # # :(Z[i,j] = X[i] .* Y[j,k]) => :(Z = X .* squeeze(sum(Y,2),2))
-                # # broadcasting
+                :(Z = X[i] .* Y[i]) => :(Z = dot(X, Y)),
+                # old broadcasting + sum
+                :(Z = X[i...] .+ Y[i...]) => :(Z = sum(X .+ Y)),
+                :(Z = X[i...] .* Y[i...]) => :(Z = sum(X .* Y)),
+                :(Z = X[i...] .- Y[i...]) => :(Z = sum(X .- Y)),
+                :(Z = X[i...] ./ Y[i...]) => :(Z = sum(X ./ Y)),
+                :(Z = X[i...] .+ Y) => :(Z = sum(X .+ Y)),
+                :(Z = X[i...] .* Y) => :(Z = sum(X .* Y)),
+                :(Z = X[i...] .- Y) => :(Z = sum(X .- Y)),
+                :(Z = X[i...] ./ Y) => :(Z = sum(X ./ Y)),
+                :(Z = X .+ Y[i...]) => :(Z = sum(X .+ Y)),
+                :(Z = X .* Y[i...]) => :(Z = sum(X .* Y)),
+                :(Z = X .- Y[i...]) => :(Z = sum(X .- Y)),
+                :(Z = X ./ Y[i...]) => :(Z = sum(X ./ Y)),
+                :(Z = X[i...] / Y) => :(Z = sum(X / Y)),
+                # broadcasting
                 :(Z = _f(X)) => :(Z = _f(X)),
                 :(Z = _f(X, Y)) => :(Z = _f(X, Y)),
                 :(Z[i...] = _f(X[i...])) => :(Z .= _f.(X)),

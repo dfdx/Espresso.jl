@@ -88,6 +88,15 @@ function genname()
     return Symbol(replace(s, "##", "tmp"))
 end
 
+function genname(prefix::String)
+    s = String(gensym())
+    return Symbol(replace(s, "##", prefix))
+end
+
+function genname(prefix::Symbol)
+    s = String(gensym())
+    return Symbol(replace(s, "##", prefix))
+end
 
 function gennames(count::Int)
     return [genname() for _=1:count]

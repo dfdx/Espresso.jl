@@ -28,24 +28,37 @@ isplaceholder(x::Symbol, phs) = (startswith(string(x), "_")
                                  || in(x, phs))
 # isplaceholder(ex::Expr, phs) = ex.head == :... && isplaceholder(ex.args[1], phs)
 
+function find_key(d::Dict{K, V}, val) where {K,V}
+    r = Nullable{K}()
+    for (k,v) in d
+        if v == val
+            r = Nullable(k)
+            break
+        end
+    end
+    return r
+end
+
 
 function matchex!(m::Dict{Symbol,Any}, p::QuoteNode, x::QuoteNode;
-                  phs=DEFAULT_PHS[1], allow_ex=true)
+                  opts...)
     return matchex!(m, p.value, x.value)
 end
 
 
-function matchex!(m::Dict{Symbol,Any}, ps::Vector, xs::Vector;
-                  phs=DEFAULT_PHS[1], allow_ex=true)
+function matchex!(m::Dict{Symbol,Any}, ps::Vector, xs::Vector; opts...)
+    opts = Dict(opts)
+    phs = get(opts, :phs, Set([]))
     length(ps) <= length(xs) || return false
     for i in eachindex(ps)
         if isa(ps[i], Expr) && ps[i].head == :... && isplaceholder(ps[i].args[1], phs)
             p = ps[i].args[1]
             haskey(m, p) && m[p] != xs[i] && m[p] != xs[i:end] && return false
+            # TODO: add something here?
             m[p] = xs[i:end]
             return true
         else
-            matchex!(m, ps[i], xs[i]; phs=phs, allow_ex=allow_ex) || return false
+            matchex!(m, ps[i], xs[i]; opts...) || return false
         end
     end
     # matched everything, didn't encounter dots expression
@@ -53,7 +66,8 @@ function matchex!(m::Dict{Symbol,Any}, ps::Vector, xs::Vector;
 end
 
 
-function matchex!(m::Dict{Symbol,Any}, p, x; phs=DEFAULT_PHS[1], allow_ex=true)
+function matchex!(m::Dict{Symbol,Any}, p, x; phs=DEFAULT_PHS[1], allow_ex=true, exact=false)
+    allow_ex = exact ? false : allow_ex  # override allow_ex=false if exact==true
     if isplaceholder(p, phs)
         if haskey(m, p) && m[p] != x
             # different bindings to the same pattern, treat as no match
@@ -61,13 +75,21 @@ function matchex!(m::Dict{Symbol,Any}, p, x; phs=DEFAULT_PHS[1], allow_ex=true)
         elseif !allow_ex && isa(x, Expr)
             # x is expression, but matching to expression is not allowed, treat as no match
             return false
-        else
+        elseif exact
+            k = find_key(m, x)
+            if !isnull(k) && get(k) != p
+                return false
+            else
+                m[p] = x
+                return true
+            end
+        else                       
             m[p] = x
             return true
         end
     elseif isa(p, Expr) && isa(x, Expr)
         return (matchex!(m, p.head, x.head) &&
-                matchex!(m, p.args, x.args; phs=phs, allow_ex=allow_ex))
+                matchex!(m, p.args, x.args; phs=phs, allow_ex=allow_ex, exact=exact))
     else
         return p == x
     end
@@ -108,18 +130,23 @@ matchex(pat, ex; phs=Set([:x, :I]))
 
 Optional parameters:
 
- * phs::Set{Symbol} = DEFAULT_PHS
+ * phs::Set{Symbol} = DEFAULT_PHS[1]
        A set of placeholder symbols
  * allow_ex::Boolean = true
        Allow matchinng of symbol pattern to an expression. Example:
 
            matchex(:(_x + 1), :(a*b + 1); allow_ex=true)  # ==> matches
            matchex(:(_x + 1), :(a*b + 1); allow_ex=false)  # ==> doesn't match
+ * exact::Boolean = false
+       Allow matching of the same expression to different keys
+
+           matchex(:(_x + _y), :(a + a); exact=false) # ==> matches
+           matchex(:(_x = _y), :(a + a); exact=true)  # ==> doesn't match
 
 """
-function matchex(pat, ex; phs=DEFAULT_PHS[1], allow_ex=true)
+function matchex(pat, ex; opts...)
     m = Dict{Symbol,Any}()
-    res = matchex!(m, pat, ex; phs=phs, allow_ex=allow_ex)
+    res = matchex!(m, pat, ex; opts...)
     if res
         return Nullable(m)
     else
@@ -130,8 +157,8 @@ end
 """
 Check if expression matches pattern. See `matchex()` for details.
 """
-function matchingex(pat, ex; phs=DEFAULT_PHS[1], allow_ex=true)
-    return !isnull(matchex(pat, ex; phs=phs, allow_ex=allow_ex))
+function matchingex(pat, ex; opts...)
+    return !isnull(matchex(pat, ex; opts...))
 end
 
 
@@ -239,8 +266,8 @@ Example (derivative of x^n):
     rpat = :(_n * _x ^ (_n - 1))
     rewrite(ex, pat, rpat) # ==> :(v * u ^ (v - 1))
 """
-function rewrite(ex::Symbolic, pat::Symbolic, rpat::Any; phs=DEFAULT_PHS[1], allow_ex=true)
-    st = matchex(pat, ex; phs=phs, allow_ex=allow_ex)
+function rewrite(ex::Symbolic, pat::Symbolic, rpat::Any; opts...)
+    st = matchex(pat, ex; opts...)
     if isnull(st)
         error("Expression $ex doesn't match pattern $pat")
     else
@@ -253,8 +280,8 @@ end
 Same as rewrite, but returns Nullable{Expr} and doesn't throw an error
 when expression doesn't match pattern
 """
-function tryrewrite(ex::Symbolic, pat::Symbolic, rpat::Any; phs=DEFAULT_PHS[1], allow_ex=true)
-    st = matchex(pat, ex; phs=phs, allow_ex=allow_ex)
+function tryrewrite(ex::Symbolic, pat::Symbolic, rpat::Any; opts...)
+    st = matchex(pat, ex; opts...)
     if isnull(st)
         return Nullable{Expr}()
     else
@@ -276,16 +303,16 @@ Example:
     rewrite_all(ex, rules; phs=[:x])
     # ==> :(quux(baz(quux(A))))
 """
-function rewrite_all(ex::Symbolic, rules; phs=DEFAULT_PHS[1], allow_ex=true)
+function rewrite_all(ex::Symbolic, rules; opts...)
     new_ex = ex
     if isa(ex, Expr)
-        new_args = [rewrite_all(arg, rules; phs=phs, allow_ex=allow_ex)
+        new_args = [rewrite_all(arg, rules; opts...)
                     for arg in ex.args]
         new_ex = Expr(ex.head, new_args...)
     end
     for (pat, rpat) in rules
-        if matchingex(pat, new_ex; phs=phs, allow_ex=allow_ex)
-            new_ex = rewrite(new_ex, pat, rpat; phs=phs, allow_ex=allow_ex)
+        if matchingex(pat, new_ex; opts...)
+            new_ex = rewrite(new_ex, pat, rpat; opts...)
         end
     end
     return new_ex
@@ -304,6 +331,9 @@ Example:
     rewrite_all(ex, pat, rpat; phs=[:x])
     # ==> :(quux(bar(quux(A))))
 """
-function rewrite_all(ex::Symbolic, pat::Symbolic, rpat; phs=DEFAULT_PHS[1], allow_ex=true)
-    return rewrite_all(ex, [pat => rpat]; phs=phs, allow_ex=allow_ex)
+function rewrite_all(ex::Symbolic, pat::Symbolic, rpat; opts...)
+    return rewrite_all(ex, [pat => rpat]; opts...)
 end
+
+rewrite_all(x, pat, rpat; opts...) = x
+rewrite_all(x, rules; opts...) = x
