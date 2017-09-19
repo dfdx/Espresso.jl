@@ -57,7 +57,15 @@ const FROM_EINSTEIN_CALL_RULES =
                 :(Z[i,j] = -X[k,j]) => :(Z = -sum(X, 1)),
                 :(Z[i,j] = -X[i,k]) => :(Z = -sum(X, 2)),
                 :(Z[i,j] = -X[j,k]) => :(Z = -sum(X, 2)'),
-                # special .+ and .*
+                # special .* and co.
+                :(Z[i,j] = X[i,j] .+ Y[i]) => :(Z = X .+ Y),
+                :(Z[i,j] = X[i,j] .- Y[i]) => :(Z = X .- Y),
+                :(Z[i,j] = X[i,j] .* Y[i]) => :(Z = X .* Y),
+                :(Z[i,j] = X[i] .+ Y[i,j]) => :(Z = X .+ Y),
+                :(Z[i,j] = X[i] .- Y[i,j]) => :(Z = X .- Y),
+                :(Z[i,j] = X[i] .* Y[i,j]) => :(Z = X .* Y),
+                :(Z = X[i] .* Y[i]) => :(Z = dot(X, Y)),
+                # special .+ and .* (duplicates?)
                 :(Z[i,j] = X[j] .+ Y[i,j]) => :(Z = X' .+ Y),
                 :(Z[i,j] = X[i,j] .* Y[i]) => :(Z = X .* Y),
                 :(Z[i,j] = X[i] .* Y[i,j]) => :(Z = X .* Y),

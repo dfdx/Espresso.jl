@@ -90,6 +90,8 @@ export
     isstruct,
     field_values,
     named_field_values,
+    destruct,
+    destruct_inputs,
     # helpers
     sum_1,
     sum_2,
