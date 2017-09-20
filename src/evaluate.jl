@@ -6,16 +6,18 @@ function remember_size!(g::AbstractExGraph, nd::ExNode)
     rsizes = @get_or_create(g.ctx, :rsizes, Dict{Symbol,Any}())
     buff_exprs = @get_or_create(g.ctx, :buff_exprs, Dict{Symbol, Any}())
     val = getvalue(nd)
-    sz = size(val)
-    rsizes[varname(nd)] = sz
-    if isa(val, Array)
-        T = eltype(val)
-        buff_expr = :(zeros($T, $sz))
-    else
-        T = typeof(val)
-        buff_expr = :(zero($T))
+    if isa(val, AbstractArray) || isa(val, Number)
+        sz = size(val)
+        rsizes[varname(nd)] = sz
+        if isa(val, Array)
+            T = eltype(val)
+            buff_expr = :(zeros($T, $sz))
+        else
+            T = typeof(val)
+            buff_expr = :(zero($T))
+        end
+        buff_exprs[varname(nd)] = buff_expr
     end
-    buff_exprs[varname(nd)] = buff_expr
 end
 
 function remember_size!(g::AbstractExGraph, nd::ExNode{:tuple}) end

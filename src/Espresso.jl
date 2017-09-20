@@ -85,13 +85,20 @@ export
     to_einstein,
     from_einstein,
     to_buffered,
-    # struct utils
+    # destruct
     make_func_expr,
     isstruct,
     field_values,
     named_field_values,
     destruct,
     destruct_inputs,
+    # codegens
+    generate_code,
+    EinCodeGen,
+    VecCodeGen,
+    BufCodeGen,
+    CuCodeGen,
+    GPUCodeGen,
     # helpers
     sum_1,
     sum_2,

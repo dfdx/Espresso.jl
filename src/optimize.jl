@@ -175,7 +175,8 @@ function eliminate_common(g::AbstractExGraph)
         new_full_ex = subs(to_expr(nd), st)
         vname, vidxs = split_indexed(new_full_ex.args[1])
         key = (vidxs, new_full_ex.args[2])
-        if haskey(existing, key) && (g[vname] |> getvalue |> size) == (g[existing[key]] |> getvalue |> size)
+        if haskey(existing, key) &&
+            (g[vname] |> getvalue |> size) == (g[existing[key]] |> getvalue |> size)
             st[vname] = existing[key]
         else
             C = getcategory(nd)
@@ -218,13 +219,13 @@ function fuse_broadcasting_node(g::EinGraph, new_g::EinGraph, nd::ExNode)
         for dep_nd in dep_nds
             if is_bcast_indexed(dep_nd)
                 # if dependency is broadcasting, replace its name with its expression
-                dep_ex = getexpr(dep_nd)                
+                dep_ex = getexpr(dep_nd)
                 idx_st = Dict(zip(varidxs(dep_nd),
                                   get_indices_in_expr(getexpr(nd), varname(dep_nd))))
                 new_dep_ex = subs(dep_ex, idx_st)
                 new_dep_ex = dep_ex
-                st[getvar(dep_nd)] = new_dep_ex            
-            end            
+                st[getvar(dep_nd)] = new_dep_ex
+            end
         end
         new_ex = subs(getexpr(nd), st)
         return copy(nd; ex=new_ex, category=:opaque)
