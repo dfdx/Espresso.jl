@@ -44,7 +44,7 @@ end
 
 function collect_deps(g::AbstractExGraph, ex::Expr, depth::Int=typemax(Int))
     result = Set{Symbol}()
-    collect_deps!(g, ex, depth,  result)
+    collect_deps!(g, ex, depth, result)
     return result
 end
 

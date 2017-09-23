@@ -34,7 +34,7 @@ function mk_eval_expr(g::ExGraph, nd::ExNode)
     deps_vals = [(varname(nd), getvalue(nd)) for nd in dep_nodes]
     eval_ex = Expr(:block, Expr(:let, Expr(:block)))
     block = eval_ex.args[1].args[1]
-    for (dep, val) in deps_vals
+    for (dep, val) in unique(deps_vals)
         push!(block.args, :(local $dep = $val))
     end
     push!(block.args, to_expr(nd))

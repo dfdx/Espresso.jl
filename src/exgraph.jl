@@ -354,3 +354,21 @@ function fuse_assigned(g::AbstractExGraph; outvars=nothing)
     new_g = remove_unused(new_g, outvars == nothing ? [varname(new_g[end])] : outvars)
     return new_g
 end
+
+
+function fuse_assigned(g::ExGraph; outvars=nothing)
+    new_g = reset_tape(g)
+    for nd in g.tape
+        if isa(nd, ExNode{:(=)})
+            chain = assign_chain(g, nd)
+            root_assign_nd = g[chain[end]]
+            new_ex = getexpr(root_assign_nd)
+            new_nd = copy(root_assign_nd; var=getvar(nd), ex=new_ex)
+            push!(new_g, new_nd)
+        else
+            push!(new_g, copy(nd))
+        end
+    end
+    new_g = remove_unused(new_g, outvars == nothing ? [varname(new_g[end])] : outvars)
+    return new_g
+end

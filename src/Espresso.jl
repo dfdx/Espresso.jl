@@ -95,7 +95,7 @@ export
     # codegens
     generate_code,
     EinCodeGen,
-    VecCodeGen,
+    VectorCodeGen,
     BufCodeGen,
     CuCodeGen,
     GPUCodeGen,

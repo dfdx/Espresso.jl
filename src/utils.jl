@@ -509,3 +509,15 @@ function make_func_expr(name, args, kw_args, body)
     end
     return ex
 end
+
+
+# haskeyexact
+
+function haskeyexact(d::Dict, key)
+    for (k, v) in d
+        if k == key && typeof(k) == typeof(key)
+            return true
+        end
+    end
+    return false
+end

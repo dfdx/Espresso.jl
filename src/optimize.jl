@@ -36,6 +36,12 @@ const OPT_RULES = OrderedDict(
 )
 
 
+const OPT_VEC_RULES = [
+    :(X = transpose(W); Z = X * Y) => :(Z = W' * Y),
+    :(Y = transpose(W); Z = X * Y) => :(Z = X * W'),
+]
+
+
 function remove_unused(g::AbstractExGraph, outvars::Vector{Symbol})
     deps = collect_deps(g, outvars)
     push!(deps, outvars...)
@@ -50,6 +56,7 @@ end
 
 
 remove_unused(g::AbstractExGraph, outvar::Symbol) = remove_unused(g, [outvar])
+remove_unused(g::AbstractExGraph) = remove_unused(g, [varname(g[end])])
 
 
 """
@@ -164,6 +171,39 @@ function optimize(g::EinGraph)
 end
 
 
+"""
+Look at each node's dependencies and, if there are known pattern sequences,
+rewrite them in a more optimal way.
+"""
+function expand_fixed_sequences(g::ExGraph)
+    new_g = reset_tape(g)
+    for nd in g.tape
+        if isa(nd, ExNode{:input})
+            push!(new_g, nd)
+        else
+            # try to optimize current node + 1st level dependencies
+            ex_1 = expand_deps(g, nd, 1)
+            new_ex = tryoptimize(ex_1)
+            if !isnull(new_ex)
+                parse!(new_g, get(new_ex))
+                continue
+            end
+            # try to optimize only current node
+            new_ex = tryoptimize(to_expr(nd))
+            if !isnull(new_ex)
+                parse!(new_g, get(new_ex))
+                continue
+            end
+            # if nothing matched, add node as is
+            push!(new_g, copy(nd))
+        end
+    end
+    new_g = remove_unused(new_g,  varname(new_g[end]))
+    new_g = fuse_assigned(new_g)
+    return new_g
+end
+
+
 # common subexpression elimination
 
 function eliminate_common(g::AbstractExGraph)
@@ -174,7 +214,7 @@ function eliminate_common(g::AbstractExGraph)
     for nd in g.tape
         new_full_ex = subs(to_expr(nd), st)
         vname, vidxs = split_indexed(new_full_ex.args[1])
-        key = (vidxs, new_full_ex.args[2])
+        key = string((vidxs, new_full_ex.args[2]))
         if haskey(existing, key) &&
             (g[vname] |> getvalue |> size) == (g[existing[key]] |> getvalue |> size)
             st[vname] = existing[key]
@@ -189,7 +229,7 @@ function eliminate_common(g::AbstractExGraph)
 end
 
 
-# fuse broadcasting
+# fuse broadcasting (EinGraph)
 
 function is_bcast_indexed(nd::Union{ExNode{:call}, ExNode{:opaque}})
     all_idxs = get_indices(to_expr(nd); rec=true)
@@ -239,6 +279,58 @@ function fuse_broadcasting(g::EinGraph)
     new_g = reset_tape(g)
     for nd in g.tape
         if is_bcast_indexed(nd)
+            push!(new_g, fuse_broadcasting_node(g, new_g, nd))
+        else
+            push!(new_g, nd)
+        end
+    end
+    return remove_unused(new_g, varname(g[end]))
+end
+
+
+# fuse broadcasting (ExGraph)
+
+function is_bcast_vec(nd::ExNode{:opaque})
+    # convert to expression, re-parse and check every node
+    return all(is_bcast_vec(nd) for nd in ExGraph(to_expr(nd)).tape)
+end
+
+const OLD_BCAST_OPS = Set([:.+, :.-, :.*, :./, :.^])
+
+is_bcast_vec(nd::ExNode{:call}) = getexpr(nd).args[1] in OLD_BCAST_OPS
+is_bcast_vec(nd::ExNode{:bcast}) = true
+is_bcast_vec(nd::ExNode) = false
+
+
+function fuse_broadcasting_node(g::ExGraph, new_g::ExGraph, nd::ExNode)
+    dep_nds = [new_g[dep] for dep in dependencies(nd)]
+    if any(is_bcast_vec(dep_nd) for dep_nd in dep_nds)
+        # at least one dependency is broadcasting
+        # transform node to :opaque and expand dep expression
+        st = Dict{Any, Any}()
+        for dep_nd in dep_nds
+            if is_bcast_vec(dep_nd)
+                # if dependency is broadcasting, replace its name with its expression
+                dep_ex = getexpr(dep_nd)
+                # idx_st = Dict(zip(varidxs(dep_nd),
+                #                   get_indices_in_expr(getexpr(nd), varname(dep_nd))))
+                # new_dep_ex = subs(dep_ex, idx_st)
+                new_dep_ex = dep_ex
+                st[getvar(dep_nd)] = new_dep_ex
+            end
+        end
+        new_ex = subs(getexpr(nd), st)
+        return copy(nd; ex=new_ex, category=:opaque)
+    else
+        return nd
+    end
+end
+
+
+function fuse_broadcasting(g::ExGraph)
+    new_g = reset_tape(g)
+    for nd in g.tape
+        if is_bcast_vec(nd)
             push!(new_g, fuse_broadcasting_node(g, new_g, nd))
         else
             push!(new_g, nd)

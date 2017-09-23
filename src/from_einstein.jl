@@ -64,6 +64,12 @@ const FROM_EINSTEIN_CALL_RULES =
                 :(Z[i,j] = X[i] .+ Y[i,j]) => :(Z = X .+ Y),
                 :(Z[i,j] = X[i] .- Y[i,j]) => :(Z = X .- Y),
                 :(Z[i,j] = X[i] .* Y[i,j]) => :(Z = X .* Y),
+                :(Z = X[i,j] .+ Y[i]) => :(Z = sum(X .+ Y)),
+                :(Z = X[i,j] .- Y[i]) => :(Z = sum(X .- Y)),
+                :(Z = X[i,j] .* Y[i]) => :(Z = sum(X .* Y)),
+                :(Z = X[i] .+ Y[i,j]) => :(Z = sum(X .+ Y)),
+                :(Z = X[i] .- Y[i,j]) => :(Z = sum(X .- Y)),
+                :(Z = X[i] .* Y[i,j]) => :(Z = sum(X .* Y)),
                 :(Z = X[i] .* Y[i]) => :(Z = dot(X, Y)),
                 # special .+ and .* (duplicates?)
                 :(Z[i,j] = X[j] .+ Y[i,j]) => :(Z = X' .+ Y),
@@ -255,7 +261,7 @@ end
 
 iscall(x) = isa(x, Expr) && x.head == :call
 
-function convert_call(g::EinGraph, nd::ExNode{:call})
+function convert_call(g::AbstractExGraph, nd::Union{ExNode{:call}, ExNode{:bcast}})
     new_ex = expand_const(g, getexpr(nd)) |> simplify
     if isa(new_ex, Symbol) || (isa(new_ex, Expr) && new_ex.head == :ref)
         # convert to assignment
@@ -263,6 +269,8 @@ function convert_call(g::EinGraph, nd::ExNode{:call})
     elseif isa(new_ex, Number) || isa(new_ex, AbstractArray)
         # convert to constant
         return copy(nd; category=:constant, ex=new_ex)
+    elseif isa(new_ex, Tuple)
+        return copy(nd; category=:tuple, ex=new_ex)
     else
         error("Call node $nd is simplified to an unknown non-call $new_ex")
     end
