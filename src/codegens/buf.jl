@@ -20,7 +20,7 @@ end
 
 
 function generate_code(codegen::BufCodeGen, g::EinGraph)
-    g = eliminate_common(g)
+    g = eliminate_common(g)    
     ex = to_buffered(g)
     # init_exs = [buffer_expr(var, buffer_var, sz_ex) for (var, sz_ex) in g.ctx[:buff_exprs]
     #             if haskey(g, var) && getcategory(g[var]) != :input]

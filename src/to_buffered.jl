@@ -16,7 +16,8 @@ const TO_BUFFERED_VEC_RULES = [
 
 function to_buffered(g::ExGraph)
     evaluate!(g)
-    g = fuse_broadcasting(g)
+    g = expand_fixed_sequences(g)
+    g = fuse_broadcasting(g)    
     res = :(begin end)
     for nd in g.tape
         if getcategory(nd) != :input
@@ -62,21 +63,21 @@ function to_buffered(g::ExGraph, nd::Union{ExNode{:call}, ExNode{:bcast}, ExNode
 end
 
 
-function to_buffered(g::ExGraph, nd::ExNode{:opaque})    
-    # try broadcasting
-    if is_bcast_vec(nd)
-        lhs_is_scalar = isa(getvalue(nd), Number)
-        return make_elementwise(without_indices(to_expr(nd));
-                                lhs_is_scalar=lhs_is_scalar)
-    end
-    # if LHS is an array, use .= instead of =
-    if isa(getvalue(nd), AbstractArray)
-        rex = to_expr(nd)
-        rex.head = :.=
-        return rex
-    end
-    return to_expr(nd)   
-end
+# function to_buffered(g::ExGraph, nd::ExNode{:opaque})    
+#     # try broadcasting
+#     if is_bcast_vec(nd)
+#         lhs_is_scalar = isa(getvalue(nd), Number)
+#         return make_elementwise(without_indices(to_expr(nd));
+#                                 lhs_is_scalar=lhs_is_scalar)
+#     end
+#     # if LHS is an array, use .= instead of =
+#     if isa(getvalue(nd), AbstractArray)
+#         rex = to_expr(nd)
+#         rex.head = :.=
+#         return rex
+#     end
+#     return to_expr(nd)   
+# end
 
 
 function to_buffered(g::ExGraph, nd::ExNode)

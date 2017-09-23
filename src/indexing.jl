@@ -94,6 +94,16 @@ function get_vars!(ex::ExH{:.}, rec::Bool, result::Vector{Union{Symbol, Expr}})
 end
 
 
+function get_vars!(ex::ExH{Symbol("'")}, rec::Bool, result::Vector{Union{Symbol, Expr}})
+    arg = ex.args[1]
+    if isa(arg, Symbol) || isref(arg)
+        push!(result, arg)
+    elseif rec
+        get_vars!(arg, rec, result)
+    end    
+end
+
+
 function get_vars!(ex::ExH{:(=)}, rec::Bool, result::Vector{Union{Symbol, Expr}})
     get_vars!(ex.args[1], rec, result)
     get_vars!(ex.args[2], rec, result)

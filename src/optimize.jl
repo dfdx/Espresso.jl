@@ -1,45 +1,38 @@
 
 # optmizie.jl - optimize ExGraph
-#
-# Optimizations may be applied to 1 or several linked nodes. For example, one cross-node
-# optimization transforms a pair of call that produces rank-3 tensor and aggregation operation
-# into a single call that produces a matrix. E.g.:
-#
-#     W[i,k,j] = X[i,k] .* Y[k, j]
-#     Z[i,j] = W[i,k,j]
-#
-# is replaced with:
-#
-#     Z[i,j] = X[i,k] * Y[k,j]
-#
-# which is an ordinary matrix-by-matrix product
-
 
 const OPT_PHS = [:X, :Y, :Z, :V, :W,
                  :i, :j, :k, :l, :m, :n, :p, :q, :r, :s, :t]
 
-const OPT_RULES = OrderedDict(
-    :(W[i,k,j] = X[i,k] .* Y[j,k]; Z[i,j] = W[i,k,j]) =>
-    :(genname__(1)[k,j] = Y[j,k]; Z[i,j] = X[i,k] * genname__(1)[k,j]),
+# const OPT_RULES = OrderedDict(
+#     :(W[i,k,j] = X[i,k] .* Y[j,k]; Z[i,j] = W[i,k,j]) =>
+#     :(genname__(1)[k,j] = Y[j,k]; Z[i,j] = X[i,k] * genname__(1)[k,j]),
 
-    :(W[i,k,j] = X[i,k] .* Y[k,j]; Z[i,j] = W[i,k,j]) =>
-    :(Z[i,j] = X[i,k] * Y[k,j]),
+#     :(W[i,k,j] = X[i,k] .* Y[k,j]; Z[i,j] = W[i,k,j]) =>
+#     :(Z[i,j] = X[i,k] * Y[k,j]),
 
-    :(W[i,j,k] = X[i] .* Y[j,k]; Z[i,j] = W[i,j,k]) =>
-    :(Z[i,j] = X[i] .* Y[j,k]),
+#     :(W[i,j,k] = X[i] .* Y[j,k]; Z[i,j] = W[i,j,k]) =>
+#     :(Z[i,j] = X[i] .* Y[j,k]),
 
-    # :(W[j,k,i] = X[i] .* Y[j,k]; Z[i,j] = W[i,j,k]) =>
-    # :(Z[i,j] = X[i] .* Y[j,k]),
+#     # :(W[j,k,i] = X[i] .* Y[j,k]; Z[i,j] = W[i,j,k]) =>
+#     # :(Z[i,j] = X[i] .* Y[j,k]),
 
-    :(W[k,i,j] = X[k,i] .* Y[k,j]; Z[i,j] = W[k,i,j]) =>
-    :(genname__(1)[i,k] = X[k,i]; Z[i,j] = genname__(1)[i,k] * Y[k,j])
-)
+#     :(W[k,i,j] = X[k,i] .* Y[k,j]; Z[i,j] = W[k,i,j]) =>
+#     :(genname__(1)[i,k] = X[k,i]; Z[i,j] = genname__(1)[i,k] * Y[k,j])
+# )
 
 
 const OPT_VEC_RULES = [
-    :(X = transpose(W); Z = X * Y) => :(Z = W' * Y),
-    :(Y = transpose(W); Z = X * Y) => :(Z = X * W'),
+    :(Z = X * transpose(Y)) => :(Z = X * Y'),
+    :(Z = X * Y') => :(Z = X * Y'),
+    :(Z = transpose(X) * Y) => :(Z = X' * Y),
+    :(Z = X' * Y) => :(Z = X' * Y),
 ]
+
+# const OPT_SEQUENCES = [
+#     :(Z = X * transpose(Y)),
+#     :(Z = transpose(X) * Y),
+# ]
 
 
 function remove_unused(g::AbstractExGraph, outvars::Vector{Symbol})
@@ -96,8 +89,82 @@ end
 
 
 
+# function tryoptimize(ex::Expr)
+#     for (pat, subs_ex) in OPT_RULES
+#         new_ex_nlb = tryrewrite(ex, pat, subs_ex; phs=OPT_PHS)
+#         if !isnull(new_ex_nlb)
+#             new_ex = get(new_ex_nlb)
+#             genname_patterns = unique(findex(:(genname__(_n)), new_ex))
+#             if !isempty(genname_patterns)
+#                 new_names = gennames(length(genname_patterns))
+#                 st = Dict(zip(genname_patterns, new_names))
+#                 return Nullable(subs(new_ex, st))
+#             else
+#                 return Nullable(new_ex)
+#             end
+#         end
+#     end
+#     return Nullable{Expr}()
+# end
+
+
+function reset_tape(g::AbstractExGraph)
+    new_g = deepcopy(g)
+    new_g.tape = []
+    new_g.idx = Dict()
+    return new_g
+end
+
+
+# function remove_pseudoone(g::AbstractExGraph)
+#     g = deepcopy(g)
+#     I_pat = :(I[_...])
+#     for (i, nd) in enumerate(g.tape)
+#         ex = getexpr(nd)
+#         new_ex = without(ex, I_pat)
+#         if isa(nd, ExNode{:call}) && isa(new_ex, Expr) && new_ex.head != :call
+#             # after removing I the node changed it's type from :call to :(=)
+#             new_nd = copy(nd; category=:(=), ex=new_ex)
+#             g[i] = new_nd
+#         else
+#             setexpr!(nd, new_ex)
+#         end
+#     end
+#     return g
+# end
+
+
+# function optimize(g::EinGraph)
+#     g = remove_pseudoone(g)
+#     new_g = reset_tape(g)
+#     for nd in g.tape
+#         if isa(nd, ExNode{:input})
+#             push!(new_g, nd)
+#         else
+#             # try to optimize current node + 1st level dependencies
+#             ex_1 = expand_deps(g, nd, 1)
+#             new_ex = tryoptimize(ex_1)
+#             if !isnull(new_ex)
+#                 parse!(new_g, get(new_ex))
+#                 continue
+#             end
+#             # try to optimize only current node
+#             new_ex = tryoptimize(to_expr(nd))
+#             if !isnull(new_ex)
+#                 parse!(new_g, get(new_ex))
+#                 continue
+#             end
+#             # if nothing matched, add node as is
+#             push!(new_g, copy(nd))
+#         end
+#     end
+#     new_g = remove_unused(new_g,  varname(new_g[end]))
+#     new_g = fuse_assigned(new_g)
+#     return new_g
+# end
+
 function tryoptimize(ex::Expr)
-    for (pat, subs_ex) in OPT_RULES
+    for (pat, subs_ex) in OPT_VEC_RULES
         new_ex_nlb = tryrewrite(ex, pat, subs_ex; phs=OPT_PHS)
         if !isnull(new_ex_nlb)
             new_ex = get(new_ex_nlb)
@@ -115,59 +182,18 @@ function tryoptimize(ex::Expr)
 end
 
 
-function reset_tape(g::AbstractExGraph)
-    new_g = deepcopy(g)
-    new_g.tape = []
-    new_g.idx = Dict()
-    return new_g
-end
-
-
-function remove_pseudoone(g::AbstractExGraph)
-    g = deepcopy(g)
-    I_pat = :(I[_...])
-    for (i, nd) in enumerate(g.tape)
-        ex = getexpr(nd)
-        new_ex = without(ex, I_pat)
-        if isa(nd, ExNode{:call}) && isa(new_ex, Expr) && new_ex.head != :call
-            # after removing I the node changed it's type from :call to :(=)
-            new_nd = copy(nd; category=:(=), ex=new_ex)
-            g[i] = new_nd
-        else
-            setexpr!(nd, new_ex)
+function expand_fixed_sequences(g::ExGraph, nd::ExNode)
+    ex = to_expr(nd)
+    changed = false
+    for dep in dependencies(nd)
+        expanded = subs(ex, Dict(dep => getexpr(g[dep])))
+        new_ex = tryoptimize(expanded)
+        if !isnull(new_ex)
+            ex = get(new_ex)
+            changed = true
         end
     end
-    return g
-end
-
-
-function optimize(g::EinGraph)
-    g = remove_pseudoone(g)
-    new_g = reset_tape(g)
-    for nd in g.tape
-        if isa(nd, ExNode{:input})
-            push!(new_g, nd)
-        else
-            # try to optimize current node + 1st level dependencies
-            ex_1 = expand_deps(g, nd, 1)
-            new_ex = tryoptimize(ex_1)
-            if !isnull(new_ex)
-                parse!(new_g, get(new_ex))
-                continue
-            end
-            # try to optimize only current node
-            new_ex = tryoptimize(to_expr(nd))
-            if !isnull(new_ex)
-                parse!(new_g, get(new_ex))
-                continue
-            end
-            # if nothing matched, add node as is
-            push!(new_g, copy(nd))
-        end
-    end
-    new_g = remove_unused(new_g,  varname(new_g[end]))
-    new_g = fuse_assigned(new_g)
-    return new_g
+    return changed ? copy(nd; category=:opaque, var=ex.args[1], ex=ex.args[2]) : nd
 end
 
 
@@ -181,25 +207,12 @@ function expand_fixed_sequences(g::ExGraph)
         if isa(nd, ExNode{:input})
             push!(new_g, nd)
         else
-            # try to optimize current node + 1st level dependencies
-            ex_1 = expand_deps(g, nd, 1)
-            new_ex = tryoptimize(ex_1)
-            if !isnull(new_ex)
-                parse!(new_g, get(new_ex))
-                continue
-            end
-            # try to optimize only current node
-            new_ex = tryoptimize(to_expr(nd))
-            if !isnull(new_ex)
-                parse!(new_g, get(new_ex))
-                continue
-            end
-            # if nothing matched, add node as is
-            push!(new_g, copy(nd))
+            new_nd = expand_fixed_sequences(g, nd)
+            push!(new_g, new_nd)
         end
     end
     new_g = remove_unused(new_g,  varname(new_g[end]))
-    new_g = fuse_assigned(new_g)
+    # new_g = fuse_assigned(new_g)
     return new_g
 end
 
