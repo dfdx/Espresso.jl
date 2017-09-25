@@ -77,6 +77,7 @@ export
     expand_const,
     remove_unused,
     eliminate_common,
+    inline_nodes,
     # expr utils
     mergeex,
     optimize,    

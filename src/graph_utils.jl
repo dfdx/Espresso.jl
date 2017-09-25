@@ -1,5 +1,5 @@
 
-# topological sort
+## topological sort
 
 """
 For each variable in graph, calculate all variables that depend on it.
@@ -29,7 +29,7 @@ function topsort_visit!(g::AbstractExGraph, dpts::Dict{Symbol, Vector{Symbol}},
     if vname in temp_marked
         error("Expression graph isn't a DAG!")
     end
-    if !in(vname, temp_marked) && !in(vname, perm_marked)        
+    if !in(vname, temp_marked) && !in(vname, perm_marked)
         push!(temp_marked, vname)
         for dpt in dpts[vname]
             topsort_visit!(g, dpts, temp_marked, perm_marked, sorted, dpt)
@@ -37,7 +37,7 @@ function topsort_visit!(g::AbstractExGraph, dpts::Dict{Symbol, Vector{Symbol}},
         push!(perm_marked, vname)
         delete!(temp_marked, vname)
         push!(sorted, vname)
-    end    
+    end
 end
 
 
@@ -50,7 +50,7 @@ function topsort(g::AbstractExGraph)
     for vname in keys(dpts)
         topsort_visit!(g, dpts, temp_marked, perm_marked, sorted, vname)
     end
-    sg  = Espresso.reset_tape(g)   
+    sg  = Espresso.reset_tape(g)
     for vname in reverse(sorted)
         push!(sg, g[vname])
     end
@@ -58,7 +58,7 @@ function topsort(g::AbstractExGraph)
 end
 
 
-# expand const
+## expand const
 
 """Expand all constant vars in a given expression"""
 function expand_const(g::AbstractExGraph, ex)
@@ -73,7 +73,7 @@ function expand_const(g::AbstractExGraph, ex)
     return subs(ex, st)
 end
 
-# reindex from beginning
+## reindex from beginning
 
 function reindex_from_beginning(g::EinGraph)
     new_g = reset_tape(g)
@@ -92,3 +92,57 @@ end
 
 
 reindex_from_beginning(g::ExGraph) = g
+
+
+## inline / inline unknown
+
+function subgraph_interm_subs_table(sub_g::ExGraph, dont_subs; prefix="")
+    interm_vars = [varname(sub_nd) for sub_nd in sub_g.tape
+                   if !in(varname(sub_nd), dont_subs)]
+    new_names = [genname("$(prefix)_$(v)_") for v in interm_vars]
+    return Dict(zip(interm_vars, new_names))
+end
+
+
+"""
+Find definition of a called function and build its subgraph ready for inlining
+"""
+function make_subgraph(g::ExGraph, nd::ExNode{:call})
+    mod = @get(g.ctx, :mod, Main)
+    fname = getexpr(nd).args[1]
+    f = eval(mod, fname)
+    args = dependencies(nd)
+    arg_types = ([typeof(getvalue(g[arg])) for arg in args]...)
+    params, sub_ex = func_expr(f, arg_types)
+    sub_g = ExGraph(sub_ex)
+    st = Dict(zip(params, args))           # rename internal params to actual arguments
+    st[varname(sub_g[end])] = varname(nd)  # rename output var to this node's
+    dont_subs = Set(keys(st))    
+    st = merge(st, subgraph_interm_subs_table(sub_g, dont_subs; prefix=fname))
+    rename!(sub_g, st)
+    return sub_g
+end
+
+
+function inline_subgraphs(g::ExGraph, inline_subs::Dict{Symbol, ExGraph})
+    new_g = reset_tape(g)
+    for nd in g
+        vname = varname(nd)
+        if haskey(inline_subs, vname)
+            for sub_nd in inline_subs[vname]
+                push!(new_g, sub_nd)
+            end
+        else
+            push!(new_g, nd)
+        end
+    end
+    return new_g
+end
+
+
+function inline_nodes(g::ExGraph, vnames::Set{Symbol})
+    inline_subs = Dict(vname => make_subgraph(g, g[vname]) for vname in vnames
+                       if vname in vnames)
+    return inline_subgraphs(g, inline_subs)
+end
+

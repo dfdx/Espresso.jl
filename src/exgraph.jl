@@ -65,6 +65,10 @@ indexof(g::AbstractExGraph, vname::Symbol) = findfirst(map(varname, g.tape), vna
 getsize(g::AbstractExGraph, vname::Symbol) = g.ctx[:rsizes][vname]
 getsize(g::AbstractExGraph, nd::ExNode) = getsize(g, varname(nd))
 
+Base.start(g::ExGraph) = 1
+Base.next(g::ExGraph, i) = g[i], i + 1
+Base.done(g::ExGraph, i) = i > length(g)
+
 
 function Base.cat(g1::T, g2::T) where T<:AbstractExGraph
     return T(vcat(g1.tape, g2.tape), merge(g1.idx, g2.idx), merge(g1.ctx, g2.ctx))
