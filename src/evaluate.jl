@@ -147,5 +147,17 @@ function evaluate!(g::AbstractExGraph,
 end
 
 
+function evaluate!(g::AbstractExGraph, nd::ExNode{:field}; force=false)
+    if (!force && getvalue(nd) != nothing) return getvalue(nd) end
+    depnd = g[dependencies(nd)[1]]
+    obj = getvalue(depnd)
+    fld = getexpr(nd).args[2].value
+    val = getfield(obj, fld)
+    setvalue!(nd, val)
+    remember_size!(g, nd)
+    return getvalue(nd)
+end
+
+
 evaluate!(g::AbstractExGraph, name::Symbol; force=false) = evaluate!(g, g[name]; force=force)
 evaluate!(g::AbstractExGraph; force=false) = evaluate!(g, g[end]; force=force)

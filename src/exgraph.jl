@@ -206,14 +206,19 @@ end
 
 
 function parse!(g::ExGraph, ex::ExH{:.})
-    @assert(isa(ex.args[2], Expr) && ex.args[2].head == :tuple,
-            "Dot (.) is only allowedd in broadcasting (e.g. `f.(x)`), but `$ex` passed in")
-    op = canonical(g.ctx[:mod], ex.args[1])
-    deps = [parse!(g, arg) for arg in ex.args[2].args]
-    # pex = Expr(:call, op, deps...)
-    pex = Expr(:., op, Expr(:tuple, deps...))
-    var = push!(g, :bcast, genname(), pex)
-    return var
+    if isa(ex.args[2], Expr) && ex.args[2].head == :tuple
+        # broadcasting
+        op = canonical(g.ctx[:mod], ex.args[1])
+        deps = [parse!(g, arg) for arg in ex.args[2].args]
+        # pex = Expr(:call, op, deps...)
+        pex = Expr(:., op, Expr(:tuple, deps...))
+        var = push!(g, :bcast, genname(), pex)
+        return var
+    elseif isa(ex.args[2], QuoteNode)
+        # field
+        var = push!(g, :field, genname(), Expr(ex))
+        return var
+    end
 end
 
 

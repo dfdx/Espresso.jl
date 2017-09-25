@@ -107,6 +107,7 @@ dependencies(nd::ExNode{:call}) = get_var_names(getexpr(nd))
 dependencies(nd::ExNode{:bcast}) = get_var_names(getexpr(nd))
 dependencies(nd::ExNode{:tuple}) = [split_indexed(dep)[1] for dep in getexpr(nd).args]
 dependencies(nd::ExNode{:opaque}) = get_var_names(getexpr(nd); rec=true)
+dependencies(nd::ExNode{:field}) = [getexpr(nd).args[1]]
 
 
 ## node utils
@@ -123,6 +124,8 @@ function Base.show(io::IO, nd::ExNode{C}) where C
         val = "<$(typeof(val))>"
     elseif isa(getvalue(nd), Tuple)
         val = ([isa(v, AbstractArray) ?  "<$(typeof(v))>" : v for v in val]...)
+    elseif isstruct(getvalue(nd))
+        val = "$(typeof(getvalue(nd)))"
     end
     ex_str = "ExNode{$C}($(to_expr(nd)) | $val)"
     print(io, ex_str)
