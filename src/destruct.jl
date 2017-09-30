@@ -1,9 +1,7 @@
 
-# destruct.jl - utils for working with Julia structures
-#
-# Composite types, except for arrays, are not supported by core Espresso functions.
-# However we can provide a set of wrapper and utility functions to make working
-# with structs more pleasant
+## destruct.jl - deconstruction of structs
+##
+## TODO: now Espresso supports structures natively, remove this?
 
 "Check if an object is of a struct type, i.e. not a number or array"
 isstruct(::Type{T}) where T = !isbits(T) && !(T <: AbstractArray)

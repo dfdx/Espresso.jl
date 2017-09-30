@@ -225,15 +225,17 @@ function eliminate_common(g::AbstractExGraph)
     existing = Dict()             # index of existing expressions
     st = Dict{Symbol,Symbol}()    # later var -> previous var with the same expression
     for nd in g.tape
-        new_full_ex = subs(to_expr(nd), st)
+        new_full_ex = subs(to_expr_kw(nd), st)
         vname, vidxs = split_indexed(new_full_ex.args[1])
         key = string((vidxs, new_full_ex.args[2]))
         if haskey(existing, key) &&
             (g[vname] |> getvalue |> size) == (g[existing[key]] |> getvalue |> size)
             st[vname] = existing[key]
         else
-            C = getcategory(nd)
-            push!(new_g, ExNode{C}(new_full_ex; val=getvalue(nd)))
+            # C = getcategory(nd)
+            new_nd = copy(nd)
+            setexpr_kw!(new_nd, new_full_ex.args[2])
+            push!(new_g, new_nd)
             existing[key] = vname
         end
     end

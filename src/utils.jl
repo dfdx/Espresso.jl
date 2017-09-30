@@ -460,7 +460,7 @@ end
 subs_bcast_with_dot(x) = x
 
 
-# is broadcastable
+## is broadcastable
 
 """
 Check if all operations in this expression are broadcasting
@@ -484,7 +484,30 @@ is_bcast(x) = error("Don't know if $x is a broadcast expression")
 # also see broadcasting for EinGraph nodes in optimize.jl
 
 
-# function generation
+## function parsing
+
+"""
+Given a call expression, parse regular and keyword arguments
+"""
+function parse_call_args(ex::ExH{:call})
+    if length(ex.args) == 1
+        return [], Dict()
+    elseif isa(ex.args[2], Expr) && ex.args[2].head == :parameters
+        kw_args = Dict{Any,Any}(a.args[1] => a.args[2] for a in ex.args[2].args)
+        return ex.args[3:end], kw_args
+    else
+        return ex.args[2:end], Dict()
+    end
+end
+
+
+function parse_call_args(ex::Expr)
+    @assert ex.head == :call
+    return parse_call_args(ExH(ex))
+end
+
+
+## function generation
 
 function make_kw_params(kw_args)
     kw_params = [Expr(:kw, arg...) for arg in kw_args]
@@ -513,11 +536,12 @@ end
 
 # haskeyexact
 
-function haskeyexact(d::Dict, key)
-    for (k, v) in d
-        if k == key && typeof(k) == typeof(key)
-            return true
-        end
-    end
-    return false
-end
+# function haskeyexact(d::Dict, key)
+#     for (k, v) in d
+#         if k == key && typeof(k) == typeof(key)
+#             return true
+#         end
+#     end
+#     return false
+# end
+ 

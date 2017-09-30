@@ -113,12 +113,17 @@ Add a new node to a graph. Expression should be simple, e.g.
 nested calls or blocks are not allowed (use parse!() for it).
 """
 function Base.push!(g::AbstractExGraph, nd::ExNode)
+    @assert(!haskey(g, varname(nd)),
+            "Graph already contains a node with name $(varname(nd))!")
     push!(g.tape, nd)
     g.idx[varname(nd)] = nd
     return varname(nd)
 end
 
-function Base.push!(g::AbstractExGraph, C::Symbol, var::Union{Symbol,Expr}, ex::Any; val=nothing)
+function Base.push!(g::AbstractExGraph, C::Symbol, var::Union{Symbol,Expr}, ex::Any;
+                    val=nothing, meta=Dict())
+    @assert(!haskey(g, split_indexed(var)[1]),
+            "Graph already contains a node with name $var!")
     nd = ExNode{C}(var, ex; val=val)
     push!(g, nd)
     return var
@@ -194,12 +199,14 @@ const CONST_OPS = Set([:length])
 
 function parse!(g::ExGraph, ex::ExH{:call})
     op = canonical(g.ctx[:mod], ex.args[1])
-    deps = [parse!(g, arg) for arg in ex.args[2:end]]
+    args, kw_args = parse_call_args(ex)
+    meta = isempty(kw_args) ? Dict() : Dict(:kw => kw_args)
+    deps = [parse!(g, arg) for arg in args]
     pex = Expr(:call, op, deps...)
     if op in CONST_OPS
-        var = push!(g, :constant, genname(), pex)
+        var = push!(g, :constant, genname(), pex; meta=meta)
     else
-        var = push!(g, :call, genname(), pex)
+        var = push!(g, :call, genname(), pex; meta=meta)
     end
     return var
 end
