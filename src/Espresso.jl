@@ -56,6 +56,7 @@ export
     indexof,
     dependencies,
     to_expr,
+    to_expr_kw,
     isindexed,
     # ExGraph/EinGraph core
     AbstractExGraph,
@@ -80,7 +81,6 @@ export
     inline_nodes,
     # expr utils
     mergeex,
-    optimize,    
     sanitize,
     # Einstein conversions
     to_einstein,
@@ -105,7 +105,8 @@ export
     sum_2,
     squeeze_sum,
     squeeze_sum_1,
-    squeeze_sum_2
+    squeeze_sum_2,
+    __construct
 
 
 

@@ -16,13 +16,15 @@
 
 @runonce mutable struct ExNode{C}  # C - category of node, e.g. :call, :=, etc.
     var::Union{Symbol, Expr}       # variable name, possibly with indices
-    ex::Any                        # simple expression that produces the var
+    ex::Any                        # primitive expression that produces the var
     guards::Vector{Expr}           # guards, turning ex to 0 when false
     val::Any                       # example value
+    meta::Dict                     # node metadata & optional parameters
 end
 
-function ExNode{C}(var::Union{Symbol,Expr}, ex::Any; guards=[], val=nothing) where C
-    return ExNode{C}(var, ex, guards, val)
+function ExNode{C}(var::Union{Symbol,Expr}, ex::Any;
+                   guards=[], val=nothing, meta=Dict()) where C
+    return ExNode{C}(var, ex, guards, val, meta)
 end
 
 function ExNode{C}(full_ex::Expr; val=nothing) where C
@@ -54,8 +56,33 @@ setguards!(nd::ExNode, guards::Vector{Expr}) = (nd.guards = guards)
 getvalue(nd::ExNode) = nd.val
 setvalue!(nd::ExNode, val) = (nd.val = val)
 
-Base.copy(nd::ExNode{C}; category=C, var=nd.var, ex=nd.ex,  guards=nd.guards, val=nd.val) where {C} =
-    ExNode{category}(var, ex, guards, val)
+Base.copy(nd::ExNode{C}; category=C, var=nd.var, ex=nd.ex,
+          guards=nd.guards, val=nd.val, meta=nd.meta) where {C} =
+    ExNode{category}(var, ex, guards, val, meta)
+
+
+## pseudo-accessors
+
+function getexpr_kw(nd::ExNode)
+    if haskey(nd.meta, :kw) && !isempty(nd.meta[:kw])
+        ex = copy(getexpr(nd))
+        insert!(ex.args, 2, make_kw_params(nd.meta[:kw]))
+        return ex
+    else
+        return getexpr(nd)
+    end
+end
+
+
+function setexpr_kw!(nd::Union{ExNode{:call}, ExNode{:ctor}}, ex)
+    f = ex.args[1]
+    args, kw = parse_call_args(ex)
+    nd.ex = :($f($(args...)))
+    nd.meta[:kw] = kw
+end
+
+setexpr_kw!(nd::ExNode, ex) = setexpr!(nd, ex)
+
 
 
 ## to_expr and friends
@@ -72,6 +99,16 @@ or for indexed notation:
 function to_expr(nd::ExNode)
     var = getvar(nd)
     ex = with_guards(getexpr(nd), getguards(nd))
+    return :($var = $ex)
+end
+
+
+"""
+Same as to_expr(ExNode), but includes keyword arguments if any
+"""
+function to_expr_kw(nd::ExNode)
+    var = getvar(nd)
+    ex = with_guards(getexpr_kw(nd), getguards(nd))
     return :($var = $ex)
 end
 
@@ -107,6 +144,9 @@ dependencies(nd::ExNode{:call}) = get_var_names(getexpr(nd))
 dependencies(nd::ExNode{:bcast}) = get_var_names(getexpr(nd))
 dependencies(nd::ExNode{:tuple}) = [split_indexed(dep)[1] for dep in getexpr(nd).args]
 dependencies(nd::ExNode{:opaque}) = get_var_names(getexpr(nd); rec=true)
+dependencies(nd::ExNode{:field}) = [getexpr(nd).args[1]]
+dependencies(nd::ExNode{:ctor}) =
+    [getexpr(nd).args[2], values(get(nd.meta, :kw, Dict()))...]
 
 
 ## node utils
@@ -123,6 +163,8 @@ function Base.show(io::IO, nd::ExNode{C}) where C
         val = "<$(typeof(val))>"
     elseif isa(getvalue(nd), Tuple)
         val = ([isa(v, AbstractArray) ?  "<$(typeof(v))>" : v for v in val]...)
+    elseif isstruct(getvalue(nd))
+        val = "$(typeof(getvalue(nd)))"
     end
     ex_str = "ExNode{$C}($(to_expr(nd)) | $val)"
     print(io, ex_str)

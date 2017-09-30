@@ -43,6 +43,20 @@ function mk_eval_expr(g::ExGraph, nd::ExNode)
 end
 
 
+function mk_eval_expr(g::ExGraph, nd::ExNode{:ctor})
+    dep_nodes = [g[dep] for dep in dependencies(nd) if haskey(g, dep)]
+    deps_vals = [(varname(nd), getvalue(nd)) for nd in dep_nodes]
+    eval_ex = Expr(:block, Expr(:let, Expr(:block)))
+    block = eval_ex.args[1].args[1]
+    for (dep, val) in unique(deps_vals)
+        push!(block.args, :(local $dep = $val))
+    end
+    push!(block.args, to_expr_kw(nd))
+    push!(block.args, varname(nd))
+    return eval_ex
+end
+
+
 function mk_eval_expr(g::AbstractExGraph, nd::ExNode)   # for EinGraph
     rsizes = @get_or_create(g.ctx, :rsizes, Dict{Symbol,Any}())
     dep_nodes = [g[dep] for dep in dependencies(nd) if haskey(g, dep)]
@@ -129,7 +143,7 @@ end
 
 
 function evaluate!(g::AbstractExGraph,
-                   nd::Union{ExNode{:call}, ExNode{:bcast},
+                   nd::Union{ExNode{:call}, ExNode{:bcast}, ExNode{:ctor},
                              ExNode{:tuple}, ExNode{:opaque}};
                    force=false)
     if (!force && getvalue(nd) != nothing) return getvalue(nd) end
@@ -142,6 +156,18 @@ function evaluate!(g::AbstractExGraph,
     end
     evex = mk_eval_expr(g, nd)
     setvalue!(nd, eval(g.ctx[:mod], evex))
+    remember_size!(g, nd)
+    return getvalue(nd)
+end
+
+
+function evaluate!(g::AbstractExGraph, nd::ExNode{:field}; force=false)
+    if (!force && getvalue(nd) != nothing) return getvalue(nd) end
+    depnd = g[dependencies(nd)[1]]
+    obj = getvalue(depnd)
+    fld = getexpr(nd).args[2].value
+    val = getfield(obj, fld)
+    setvalue!(nd, val)
     remember_size!(g, nd)
     return getvalue(nd)
 end
