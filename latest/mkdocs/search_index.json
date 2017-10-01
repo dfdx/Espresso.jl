@@ -1,0 +1,59 @@
+{
+    "docs": [
+        {
+            "location": "/", 
+            "text": "Espresso ducumentation and thanks for all the fish\n\n\n\n\nEspresso.jl Documentation\n\n\n\n\nEspresso.jl Documentation\n\n\nExpression parsing and rewriting\n\n\nEinstein indexing notation\n\n\nExGraph\n\n\nFunctions\n\n\nIndex\n\n\n\n\n\n\n\n\n\n\nExpression parsing and rewriting\n\n\n\n\nExpression matching\n\n\nmatchex\n - match expression by pattern, extract matching elements. Elements of expression are matched to placeholders - symbols in pattern that start with '_' or any symbols passed in \nphs\n parameter.\n\n\nmatchex(:(_x^2), :(u^2))\n# Nullable(Dict{Symbol,Any}(:_x=\n:u))\nmatchex(:(x^n), :(u^2); phs=Set([:x, :n]))\n# Nullable(Dict{Symbol,Any}(:x=\n:u,:n=\n2))\n\n\n\n\nSee also \nmatchingex\n.   See also \nfindex\n.\n\n\n\n\nExpression substitution\n\n\nsubs\n - substitute elements of in expression according to substitution table:\n\n\nex = :(x ^ n)\nsubs(ex, x=2)\n# :(2 ^ n)\n\n\n\n\n\n\nExpression rewriting\n\n\nrewrite\n - rewrite an expression matching it to a pattern and replacing corresponding placeholders in substitution expression. \n\n\nex = :(u ^ v)\npat = :(_x ^ _n)\nsubex = :(_n * _x ^ (_n - 1))\nrewrite(ex, pat, subex)\n# :(v * u ^ (v - 1))\n\n\n\n\nSee also \ntryrewrite\n.\n\n\n\n\nExpression simplification\n\n\nsimplify\n - simplify numeric expression if possible.\n\n\nsimplify(:(2 - 1))\n# 1\nsimplify(:(1 * (2x^1)))\n# :(2x)\n\n\n\n\n\n\nEinstein indexing notation\n\n\nEspresso.jl also supports expressions in Einstein indexing notation and is mostly compatible with \nEinsum.jl\n. The most important functions are:\n\n\nto_einstein\n - convert vectorized expression to Einstein notation.\n\n\nto_einstein(:(W*x + b); W=rand(3,4), x=rand(4), b=rand(3))\n# quote\n#    tmp1[i] = W[i,k] * x[k]\n#    tmp2[i] = tmp1[i] + b[i]\n# end\n\n\n\n\nHere \nW=rand(3,4)\n, \nx=rand(4)\n and \nb=rand(3)\n are \nexample values\n - anything that has the same type and dimensions as real expected values.\n\n\nfrom_einstein\n - convert an expression in Einstein notation to vectorized form if possible.\n\n\nfrom_einstein(:(W[i,k] * x[k] + b[i]))\n# quote\n#     tmp1 = W * x\n#     tmp2 = tmp1 + b\n# end\n\n\n\n\n\n\nExGraph\n\n\nOn low-level many functions of Espresso.jl use \nExGraph\n - expression graph, represented as a topologically sorted list of primitive expression. Example:\n\n\ng = ExGraph(:(W*x + b); W=rand(3,4), x=rand(4), b=rand(3))\n# ExGraph\n#   ExNode{input}(W = W | \nArray{Float64,2}\n)\n#   ExNode{input}(x = x | \nArray{Float64,1}\n)\n#   ExNode{input}(b = b | \nArray{Float64,1}\n)\n#   ExNode{call}(tmp1 = W * x | nothing)\n#   ExNode{call}(tmp2 = tmp1 + b | nothing)\n\n\n\n\nThe main advantage of using such representation is that each node represents exactly one simple enough expression such as assignment or function call. For example, \nto_einstein\n and \nfrom_einstein\n both use \nExGraph\n to find rule for transforming between two notations.\n\n\n\n\nFunctions\n\n\n#\n\n\nEspresso.matchex\n \n \nMethod\n.\n\n\nMatch expression \nex\n to a pattern \npat\n, return nullable dictionary of matched symbols or rpatpressions. Example:\n\n\nex = :(u ^ v)\npat = :(_x ^ _n)\nmatchex(pat, ex)\n# ==\n Nullable(Dict{Symbol,Any}(:_n=\n:v,:_x=\n:u))\n\n\n\n\nNOTE: two symbols match if they are equal or symbol in pattern is a placeholder. Placeholder is any symbol that starts with '\n'. It's also possible to pass list of placeholder names (not necessarily starting wiht '\n') via \nphs\n parameter:\n\n\nex = :(u ^ v)\npat = :(x ^ n)\nmatchex(pat, ex; phs=Set([:x, :n]))\n# ==\n Nullable(Dict{Symbol,Any}(:n=\n:v,:x=\n:u))\n\n\n\n\nSeveral elements may be matched using \n...\n expression, e.g.:\n\n\nex = :(A[i, j, k])\npat = :(x[I...])\nmatchex(pat, ex; phs=Set([:x, :I]))\n# ==\n Nullable(Dict(:x=\n:A, :I=\n[:i,:j,:k]))\n\n\n\n\nOptional parameters:\n\n\n\n\nphs::Set{Symbol} = DEFAULT_PHS[1]     A set of placeholder symbols\n\n\n\n\nallow_ex::Boolean = true     Allow matchinng of symbol pattern to an expression. Example:\n\n\nmatchex(:(_x + 1), :(a*b + 1); allow_ex=true)  # ==\n matches\n    matchex(:(_x + 1), :(a*b + 1); allow_ex=false)  # ==\n doesn't match\n\n  * exact::Boolean = false     Allow matching of the same expression to different keys\n\n\nmatchex(:(_x + _y), :(a + a); exact=false) # ==\n matches\n    matchex(:(_x = _y), :(a + a); exact=true)  # ==\n doesn't match\n\n\n\n\n\n\nsource\n\n\n\n\nIndex\n\n\n\n\nEspresso.matchex", 
+            "title": "Home"
+        }, 
+        {
+            "location": "/#espressojl-documentation", 
+            "text": "Espresso.jl Documentation  Expression parsing and rewriting  Einstein indexing notation  ExGraph  Functions  Index", 
+            "title": "Espresso.jl Documentation"
+        }, 
+        {
+            "location": "/#expression-parsing-and-rewriting", 
+            "text": "", 
+            "title": "Expression parsing and rewriting"
+        }, 
+        {
+            "location": "/#expression-matching", 
+            "text": "matchex  - match expression by pattern, extract matching elements. Elements of expression are matched to placeholders - symbols in pattern that start with '_' or any symbols passed in  phs  parameter.  matchex(:(_x^2), :(u^2))\n# Nullable(Dict{Symbol,Any}(:_x= :u))\nmatchex(:(x^n), :(u^2); phs=Set([:x, :n]))\n# Nullable(Dict{Symbol,Any}(:x= :u,:n= 2))  See also  matchingex .   See also  findex .", 
+            "title": "Expression matching"
+        }, 
+        {
+            "location": "/#expression-substitution", 
+            "text": "subs  - substitute elements of in expression according to substitution table:  ex = :(x ^ n)\nsubs(ex, x=2)\n# :(2 ^ n)", 
+            "title": "Expression substitution"
+        }, 
+        {
+            "location": "/#expression-rewriting", 
+            "text": "rewrite  - rewrite an expression matching it to a pattern and replacing corresponding placeholders in substitution expression.   ex = :(u ^ v)\npat = :(_x ^ _n)\nsubex = :(_n * _x ^ (_n - 1))\nrewrite(ex, pat, subex)\n# :(v * u ^ (v - 1))  See also  tryrewrite .", 
+            "title": "Expression rewriting"
+        }, 
+        {
+            "location": "/#expression-simplification", 
+            "text": "simplify  - simplify numeric expression if possible.  simplify(:(2 - 1))\n# 1\nsimplify(:(1 * (2x^1)))\n# :(2x)", 
+            "title": "Expression simplification"
+        }, 
+        {
+            "location": "/#einstein-indexing-notation", 
+            "text": "Espresso.jl also supports expressions in Einstein indexing notation and is mostly compatible with  Einsum.jl . The most important functions are:  to_einstein  - convert vectorized expression to Einstein notation.  to_einstein(:(W*x + b); W=rand(3,4), x=rand(4), b=rand(3))\n# quote\n#    tmp1[i] = W[i,k] * x[k]\n#    tmp2[i] = tmp1[i] + b[i]\n# end  Here  W=rand(3,4) ,  x=rand(4)  and  b=rand(3)  are  example values  - anything that has the same type and dimensions as real expected values.  from_einstein  - convert an expression in Einstein notation to vectorized form if possible.  from_einstein(:(W[i,k] * x[k] + b[i]))\n# quote\n#     tmp1 = W * x\n#     tmp2 = tmp1 + b\n# end", 
+            "title": "Einstein indexing notation"
+        }, 
+        {
+            "location": "/#exgraph", 
+            "text": "On low-level many functions of Espresso.jl use  ExGraph  - expression graph, represented as a topologically sorted list of primitive expression. Example:  g = ExGraph(:(W*x + b); W=rand(3,4), x=rand(4), b=rand(3))\n# ExGraph\n#   ExNode{input}(W = W |  Array{Float64,2} )\n#   ExNode{input}(x = x |  Array{Float64,1} )\n#   ExNode{input}(b = b |  Array{Float64,1} )\n#   ExNode{call}(tmp1 = W * x | nothing)\n#   ExNode{call}(tmp2 = tmp1 + b | nothing)  The main advantage of using such representation is that each node represents exactly one simple enough expression such as assignment or function call. For example,  to_einstein  and  from_einstein  both use  ExGraph  to find rule for transforming between two notations.", 
+            "title": "ExGraph"
+        }, 
+        {
+            "location": "/#functions", 
+            "text": "#  Espresso.matchex     Method .  Match expression  ex  to a pattern  pat , return nullable dictionary of matched symbols or rpatpressions. Example:  ex = :(u ^ v)\npat = :(_x ^ _n)\nmatchex(pat, ex)\n# ==  Nullable(Dict{Symbol,Any}(:_n= :v,:_x= :u))  NOTE: two symbols match if they are equal or symbol in pattern is a placeholder. Placeholder is any symbol that starts with ' '. It's also possible to pass list of placeholder names (not necessarily starting wiht ' ') via  phs  parameter:  ex = :(u ^ v)\npat = :(x ^ n)\nmatchex(pat, ex; phs=Set([:x, :n]))\n# ==  Nullable(Dict{Symbol,Any}(:n= :v,:x= :u))  Several elements may be matched using  ...  expression, e.g.:  ex = :(A[i, j, k])\npat = :(x[I...])\nmatchex(pat, ex; phs=Set([:x, :I]))\n# ==  Nullable(Dict(:x= :A, :I= [:i,:j,:k]))  Optional parameters:   phs::Set{Symbol} = DEFAULT_PHS[1]     A set of placeholder symbols   allow_ex::Boolean = true     Allow matchinng of symbol pattern to an expression. Example:  matchex(:(_x + 1), :(a*b + 1); allow_ex=true)  # ==  matches\n    matchex(:(_x + 1), :(a*b + 1); allow_ex=false)  # ==  doesn't match \n  * exact::Boolean = false     Allow matching of the same expression to different keys  matchex(:(_x + _y), :(a + a); exact=false) # ==  matches\n    matchex(:(_x = _y), :(a + a); exact=true)  # ==  doesn't match    source", 
+            "title": "Functions"
+        }, 
+        {
+            "location": "/#index", 
+            "text": "Espresso.matchex", 
+            "title": "Index"
+        }
+    ]
+}

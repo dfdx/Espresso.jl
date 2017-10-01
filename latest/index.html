@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Expression transformation package">
+  <meta name="author" content="dfdx">
+  <link rel="shortcut icon" href="./img/favicon.ico">
+  <title>Home - Espresso.jl</title>
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
+
+  <link rel="stylesheet" href="./css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="./css/theme_extra.css" type="text/css" />
+  <link rel="stylesheet" href="./css/highlight.css">
+  <link href="./assets/Documenter.css" rel="stylesheet">
+  
+  <script>
+    // Current page data
+    var mkdocs_page_name = "Home";
+    var mkdocs_page_input_path = "index.md";
+    var mkdocs_page_url = "/";
+  </script>
+  
+  <script src="./js/jquery-2.1.1.min.js"></script>
+  <script src="./js/modernizr-2.8.3.min.js"></script>
+  <script type="text/javascript" src="./js/highlight.pack.js"></script> 
+  
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+      <div class="wy-side-nav-search">
+        <a href="." class="icon icon-home"> Espresso.jl</a>
+        <div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="./search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+	<ul class="current">
+	  
+          
+            <li class="toctree-l1 current">
+		
+    <a class="current" href=".">Home</a>
+    <ul class="subnav">
+            
+    <li class="toctree-l2"><a href="#espressojl-documentation">Espresso.jl Documentation</a></li>
+    
+        <ul>
+        
+            <li><a class="toctree-l3" href="#expression-parsing-and-rewriting">Expression parsing and rewriting</a></li>
+        
+            <li><a class="toctree-l3" href="#einstein-indexing-notation">Einstein indexing notation</a></li>
+        
+            <li><a class="toctree-l3" href="#exgraph">ExGraph</a></li>
+        
+            <li><a class="toctree-l3" href="#functions">Functions</a></li>
+        
+            <li><a class="toctree-l3" href="#index">Index</a></li>
+        
+        </ul>
+    
+
+    </ul>
+	    </li>
+          
+        </ul>
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href=".">Espresso.jl</a>
+      </nav>
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".">Docs</a> &raquo;</li>
+    
+      
+    
+    <li>Home</li>
+    <li class="wy-breadcrumbs-aside">
+      
+        <a href="https://github.com/dfdx/Espresso.jl/edit/master/docs/index.md"
+          class="icon icon-github"> Edit on GitHub</a>
+      
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main">
+            <div class="section">
+              
+                <p>Espresso ducumentation and thanks for all the fish</p>
+<p><a id='Espresso.jl-Documentation-1'></a></p>
+<h1 id="espressojl-documentation">Espresso.jl Documentation</h1>
+<ul>
+<li><a href=".#Espresso.jl-Documentation-1">Espresso.jl Documentation</a><ul>
+<li><a href=".#Expression-parsing-and-rewriting-1">Expression parsing and rewriting</a></li>
+<li><a href=".#Einstein-indexing-notation-1">Einstein indexing notation</a></li>
+<li><a href=".#ExGraph-1">ExGraph</a></li>
+<li><a href=".#Functions-1">Functions</a></li>
+<li><a href=".#Index-1">Index</a></li>
+</ul>
+</li>
+</ul>
+<p><a id='Expression-parsing-and-rewriting-1'></a></p>
+<h2 id="expression-parsing-and-rewriting">Expression parsing and rewriting</h2>
+<p><a id='Expression-matching-1'></a></p>
+<h3 id="expression-matching">Expression matching</h3>
+<p><code>matchex</code> - match expression by pattern, extract matching elements. Elements of expression are matched to placeholders - symbols in pattern that start with '_' or any symbols passed in <code>phs</code> parameter.</p>
+<pre><code class="julia">matchex(:(_x^2), :(u^2))
+# Nullable(Dict{Symbol,Any}(:_x=&gt;:u))
+matchex(:(x^n), :(u^2); phs=Set([:x, :n]))
+# Nullable(Dict{Symbol,Any}(:x=&gt;:u,:n=&gt;2))
+</code></pre>
+
+<p>See also <code>matchingex</code>.   See also <code>findex</code>.</p>
+<p><a id='Expression-substitution-1'></a></p>
+<h3 id="expression-substitution">Expression substitution</h3>
+<p><code>subs</code> - substitute elements of in expression according to substitution table:</p>
+<pre><code class="julia">ex = :(x ^ n)
+subs(ex, x=2)
+# :(2 ^ n)
+</code></pre>
+
+<p><a id='Expression-rewriting-1'></a></p>
+<h3 id="expression-rewriting">Expression rewriting</h3>
+<p><code>rewrite</code> - rewrite an expression matching it to a pattern and replacing corresponding placeholders in substitution expression. </p>
+<pre><code class="julia">ex = :(u ^ v)
+pat = :(_x ^ _n)
+subex = :(_n * _x ^ (_n - 1))
+rewrite(ex, pat, subex)
+# :(v * u ^ (v - 1))
+</code></pre>
+
+<p>See also <code>tryrewrite</code>.</p>
+<p><a id='Expression-simplification-1'></a></p>
+<h3 id="expression-simplification">Expression simplification</h3>
+<p><code>simplify</code> - simplify numeric expression if possible.</p>
+<pre><code class="julia">simplify(:(2 - 1))
+# 1
+simplify(:(1 * (2x^1)))
+# :(2x)
+</code></pre>
+
+<p><a id='Einstein-indexing-notation-1'></a></p>
+<h2 id="einstein-indexing-notation">Einstein indexing notation</h2>
+<p>Espresso.jl also supports expressions in Einstein indexing notation and is mostly compatible with <a href="https://github.com/ahwillia/Einsum.jl">Einsum.jl</a>. The most important functions are:</p>
+<p><code>to_einstein</code> - convert vectorized expression to Einstein notation.</p>
+<pre><code class="julia">to_einstein(:(W*x + b); W=rand(3,4), x=rand(4), b=rand(3))
+# quote
+#    tmp1[i] = W[i,k] * x[k]
+#    tmp2[i] = tmp1[i] + b[i]
+# end
+</code></pre>
+
+<p>Here <code>W=rand(3,4)</code>, <code>x=rand(4)</code> and <code>b=rand(3)</code> are <em>example values</em> - anything that has the same type and dimensions as real expected values.</p>
+<p><code>from_einstein</code> - convert an expression in Einstein notation to vectorized form if possible.</p>
+<pre><code class="julia">from_einstein(:(W[i,k] * x[k] + b[i]))
+# quote
+#     tmp1 = W * x
+#     tmp2 = tmp1 + b
+# end
+</code></pre>
+
+<p><a id='ExGraph-1'></a></p>
+<h2 id="exgraph">ExGraph</h2>
+<p>On low-level many functions of Espresso.jl use <code>ExGraph</code> - expression graph, represented as a topologically sorted list of primitive expression. Example:</p>
+<pre><code class="julia">g = ExGraph(:(W*x + b); W=rand(3,4), x=rand(4), b=rand(3))
+# ExGraph
+#   ExNode{input}(W = W | &lt;Array{Float64,2}&gt;)
+#   ExNode{input}(x = x | &lt;Array{Float64,1}&gt;)
+#   ExNode{input}(b = b | &lt;Array{Float64,1}&gt;)
+#   ExNode{call}(tmp1 = W * x | nothing)
+#   ExNode{call}(tmp2 = tmp1 + b | nothing)
+</code></pre>
+
+<p>The main advantage of using such representation is that each node represents exactly one simple enough expression such as assignment or function call. For example, <code>to_einstein</code> and <code>from_einstein</code> both use <code>ExGraph</code> to find rule for transforming between two notations.</p>
+<p><a id='Functions-1'></a></p>
+<h2 id="functions">Functions</h2>
+<p><a id='Espresso.matchex-Tuple{Any,Any}' href='#Espresso.matchex-Tuple{Any,Any}'>#</a>
+<strong><code>Espresso.matchex</code></strong> &mdash; <em>Method</em>.</p>
+<p>Match expression <code>ex</code> to a pattern <code>pat</code>, return nullable dictionary of matched symbols or rpatpressions. Example:</p>
+<pre><code>ex = :(u ^ v)
+pat = :(_x ^ _n)
+matchex(pat, ex)
+# ==&gt; Nullable(Dict{Symbol,Any}(:_n=&gt;:v,:_x=&gt;:u))
+</code></pre>
+
+<p>NOTE: two symbols match if they are equal or symbol in pattern is a placeholder. Placeholder is any symbol that starts with '<em>'. It's also possible to pass list of placeholder names (not necessarily starting wiht '</em>') via <code>phs</code> parameter:</p>
+<pre><code>ex = :(u ^ v)
+pat = :(x ^ n)
+matchex(pat, ex; phs=Set([:x, :n]))
+# ==&gt; Nullable(Dict{Symbol,Any}(:n=&gt;:v,:x=&gt;:u))
+</code></pre>
+
+<p>Several elements may be matched using <code>...</code> expression, e.g.:</p>
+<pre><code>ex = :(A[i, j, k])
+pat = :(x[I...])
+matchex(pat, ex; phs=Set([:x, :I]))
+# ==&gt; Nullable(Dict(:x=&gt;:A, :I=&gt;[:i,:j,:k]))
+</code></pre>
+
+<p>Optional parameters:</p>
+<ul>
+<li>phs::Set{Symbol} = DEFAULT_PHS[1]     A set of placeholder symbols</li>
+<li>
+<p>allow_ex::Boolean = true     Allow matchinng of symbol pattern to an expression. Example:</p>
+<p><code>matchex(:(_x + 1), :(a*b + 1); allow_ex=true)  # ==&gt; matches
+    matchex(:(_x + 1), :(a*b + 1); allow_ex=false)  # ==&gt; doesn't match</code>
+  * exact::Boolean = false     Allow matching of the same expression to different keys</p>
+<p><code>matchex(:(_x + _y), :(a + a); exact=false) # ==&gt; matches
+    matchex(:(_x = _y), :(a + a); exact=true)  # ==&gt; doesn't match</code></p>
+</li>
+</ul>
+<p><a target='_blank' href='https://github.com/dfdx/Espresso.jl/tree/78551b0458f72bc27b3c29c711946b6be51429c6/src/rewrite.jl#L99-L146' class='documenter-source'>source</a><br></p>
+<p><a id='Index-1'></a></p>
+<h2 id="index">Index</h2>
+<ul>
+<li><a href=".#Espresso.matchex-Tuple{Any,Any}"><code>Espresso.matchex</code></a></li>
+</ul>
+              
+            </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+    
+  </div>
+
+  Built with <a href="http://www.mkdocs.org">MkDocs</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+	  
+        </div>
+      </div>
+
+    </section>
+    
+  </div>
+
+  <div class="rst-versions" role="note" style="cursor: pointer">
+    <span class="rst-current-version" data-toggle="rst-current-version">
+      
+          <a href="https://github.com/dfdx/Espresso.jl" class="fa fa-github" style="float: left; color: #fcfcfc"> GitHub</a>
+      
+      
+      
+    </span>
+</div>
+    <script src="./js/theme.js"></script>
+      <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+      <script src="./assets/mathjaxhelper.js"></script>
+
+</body>
+</html>
+
+<!--
+MkDocs version : 0.16.3
+Build Date UTC : 2017-10-01 21:06:41
+-->
