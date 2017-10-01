@@ -3,3 +3,5 @@
 *.jld
 .juliahistory
 *.save
+docs/build/
+docs/site/
