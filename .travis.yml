@@ -12,4 +12,4 @@ script:
  - julia -e 'Pkg.clone(pwd()); Pkg.build("Espresso"); Pkg.test("Espresso"; coverage=true)'
 after_success:
   - julia -e 'Pkg.add("Documenter")'
-  - julia -e 'cd(Pkg.dir("PACKAGE_NAME")); include(joinpath("docs", "make.jl"))'
+  - julia -e 'cd(Pkg.dir("Espresso")); include(joinpath("docs", "make.jl"))'
