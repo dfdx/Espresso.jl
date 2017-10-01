@@ -181,16 +181,27 @@ end
 
 
 function parse!(g::ExGraph, ex::ExH{:(=)})
-    vname, rhs = ex.args
+    lhs, rhs = ex.args
     dep = parse!(g, rhs)
-    push!(g, :(=), vname, dep)
-    return vname
+    if isa(lhs, Symbol)
+        push!(g, :(=), lhs, dep)
+        return lhs
+    elseif isa(lhs, Expr) && lhs.head == :tuple
+        last_vname = nothing
+        for (i, vname) in enumerate(lhs.args)
+            parse!(g, :($vname = $dep[$i]))
+        end
+        return last_vname
+    else
+        error("LHS of $(Expr(ex)) is neither variable, nor tuple")
+    end
 end
 
 
 function parse!(g::ExGraph, ex::ExH{:ref})
-    error("Indexing is not currently allowed in vectorized expression")
-    # return Expr(ex)
+    @assert isa(ex.args[2], Number) "Currently only constant indices are supported"
+    vname = push!(g, :ref, genname(), Expr(ex))
+    return vname
 end
 
 

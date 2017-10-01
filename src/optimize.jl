@@ -112,6 +112,7 @@ function reset_tape(g::AbstractExGraph)
     new_g = deepcopy(g)
     new_g.tape = []
     new_g.idx = Dict()
+    new_g.ctx = g.ctx  # experimental
     return new_g
 end
 
