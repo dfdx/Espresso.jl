@@ -24,6 +24,7 @@ function remember_size!(g::AbstractExGraph, nd::ExNode{:tuple}) end
 
 
 function isconv(nd::ExNode)
+    depwarn_eingraph(:isconv)
     idxs = nd |> getexpr |> get_indices |> flatten
     return any(i -> isa(i, Expr), idxs)
 end
@@ -58,6 +59,7 @@ end
 
 
 function mk_eval_expr(g::AbstractExGraph, nd::ExNode)   # for EinGraph
+    depwarn_eingraph(:mk_eval_expr)
     rsizes = @get_or_create(g.ctx, :rsizes, Dict{Symbol,Any}())
     dep_nodes = [g[dep] for dep in dependencies(nd) if haskey(g, dep)]
     deps_vals = [(varname(nd), getvalue(nd)) for nd in dep_nodes]
@@ -142,10 +144,9 @@ function evaluate!(g::AbstractExGraph, nd::ExNode{:(=)}; force=false)
 end
 
 
-function evaluate!(g::AbstractExGraph,
-                   nd::Union{ExNode{:call}, ExNode{:bcast}, ExNode{:ctor},
-                             ExNode{:tuple}, ExNode{:opaque}};
-                   force=false)
+# nd::Union{ExNode{:call}, ExNode{:bcast}, ExNode{:ctor},
+# ExNode{:tuple}, ExNode{:opaque}}
+function evaluate!(g::AbstractExGraph, nd::ExNode; force=false)
     if (!force && getvalue(nd) != nothing) return getvalue(nd) end
     deps = dependencies(nd)
     for dep in deps

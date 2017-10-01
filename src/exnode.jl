@@ -117,6 +117,7 @@ end
 Convert ExNode to a fortmat compatible with Einsum.jl
 """
 function to_einsum_expr(nd::ExNode)
+    depwarn_eingraph(:to_einsum_expr)
     ex = getexpr(nd)
     v = varname(nd)
     assign_ex = Expr(:(:=), getvar(nd), ex)
@@ -125,6 +126,7 @@ function to_einsum_expr(nd::ExNode)
 end
 
 function to_einsum_expr(nd::ExNode, var_size)
+    depwarn_eingraph(:to_einsum_expr)
     ex = getexpr(nd)
     v = varname(nd)
     init_ex = :($v = zeros($(var_size)))  # TODO: handle data types other than Float64
@@ -143,6 +145,7 @@ dependencies(nd::ExNode{:(=)}) = get_var_names(getexpr(nd))
 dependencies(nd::ExNode{:call}) = get_var_names(getexpr(nd))
 dependencies(nd::ExNode{:bcast}) = get_var_names(getexpr(nd))
 dependencies(nd::ExNode{:tuple}) = [split_indexed(dep)[1] for dep in getexpr(nd).args]
+dependencies(nd::ExNode{:ref}) = [getexpr(nd).args[1]]
 dependencies(nd::ExNode{:opaque}) = get_var_names(getexpr(nd); rec=true)
 dependencies(nd::ExNode{:field}) = [getexpr(nd).args[1]]
 dependencies(nd::ExNode{:ctor}) =
