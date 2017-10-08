@@ -193,6 +193,28 @@ end
 ## substitution
 
 """
+Given a list of expression arguments, flatten the dotted ones. Example:
+
+    args = [:foo, :([a, b, c]...)]
+    flatten_dots(args)
+    # ==> [:foo, :a, :b, :c]
+"""
+function flatten_dots(args::Vector)
+    new_args = Vector{eltype(args)}()
+    for arg in args
+        if isa(arg, Expr) && arg.head == :... && isa(arg.args[1], AbstractArray)
+            for x in arg.args[1]
+                push!(new_args, x)
+            end
+        else
+            push!(new_args, arg)
+        end
+    end
+    return new_args
+end
+
+
+"""
 Substitute symbols in `ex` according to substitute table `st`.
 Example:
 
@@ -202,12 +224,21 @@ Example:
 alternatively:
 
     subs(ex, Dict(:x => 2))  # ==> :(2 ^ n)
+
+If `ex` contains a :(xs...) argument and `st` contains an array-valued
+sabstitute for it, the substitute will be flattened:
+
+    ex = :(foo(xs...))
+    subs(ex, Dict(:xs => [:a, :b, :c]))
+    # ==> :(foo(a, b, c))
 """
 function subs(ex::Expr, st::Dict)
     if haskey(st, ex)
         return st[ex]
+        # elseif ex.head == :... && haskey(st, ex.args[1])        
     else
         new_args = [subs(arg, st) for arg in ex.args]
+        new_args = flatten_dots(new_args)
         return Expr(ex.head, new_args...)
     end
 end
