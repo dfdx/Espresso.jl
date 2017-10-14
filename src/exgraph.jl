@@ -124,7 +124,7 @@ function Base.push!(g::AbstractExGraph, C::Symbol, var::Union{Symbol,Expr}, ex::
                     val=nothing, meta=Dict())
     @assert(!haskey(g, split_indexed(var)[1]),
             "Graph already contains a node with name $var!")
-    nd = ExNode{C}(var, ex; val=val)
+    nd = ExNode{C}(var, ex; val=val, meta=meta)
     push!(g, nd)
     return var
 end
@@ -214,8 +214,8 @@ function parse!(g::ExGraph, ex::ExH{:call})
     meta = isempty(kw_args) ? Dict() : Dict(:kw => kw_args)
     deps = [parse!(g, arg) for arg in args]
     pex = Expr(:call, op, deps...)
-    if op in CONST_OPS
-        var = push!(g, :constant, genname(), pex; meta=meta)
+    if op in CONST_OPS && isempty(meta)
+        var = push!(g, :constant, genname(), pex)
     else
         var = push!(g, :call, genname(), pex; meta=meta)
     end
