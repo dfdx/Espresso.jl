@@ -86,6 +86,8 @@ export
     to_einstein,
     from_einstein,
     to_buffered,
+    to_inplace,
+    @inplacerule,
     # destruct
     make_func_expr,
     isstruct,
