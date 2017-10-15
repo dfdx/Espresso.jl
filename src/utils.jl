@@ -547,6 +547,15 @@ end
  
 
 
+function make_elementwise(ex; lhs_is_scalar=false)
+    new_ex = macroexpand(:(@. $ex))
+    if isa(new_ex, Expr) && new_ex.head == :.= && lhs_is_scalar
+        new_ex.head = :(=)  # can't use :.= if LHS is scalar
+    end
+    return new_ex
+end
+
+
 # EinGraph deprecation
 
 function depwarn_eingraph(funcsym)
