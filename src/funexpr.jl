@@ -8,8 +8,9 @@
 sanitize(x) = x
 sanitize(ex::Expr) = sanitize(ExH(ex))
 sanitize(ex::LineNumberNode) = nothing
+sanitize(m::Module) = Symbol(string(m))
 sanitize(ex::ExH{:line}) = nothing
-sanitize(ex::ExH{:return}) = ex.args[1]
+sanitize(ex::ExH{:return}) = sanitize(ex.args[1])
 
 function sanitize(ex::ExH{:block})
     sanitized_args = [sanitize(arg) for arg in ex.args]
@@ -31,10 +32,62 @@ end
 
 
 function sanitize(ref::GlobalRef)
-    # mod = Main # module doesn't actually matter since GlobalRef contains it anyway
-    # return canonical(mod, ref)
-    return Expr(:., ref.mod, QuoteNode(ref.name))
+    return Expr(:., Symbol(string(ref.mod)), QuoteNode(ref.name))
 end
+
+
+## recover lowered
+
+const RECOVER_LOWERED_RULES = [
+    :(Base.broadcast(_f, _xs...)) => :(_f.(_xs...)),
+    :(Base.broadcast(_m._f, _xs...)) => :(_m._f.(_xs...)),
+    :(Base.literal_pow(Main.:^, _x, _v)) => :(_x ^ _v),
+    :(Core.apply_type(Base.Val, _x)) => :_x,
+]
+
+"""
+Try to recover an expression from a lowered form. Example:
+
+    ex = (Main.sum)((Base.literal_pow)(Main.^, (Base.broadcast)(Main.-, (Main.predict)(W, b, x), y), (Core.apply_type)(Base.Val, 2)))
+"""
+recover_lowered(x) = x
+recover_lowered(ex::Expr) = recover_lowered(ExH(ex))
+
+
+function recover_lowered(ex::ExH{:block})
+    recovered_args = [recover_lowered(arg) for arg in ex.args]
+    new_args = filter(arg -> arg != nothing, recovered_args)
+    return length(new_args) == 1 ? new_args[1] : Expr(ex.head, new_args...)
+end
+
+
+function recover_lowered(ex::ExH{:call})
+    # recover arguments
+    recovered_args = [recover_lowered(arg) for arg in ex.args[2:end]]
+    new_args = filter(arg -> arg != nothing, recovered_args)
+    ex = Expr(:call, ex.args[1], new_args...)
+    # check patterns
+    for (pat, rpat) in RECOVER_LOWERED_RULES
+        rex = tryrewrite(ex, pat, rpat)
+        if !isnull(rex)
+            ex = get(rex)
+            break
+        end
+    end
+    ex = canonical_calls(current_module(), ex) |> subs_bcast_with_dot
+    return ex
+end
+
+
+function recover_lowered(ex::ExH{H}) where H
+    recovered_args = [recover_lowered(arg) for arg in ex.args]
+    new_args = filter(arg -> arg != nothing, recovered_args)
+    return Expr(H, new_args...)
+end
+
+
+
+## funexpr
 
 
 function replace_slots(ex::Expr, slotnames::Vector)
@@ -58,7 +111,9 @@ function arg_names(sig::Expr)
 end
 
 
-func_name(f::Function) = (methods(f) |> first).name
+# there's already func_name in utils.jl
+# funname(f::Function) = (methods(f) |> first).name
+
 
 
 function to_expr(src::CodeInfo)
@@ -73,7 +128,7 @@ function to_expr(src::CodeInfo)
 end
 
 
-function func_expr(f::Function, types::NTuple{N,DataType}) where N
+function funexpr(f::Function, types::NTuple{N,DataType}) where N
     method = Sugar.get_method(f, types)
     file = string(method.file)
     linestart = method.line
@@ -84,11 +139,12 @@ function func_expr(f::Function, types::NTuple{N,DataType}) where N
         if isa(err, LoadError)
             code = code_lowered(f, types)[1]
             args = convert(Vector{Symbol}, code.slotnames[2:end])
-            return args,to_expr(code)
+            ex = to_expr(code) |> sanitize |> recover_lowered
+            return args, ex
         else
             rethrow(err)
         end
     end
 end
 
-@deprecate funexpr func_expr
+func_expr = funexpr

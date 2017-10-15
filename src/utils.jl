@@ -218,6 +218,9 @@ function canonical_calls(mod::Module, ex::Expr)
     if ex.head == :call
         new_args = [canonical_calls(mod, arg) for arg in ex.args[2:end]]
         return Expr(:call, canonical(mod, ex.args[1]), new_args...)
+    elseif ex.head == :.
+        new_args = [canonical_calls(mod, arg) for arg in ex.args[2:end]]
+        return Expr(:., canonical(mod, ex.args[1]), new_args...)
     else
         new_args = [canonical_calls(mod, arg) for arg in ex.args]
         return Expr(ex.head, new_args...)

@@ -200,7 +200,7 @@ Given a list of expression arguments, flatten the dotted ones. Example:
     # ==> [:foo, :a, :b, :c]
 """
 function flatten_dots(args::Vector)
-    new_args = Vector{eltype(args)}()
+    new_args = Vector{Any}()
     for arg in args
         if isa(arg, Expr) && arg.head == :... && isa(arg.args[1], AbstractArray)
             for x in arg.args[1]
