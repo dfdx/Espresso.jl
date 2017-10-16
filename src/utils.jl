@@ -567,9 +567,11 @@ function make_elementwise(ex; lhs_is_scalar=false)
 end
 
 
+
 # EinGraph deprecation
 
 function depwarn_eingraph(funcsym)
     Base.depwarn("Einstein notation is deprecated and will be removed in Espresso 0.4.0",
                  funcsym)
 end
+
