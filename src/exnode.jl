@@ -14,7 +14,7 @@
 
 # exnode
 
-@runonce mutable struct ExNode{C}  # C - category of node, e.g. :call, :=, etc.
+mutable struct ExNode{C}  # C - category of node, e.g. :call, :=, etc.
     var::Union{Symbol, Expr}       # variable name, possibly with indices
     ex::Any                        # primitive expression that produces the var
     guards::Vector{Expr}           # guards, turning ex to 0 when false

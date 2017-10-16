@@ -7,8 +7,8 @@
 isstruct(::Type{T}) where T = !isbits(T) && !(T <: AbstractArray)
 isstruct(obj) = !isbits(obj) && !isa(obj, AbstractArray)
 
-field_values(m) = [getfield(m, f) for f in fieldnames(m)]
-named_field_values(m) = [f => getfield(m, f) for f in fieldnames(m)]
+field_values(m) = [getfield(m, f) for f in fieldnames(typeof(m))]
+named_field_values(m) = [f => getfield(m, f) for f in fieldnames(typeof(m))]
 
 
 """

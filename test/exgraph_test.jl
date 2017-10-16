@@ -1,6 +1,6 @@
 
 @testset "exgraph" begin
-    let
+    begin
         g = ExGraph()
         g = ExGraph(ctx=[:foo => 42], x=1)
         @test g.ctx[:foo] == 42

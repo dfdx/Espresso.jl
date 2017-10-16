@@ -1,38 +1,46 @@
 
 # utils.jl - utility functions
 
-if !isdefined(:__EXPRESSION_HASHES__)
-    __EXPRESSION_HASHES__ = Set{AbstractString}()
-end
+# @static if VERSION < v"0.7-"
+#     println("if")
+#     if isdefined(:__EXPRESSION_HASHES__)
+#         __EXPRESSION_HASHES__ = Set{AbstractString}()
+#     end
+# else
+#     println("else")
+#     if @isdefined __EXPRESSION_HASHES__
+#         __EXPRESSION_HASHES__ = Set{AbstractString}()
+#     end
+# end
 
-"""
-If loaded twice without changes, evaluate expression only for the first time.
-This is useful for reloading code in REPL. For example, the following code will
-produce `invalid redifinition` error if loaded twice:
+# """
+# If loaded twice without changes, evaluate expression only for the first time.
+# This is useful for reloading code in REPL. For example, the following code will
+# produce `invalid redifinition` error if loaded twice:
 
-    type Point{T}
-        x::T
-        y::T
-    end
+#     type Point{T}
+#         x::T
+#         y::T
+#     end
 
-Wrapped into @runonce, however, the code is reloaded fine:
+# Wrapped into @runonce, however, the code is reloaded fine:
 
-    @runonce type Point{T}
-        x::T
-        y::T
-    end
+#     @runonce type Point{T}
+#         x::T
+#         y::T
+#     end
 
-@runonce doesn't have any affect on expression itself.
-"""
-macro runonce(expr)
-    h = string(expr)
-    return esc(quote
-        if !in($h, __EXPRESSION_HASHES__)
-            push!(__EXPRESSION_HASHES__, $h)
-            $expr
-        end
-    end)
-end
+# @runonce doesn't have any affect on expression itself.
+# """
+# macro runonce(expr)
+#     h = string(expr)
+#     return esc(quote
+#         if !in($h, __EXPRESSION_HASHES__)
+#             push!(__EXPRESSION_HASHES__, $h)
+#             $expr
+#         end
+#     end)
+# end
 
 
 """Same as `get` function, but evaluates default_expr only if needed"""
@@ -350,7 +358,7 @@ end
 
 
 function expr_like(x)
-    flds = Set(fieldnames(x))
+    flds = Set(fieldnames(typeof(x)))
     return in(:head, flds) && in(:args, flds)
 end
 
