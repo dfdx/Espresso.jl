@@ -206,19 +206,28 @@ Return canonical representation of a function name, e.g.:
     Mod.foo ==> Mod.foo
 """
 function canonical(mod::Module, qname)
-    f = eval(mod, qname)
-    mod = func_mod(f)
-    name = func_name(f)
-    if qname in [:.*, :./, :.+, :.-, :.^]
-        return qname  # for Julia 0.6 only
-    elseif (mod == Main || mod == Base || mod == Base.Math ||
-            mod == Base.LinAlg || mod == Base.DSP)
-        return Symbol(name)
-    else
-        # there should be a smarter way to do it...
-        parts = map(Symbol, split(string(mod), "."))
-        mod_ex = dot_expr(parts)
-        return Expr(:., mod_ex, QuoteNode(name))
+    try
+        f = eval(mod, qname)
+        mod = func_mod(f)
+        name = func_name(f)
+        if qname in [:.*, :./, :.+, :.-, :.^]
+            return qname  # for Julia 0.6 only
+        elseif (mod == Main || mod == Base || mod == Base.Math ||
+                mod == Base.LinAlg || mod == Base.DSP)
+            return Symbol(name)
+        else
+            # there should be a smarter way to do it...
+            parts = map(Symbol, split(string(mod), "."))
+            mod_ex = dot_expr(parts)
+            return Expr(:., mod_ex, QuoteNode(name))
+        end
+    catch e
+        # if qname isn't defined in module `mod`, return it as is
+        if isa(e, UndefVarError)
+            return qname
+        else
+            throw(e)
+        end
     end
 end
 
