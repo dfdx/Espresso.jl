@@ -8,9 +8,9 @@ const Mat = AbstractMatrix
 const INPLACE_PHS = Set([:u, :v, :w, :x, :y, :z, :X, :Y, :Z])
 
 const INPLACE_RULES = [
-    Type[Mat, Mat] => :(Z = X * Y) => :(A_mul_B!(Z, X, Y)),
     Type[Mat, Mat] => :(Z = X' * Y) => :(At_mul_B!(Z, X, Y)),
     Type[Mat, Mat] => :(Z = X * Y') => :(A_mul_Bt!(Z, X, Y)),
+    Type[Mat, Mat] => :(Z = X * Y) => :(A_mul_B!(Z, X, Y)),    
 ]
 
 

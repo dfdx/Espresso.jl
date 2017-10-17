@@ -108,12 +108,12 @@ end
 Find definition of a called function and build its subgraph ready for inlining
 """
 function make_subgraph(g::ExGraph, nd::ExNode{:call})
-    mod = @get(g.ctx, :mod, Main)
+    mod = @get(g.ctx, :mod, Main)  # TODO: Main or current_graph()?
     fname = getexpr(nd).args[1]
     f = eval(mod, fname)
     args = dependencies(nd)
     arg_types = ([typeof(getvalue(g[arg])) for arg in args]...)
-    params, sub_ex = func_expr(f, arg_types)
+    params, sub_ex = funexpr(f, arg_types)
     sub_g = ExGraph(sub_ex)
     st = Dict(zip(params, args))           # rename internal params to actual arguments
     st[varname(sub_g[end])] = varname(nd)  # rename output var to this node's
@@ -141,8 +141,7 @@ end
 
 
 function inline_nodes(g::ExGraph, vnames::Set{Symbol})
-    inline_subs = Dict(vname => make_subgraph(g, g[vname]) for vname in vnames
-                       if vname in vnames)
+    inline_subs = Dict(vname => make_subgraph(g, g[vname]) for vname in vnames)
     return inline_subgraphs(g, inline_subs)
 end
 

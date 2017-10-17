@@ -29,11 +29,6 @@ const OPT_VEC_RULES = [
     :(Z = X' * Y) => :(Z = X' * Y),
 ]
 
-# const OPT_SEQUENCES = [
-#     :(Z = X * transpose(Y)),
-#     :(Z = transpose(X) * Y),
-# ]
-
 
 function remove_unused(g::AbstractExGraph, outvars::Vector{Symbol})
     deps = collect_deps(g, outvars)
@@ -88,26 +83,6 @@ function remove_unused(ex::Expr; output_vars=nothing)
 end
 
 
-
-# function tryoptimize(ex::Expr)
-#     for (pat, subs_ex) in OPT_RULES
-#         new_ex_nlb = tryrewrite(ex, pat, subs_ex; phs=OPT_PHS)
-#         if !isnull(new_ex_nlb)
-#             new_ex = get(new_ex_nlb)
-#             genname_patterns = unique(findex(:(genname__(_n)), new_ex))
-#             if !isempty(genname_patterns)
-#                 new_names = gennames(length(genname_patterns))
-#                 st = Dict(zip(genname_patterns, new_names))
-#                 return Nullable(subs(new_ex, st))
-#             else
-#                 return Nullable(new_ex)
-#             end
-#         end
-#     end
-#     return Nullable{Expr}()
-# end
-
-
 function reset_tape(g::AbstractExGraph)
     new_g = deepcopy(g)
     new_g.tape = []
@@ -117,56 +92,9 @@ function reset_tape(g::AbstractExGraph)
 end
 
 
-# function remove_pseudoone(g::AbstractExGraph)
-#     g = deepcopy(g)
-#     I_pat = :(I[_...])
-#     for (i, nd) in enumerate(g.tape)
-#         ex = getexpr(nd)
-#         new_ex = without(ex, I_pat)
-#         if isa(nd, ExNode{:call}) && isa(new_ex, Expr) && new_ex.head != :call
-#             # after removing I the node changed it's type from :call to :(=)
-#             new_nd = copy(nd; category=:(=), ex=new_ex)
-#             g[i] = new_nd
-#         else
-#             setexpr!(nd, new_ex)
-#         end
-#     end
-#     return g
-# end
-
-
-# function optimize(g::EinGraph)
-#     g = remove_pseudoone(g)
-#     new_g = reset_tape(g)
-#     for nd in g.tape
-#         if isa(nd, ExNode{:input})
-#             push!(new_g, nd)
-#         else
-#             # try to optimize current node + 1st level dependencies
-#             ex_1 = expand_deps(g, nd, 1)
-#             new_ex = tryoptimize(ex_1)
-#             if !isnull(new_ex)
-#                 parse!(new_g, get(new_ex))
-#                 continue
-#             end
-#             # try to optimize only current node
-#             new_ex = tryoptimize(to_expr(nd))
-#             if !isnull(new_ex)
-#                 parse!(new_g, get(new_ex))
-#                 continue
-#             end
-#             # if nothing matched, add node as is
-#             push!(new_g, copy(nd))
-#         end
-#     end
-#     new_g = remove_unused(new_g,  varname(new_g[end]))
-#     new_g = fuse_assigned(new_g)
-#     return new_g
-# end
-
 function tryoptimize(ex::Expr)
     for (pat, subs_ex) in OPT_VEC_RULES
-        new_ex_nlb = tryrewrite(ex, pat, subs_ex; phs=OPT_PHS)
+        new_ex_nlb = tryrewrite(ex, pat, subs_ex; phs=OPT_PHS, allow_ex=false)
         if !isnull(new_ex_nlb)
             new_ex = get(new_ex_nlb)
             genname_patterns = unique(findex(:(genname__(_n)), new_ex))
