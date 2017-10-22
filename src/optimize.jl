@@ -83,11 +83,12 @@ function remove_unused(ex::Expr; output_vars=nothing)
 end
 
 
-function reset_tape(g::AbstractExGraph)
-    new_g = deepcopy(g)
+function reset_tape(g::G) where {G <: AbstractExGraph}
+    # new_g = deepcopy(g)
+    new_g = G()
     new_g.tape = []
     new_g.idx = Dict()
-    new_g.ctx = g.ctx  # experimental
+    new_g.ctx = g.ctx
     return new_g
 end
 
