@@ -24,18 +24,14 @@ end
 
 
 
-function generate_code(codegen::CuCodeGen, g::EinGraph)
-    g = eliminate_common(g)
-    ex = to_buffered(g)
+function generate_code(::CuCodeGen, g::ExGraph, nd::ExNode)
+    ex = to_buffered(g, nd)
     ex = rewrite_all(ex, CUDA_NATIVE_RULES; phs=[:x, :y, :z, :n])
-    init_exs = [cuda_buffer_expr(var, :mem, sz) for (var, sz) in g.ctx[:rsizes]
-                if haskey(g, var) && getcategory(g[var]) != :input]
-    res = Expr(:block, init_exs..., ex.args...)
-    return res
+    return ex
 end
 
 
-function generate_code(codegen::CuCodeGen, g::ExGraph)
+function generate_code(::CuCodeGen, g::ExGraph)
     g = eliminate_common(g)
     ex = to_buffered(g)
     ex = rewrite_all(ex, CUDA_NATIVE_RULES; phs=[:x, :y, :z, :n])

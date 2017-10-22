@@ -14,7 +14,13 @@ function buffer_expr(var, buffer_var, sz)
 end
 
 
-function generate_code(codegen::BufCodeGen, g::ExGraph)
+function generate_code(::BufCodeGen, g::ExGraph, nd::ExNode)
+    ex = to_buffered(g, nd)
+    return ex
+end
+
+
+function generate_code(::BufCodeGen, g::ExGraph)
     g = eliminate_common(g)
     ex = to_buffered(g)
     init_exs = [buffer_expr(var, :mem, sz) for (var, sz) in g.ctx[:rsizes]
