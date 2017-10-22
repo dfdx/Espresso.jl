@@ -102,6 +102,7 @@ export
     BufCodeGen,
     CuCodeGen,
     GPUCodeGen,
+    autoselect_codegen,
     # helpers
     sum_1,
     sum_2,
