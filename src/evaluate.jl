@@ -32,13 +32,14 @@ end
 
 function mk_eval_expr(g::ExGraph, nd::ExNode)
     dep_nodes = [g[dep] for dep in dependencies(nd) if haskey(g, dep)]
-    deps_vals = [(varname(nd), getvalue(nd)) for nd in dep_nodes]
+    deps_vals = Dict((varname(nd), getvalue(nd)) for nd in dep_nodes)
     eval_ex = Expr(:block, Expr(:let, Expr(:block)))
-    block = eval_ex.args[1].args[1]
-    for (dep, val) in unique(deps_vals)
+    block = eval_ex.args[1].args[1]    
+    for dep in unique(keys(deps_vals))
+        val = deps_vals[dep]
         push!(block.args, :(local $dep = $val))
     end
-    codegen = @get(g.ctx, :codegen, VectorCodeGen())
+    codegen = eval_codegen(@get(g.ctx, :codegen, VectorCodeGen()))
     push!(block.args, generate_code(codegen, g, nd))
     push!(block.args, varname(nd))
     return eval_ex
@@ -57,47 +58,6 @@ function mk_eval_expr(g::ExGraph, nd::ExNode{:ctor})
     push!(block.args, varname(nd))
     return eval_ex
 end
-
-
-# function mk_eval_expr(g::AbstractExGraph, nd::ExNode)   # for EinGraph
-#     depwarn_eingraph(:mk_eval_expr)
-#     rsizes = @get_or_create(g.ctx, :rsizes, Dict{Symbol,Any}())
-#     dep_nodes = [g[dep] for dep in dependencies(nd) if haskey(g, dep)]
-#     deps_vals = [(varname(nd), getvalue(nd)) for nd in dep_nodes]
-#     eval_ex = Expr(:block, Expr(:let, Expr(:block)))
-#     block = eval_ex.args[1].args[1]
-#     for (dep, val) in deps_vals
-#         push!(block.args, :(local $dep = $val))
-#     end
-#     try
-#         # try to convert to vectorized notation for speed and to cover things like `x[i,j] = 1.0`
-#         subex = from_einstein(g, nd)
-#         subex = subs_size(subex, rsizes)
-#         subex = subs_bcast_with_dot(subex)
-#         push!(block.args, subex)
-#     catch
-#         if !isindexed(nd)
-#             push!(block.args, to_expr(nd))
-#         elseif isconv(nd)
-#             push!(block.args, from_einstein(g, nd))
-#         elseif getcategory(nd) == :tuple
-#             push!(block.args, without_indices(to_expr(nd)))
-#         else
-#             warn("Using @einsum to evaluate node: $nd")
-#             vname = varname(nd)
-#             if haskey(rsizes, vname)
-#                 # provide size if available
-#                 push!(block.args, to_einsum_expr(nd, rsizes[vname]).args...)
-#             else
-#                 # otherwise let Einsum to try to infer the size
-#                 push!(block.args, to_einsum_expr(nd).args...)
-#             end
-#         end
-#     end
-#     push!(block.args, varname(nd))
-#     return eval_ex
-# end
-
 
 
 """
@@ -137,7 +97,7 @@ end
 function evaluate!(g::AbstractExGraph, nd::ExNode{:(=)}; force=false)
     if (!force && getvalue(nd) != nothing) return getvalue(nd) end
     dep = dependencies(nd)[1]
-    evaluate!(g, g[dep]; force=force)
+    evaluate!(g, g[dep]; force=false)
     evex = mk_eval_expr(g, nd)
     setvalue!(nd, eval(g.ctx[:mod], evex))
     remember_size!(g, nd)
@@ -153,7 +113,7 @@ function evaluate!(g::AbstractExGraph, nd::ExNode; force=false)
     for dep in deps
         # if dep is not in graph, consider it a global constant (like π)
         if haskey(g.idx, dep)
-            evaluate!(g, g[dep]; force=force)
+            evaluate!(g, g[dep]; force=false)  # force affects only current node
         end
     end
     evex = mk_eval_expr(g, nd)
@@ -176,4 +136,10 @@ end
 
 
 evaluate!(g::AbstractExGraph, name::Symbol; force=false) = evaluate!(g, g[name]; force=force)
-evaluate!(g::AbstractExGraph; force=false) = evaluate!(g, g[end]; force=force)
+
+function evaluate!(g::AbstractExGraph; force=false)
+    for i=1:length(g)
+        evaluate!(g, g[i]; force=force)
+    end
+    return getvalue(g[end])
+end

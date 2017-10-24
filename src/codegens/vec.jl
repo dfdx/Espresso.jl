@@ -1,17 +1,26 @@
 
 # type for generating vectorized code
 struct VectorCodeGen
+    eltyp::Type
 end
 
+VectorCodeGen() = VectorCodeGen(Float64)
 
-function generate_code(::VectorCodeGen, g::ExGraph, nd::ExNode)
+function generate_code(codegen::VectorCodeGen, g::ExGraph, nd::ExNode)
+    # nd = cast_const_type(nd, codegen.eltyp)
     ex = to_expr(nd)
     return ex
 end
 
 
-function generate_code(::VectorCodeGen, g::ExGraph)
+function generate_code(codegen::VectorCodeGen, g::ExGraph)
+    # g = cast_const_type(nd, codegen.eltyp)
     ex = to_expr(g)
     return ex
 end
 
+
+"""
+For buffered codegens, return unbuffered version that can be used in evaluate!()
+"""
+eval_codegen(codegen::VectorCodeGen) = codegen

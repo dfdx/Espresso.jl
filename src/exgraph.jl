@@ -86,6 +86,17 @@ function to_expr(g::AbstractExGraph)
 end
 
 
+function to_expr_kw(g::AbstractExGraph)
+    res = quote end
+    for nd in g.tape
+        if !isa(nd, ExNode{:input})
+            push!(res.args, to_expr_kw(nd))
+        end
+    end
+    return res
+end
+
+
 """Generate a new unique name for intermediate variable in graph"""
 function genname()
     s = String(gensym())
@@ -169,12 +180,18 @@ parse!(g::AbstractExGraph, s::Symbol) = s
 # parse!(g::ExGraph, gr::GlobalRef) = (gr, [])
 
 function parse!(g::AbstractExGraph, x::Number)
+    if haskey(g.ctx, :bitness)
+        x = force_bitness(x, Val(g.ctx[:bitness]))
+    end
     var = push!(g, :constant, genname(), x; val=x)
     return var
 end
 
 
 function parse!(g::AbstractExGraph, x::AbstractArray)
+    if haskey(g.ctx, :bitness)
+        x = force_bitness(x, Val(g.ctx[:bitness]))
+    end
     var = push!(g, :constant, genname(), x; val=x)
     return var
 end
