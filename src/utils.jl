@@ -150,7 +150,7 @@ function canonical(mod::Module, qname)
         f = eval(mod, qname)
         mod = func_mod(f)
         name = func_name(f)
-        if qname in [:.*, :./, :.+, :.-, :.^]
+        if qname in [:.*, :./, :.+, :.-, :.^, :.>, :.<, :.>=, :.<=, :.==]
             return qname  # for Julia 0.6 only
         elseif (mod == Main || mod == Base || mod == Base.Math ||
                 mod == Base.LinAlg || mod == Base.DSP)

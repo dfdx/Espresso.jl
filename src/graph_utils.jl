@@ -114,7 +114,7 @@ function make_subgraph(g::ExGraph, nd::ExNode{:call})
     args = dependencies(nd)
     arg_types = ([typeof(getvalue(g[arg])) for arg in args]...)
     params, sub_ex = funexpr(f, arg_types)
-    sub_g = ExGraph(sub_ex)
+    sub_g = ExGraph(sub_ex; ctx=g.ctx)
     st = Dict(zip(params, args))           # rename internal params to actual arguments
     st[varname(sub_g[end])] = varname(nd)  # rename output var to this node's
     dont_subs = Set(keys(st))    
@@ -156,6 +156,9 @@ function convert_call(g::AbstractExGraph, nd::Union{ExNode{:call}, ExNode{:bcast
         return copy(nd; category=:(=), ex=new_ex)
     elseif isa(new_ex, Number) || isa(new_ex, AbstractArray)
         # convert to constant
+        if haskey(g.ctx, :bitness)
+            new_ex = force_bitness(new_ex, Val(g.ctx[:bitness]))
+        end
         return copy(nd; category=:constant, ex=new_ex)
     elseif isa(new_ex, Tuple)
         return copy(nd; category=:tuple, ex=new_ex)

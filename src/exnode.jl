@@ -169,7 +169,7 @@ function Base.show(io::IO, nd::ExNode{C}) where C
     elseif isstruct(getvalue(nd))
         val = "$(typeof(getvalue(nd)))"
     end
-    ex_str = "ExNode{$C}($(to_expr(nd)) | $val)"
+    ex_str = "ExNode{$C}($(to_expr_kw(nd)) | $val)"
     print(io, ex_str)
 end
 

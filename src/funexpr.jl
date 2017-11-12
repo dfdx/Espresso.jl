@@ -107,7 +107,11 @@ end
 
 
 function arg_names(sig::Expr)
-    return [isa(arg,  Symbol) ? arg : arg.args[1] for arg in sig.args[2:end]]
+    # note: ignoring type parameters, may not always be the right thing
+    while sig.head == :where
+        sig = sig.args[1]
+    end
+    return [isa(arg, Symbol) ? arg : arg.args[1] for arg in sig.args[2:end]]    
 end
 
 

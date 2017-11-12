@@ -8,14 +8,14 @@ VectorCodeGen() = VectorCodeGen(Float64)
 
 function generate_code(codegen::VectorCodeGen, g::ExGraph, nd::ExNode)
     # nd = cast_const_type(nd, codegen.eltyp)
-    ex = to_expr(nd)
+    ex = to_expr_kw(nd)
     return ex
 end
 
 
 function generate_code(codegen::VectorCodeGen, g::ExGraph)
     # g = cast_const_type(nd, codegen.eltyp)
-    ex = to_expr(g)
+    ex = to_expr_kw(g)
     return ex
 end
 

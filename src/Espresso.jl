@@ -48,6 +48,7 @@ export
     varname,
     varidxs,
     getexpr,
+    getexpr_kw,
     setexpr!,
     getguards,
     setguards!,
@@ -58,16 +59,15 @@ export
     to_expr,
     to_expr_kw,
     isindexed,
-    # ExGraph/EinGraph core
+    # ExGraph core
     AbstractExGraph,
     ExGraph,
-    EinGraph,
     parse!,
     reparse,
     evaluate!,
     cat,
     fuse_assigned,
-    # ExGraph/EinGraph utils
+    # ExGraph utils
     dependents,
     external_vars,
     topsort,
@@ -82,9 +82,7 @@ export
     # expr utils
     mergeex,
     sanitize,
-    # Einstein conversions
-    to_einstein,
-    from_einstein,
+    # conversions
     to_buffered,
     to_inplace,
     @inplacerule,
@@ -96,8 +94,7 @@ export
     destruct,
     destruct_inputs,
     # codegens
-    generate_code,
-    EinCodeGen,
+    generate_code,    
     VectorCodeGen,
     BufCodeGen,
     CuCodeGen,

@@ -134,7 +134,7 @@ end
 function Base.push!(g::AbstractExGraph, C::Symbol, var::Union{Symbol,Expr}, ex::Any;
                     val=nothing, meta=Dict())
     @assert(!haskey(g, split_indexed(var)[1]),
-            "Graph already contains a node with name $var!")
+            "Graph already contains a node with name $(var)!")
     nd = ExNode{C}(var, ex; val=val, meta=meta)
     push!(g, nd)
     return var

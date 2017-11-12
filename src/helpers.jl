@@ -11,8 +11,21 @@ squeeze_sum_2(A) = squeeze_sum(A, 2)
 
 ## constructor
 
+function struct_like(m)
+    try
+        return typeof(m)()
+    catch e
+        if e isa MethodError
+            println("ERROR: Trying to instantiate $(typeof(m)), but it doesn't " *
+                    "have a default constructor")            
+        end
+        throw(e)
+    end
+end
+
+
 function __construct(mem::Dict, dzdm_v::Symbol, m; fields...)
-    dz!dm = @get_or_create(mem, dzdm_v, deepcopy(m))
+    dz!dm = @get_or_create(mem, dzdm_v, struct_like(m))
     for (f, val) in fields
         setfield!(dz!dm, f, val)
     end
@@ -21,7 +34,7 @@ end
 
 
 function __construct(m; fields...)
-    dz!dm = deepcopy(m)
+    dz!dm = struct_like(m)
     for (f, val) in fields
         setfield!(dz!dm, f, val)
     end

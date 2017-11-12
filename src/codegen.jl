@@ -10,6 +10,7 @@ include("codegens/gpu.jl")
 
 function autoselect_codegen(inputs)
     first_array_idx = findfirst(a -> isa(a, AbstractArray), [v for (k,v) in inputs])
+    first_array_idx > 0 || return VectorCodeGen()
     eltyp = eltype(inputs[first_array_idx][2])
     # we don't want to include CuArrays as dependency, so working on strings
     if any(startswith(string(typeof(v)), "CuArray") for (k, v) in inputs)
