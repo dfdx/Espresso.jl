@@ -145,14 +145,14 @@ Return canonical representation of a function name, e.g.:
     Base.LinAlg.exp ==> exp
     Mod.foo ==> Mod.foo
 """
-function canonical(mod::Module, qname)
+function canonical(cur_mod::Module, qname)
     try
-        f = eval(mod, qname)
+        f = eval(cur_mod, qname)
         mod = func_mod(f)
         name = func_name(f)
         if qname in [:.*, :./, :.+, :.-, :.^, :.>, :.<, :.>=, :.<=, :.==]
             return qname  # for Julia 0.6 only
-        elseif (mod == Main || mod == Base || mod == Base.Math ||
+        elseif (mod == cur_mod || mod == Main || mod == Base || mod == Base.Math ||
                 mod == Base.LinAlg || mod == Base.DSP)
             return Symbol(name)
         else
