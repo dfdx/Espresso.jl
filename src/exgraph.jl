@@ -11,9 +11,9 @@ end
 
 function ExGraph(; ctx=Dict(), inputs...)
     ctx = to_context(ctx)
-    @get_or_create(ctx, :mod, current_module())
+    @get_or_create(ctx, :mod, @__MODULE__)
     g = ExGraph(ExNode[], Dict(), ctx)
-    for (var, val) in inputs
+    for (var, val) in zip(keys(inputs),inputs)
         push!(g, :input, var, var; val=val)
     end
     return g

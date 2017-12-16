@@ -122,7 +122,7 @@ end
 
 
 macro inplacerule(tpat, rpat)
-    mod = current_module()
+    mod = @__MODULE__
     add_inplace_rule(mod, tpat, rpat)
     nothing
 end

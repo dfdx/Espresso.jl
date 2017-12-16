@@ -2,7 +2,7 @@
 @testset "exgraph" begin
     begin
         g = ExGraph()
-        g = ExGraph(ctx=[:foo => 42], x=1)
+        g = ExGraph(;ctx=[:foo => 42], x=1)
         @test g.ctx[:foo] == 42
         @test getvalue(g[1]) == 1    
     end
