@@ -29,10 +29,10 @@ isplaceholder(x::Symbol, phs) = (startswith(string(x), "_")
 # isplaceholder(ex::Expr, phs) = ex.head == :... && isplaceholder(ex.args[1], phs)
 
 function find_key(d::Dict{K, V}, val) where {K,V}
-    r = Nullable{K}()
+    r = nothing
     for (k,v) in d
         if v == val
-            r = Nullable(k)
+            r = k
             break
         end
     end
@@ -47,7 +47,7 @@ end
 
 
 function matchex!(m::Dict{Symbol,Any}, ps::Vector, xs::Vector; opts...)
-    opts = Dict(opts)
+    opts = to_dict(opts)
     phs = get(opts, :phs, Set([]))
     length(ps) <= length(xs) || return false
     for i in eachindex(ps)
@@ -77,7 +77,7 @@ function matchex!(m::Dict{Symbol,Any}, p, x; phs=DEFAULT_PHS[1], allow_ex=true, 
             return false
         elseif exact
             k = find_key(m, x)
-            if !isnull(k) && get(k) != p
+            if k != p
                 return false
             else
                 m[p] = x
@@ -105,7 +105,7 @@ Example:
 ex = :(u ^ v)
 pat = :(_x ^ _n)
 matchex(pat, ex)
-# ==> Nullable(Dict{Symbol,Any}(:_n=>:v,:_x=>:u))
+# ==> Union{ Dict{Symbol,Any}(:_n=>:v,:_x=>:u), Void }
 ```
 
 NOTE: two symbols match if they are equal or symbol in pattern is a placeholder.
@@ -116,7 +116,7 @@ list of placeholder names (not necessarily starting wiht '_') via `phs` paramete
 ex = :(u ^ v)
 pat = :(x ^ n)
 matchex(pat, ex; phs=Set([:x, :n]))
-# ==> Nullable(Dict{Symbol,Any}(:n=>:v,:x=>:u))
+# ==> Union{ Dict{Symbol,Any}(:n=>:v,:x=>:u), Void } 
 ```
 
 Several elements may be matched using `...` expression, e.g.:
@@ -125,7 +125,7 @@ Several elements may be matched using `...` expression, e.g.:
 ex = :(A[i, j, k])
 pat = :(x[I...])
 matchex(pat, ex; phs=Set([:x, :I]))
-# ==> Nullable(Dict(:x=>:A, :I=>[:i,:j,:k]))
+# ==> Union{ Dict(:x=>:A, :I=>[:i,:j,:k]), Void }
 ```
 
 Optional parameters:
@@ -148,9 +148,9 @@ function matchex(pat, ex; opts...)
     m = Dict{Symbol,Any}()
     res = matchex!(m, pat, ex; opts...)
     if res
-        return Nullable(m)
+        return m
     else
-        return Nullable{Dict{Symbol,Any}}()
+        return nothing
     end
 end
 
@@ -158,7 +158,7 @@ end
 Check if expression matches pattern. See `matchex()` for details.
 """
 function matchingex(pat, ex; opts...)
-    return !isnull(matchex(pat, ex; opts...))
+    return matchex(pat, ex; opts...) != nothing
 end
 
 
@@ -250,7 +250,7 @@ end
 
 subs(q::QuoteNode, st::Dict) = QuoteNode(subs(q.value, st))
 subs(x::Any, st::Dict) = x
-subs(ex; st...) = subs(ex, Dict(st))
+subs(ex; st...) = subs(ex, to_dict(st))
 
 
 ## remove rpatpression
@@ -265,7 +265,7 @@ Example:
 """
 function without(ex::Expr, pat; phs=DEFAULT_PHS[1])
     new_args_without = [without(arg, pat; phs=phs) for arg in ex.args]
-    new_args = filter(arg -> isnull(matchex(pat, arg; phs=phs)), new_args_without)
+    new_args = filter(arg -> !matchingex(pat, arg; phs=phs), new_args_without)
     if ex.head == :call && length(new_args) == 2 &&
         (ex.args[1] == :+ || ex.args[1] == :*)
         # pop argument of now-single-valued operation
@@ -299,24 +299,24 @@ Example (derivative of x^n):
 """
 function rewrite(ex::Symbolic, pat::Symbolic, rpat::Any; opts...)
     st = matchex(pat, ex; opts...)
-    if isnull(st)
+    if st == nothing
         error("Expression $ex doesn't match pattern $pat")
     else
-        return subs(rpat, get(st))
+        return subs(rpat, st)
     end
 end
 
 
 """
-Same as rewrite, but returns Nullable{Expr} and doesn't throw an error
+Same as rewrite, but returns Union{Expr, Void} and doesn't throw an error
 when expression doesn't match pattern
 """
 function tryrewrite(ex::Symbolic, pat::Symbolic, rpat::Any; opts...)
     st = matchex(pat, ex; opts...)
-    if isnull(st)
-        return Nullable{Expr}()
+    if st == nothing
+        return nothing
     else
-        return Nullable(subs(rpat, get(st)))
+        return subs(rpat, st)
     end
 end
 

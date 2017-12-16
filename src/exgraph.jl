@@ -9,9 +9,9 @@ mutable struct ExGraph <: AbstractExGraph
     ctx::Dict{Any,Any}             # settings and caches
 end
 
-function ExGraph(; ctx=Dict(), inputs...)
+function ExGraph(; ctx=Dict(), inputs...)    
     ctx = to_context(ctx)
-    @get_or_create(ctx, :mod, current_module())
+    @get_or_create(ctx, :mod, @__MODULE__)
     g = ExGraph(ExNode[], Dict(), ctx)
     for (var, val) in inputs
         push!(g, :input, var, var; val=val)
@@ -121,17 +121,17 @@ end
 """Generate a new unique name for intermediate variable in graph"""
 function genname()
     s = String(gensym())
-    return Symbol(replace(s, "##", "tmp"))
+    return Symbol(replace(s, "##" => "tmp"))
 end
 
 function genname(prefix::String)
     s = String(gensym())
-    return Symbol(replace(s, "##", prefix))
+    return Symbol(replace(s, "##" => prefix))
 end
 
 function genname(prefix::Symbol)
     s = String(gensym())
-    return Symbol(replace(s, "##", prefix))
+    return Symbol(replace(s, "##" => prefix))
 end
 
 function gennames(count::Int)
@@ -202,7 +202,7 @@ end
 
 function Base.delete!(g::AbstractExGraph, vname::Symbol)
     delete!(g.idx, vname)
-    i = find(nd -> varname(nd) == vname, g.tape)
+    i = findall(nd -> varname(nd) == vname, g.tape)
     deleteat!(g.tape, i)
 end
 

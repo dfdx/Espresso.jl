@@ -82,7 +82,7 @@ function recover_lowered(ex::ExH{:call})
             break
         end
     end
-    ex = canonical_calls(current_module(), ex) |> subs_bcast_with_dot
+    ex = canonical_calls(@__MODULE__, ex) |> subs_bcast_with_dot
     return ex
 end
 

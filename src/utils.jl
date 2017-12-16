@@ -94,17 +94,17 @@ function flatten1(a::Vector{Vector{T}}) where T
 end
 
 
-function countdict(a::AbstractArray{T}) where T
-    counts = OrderedDict{T, Int}()
-    for x in a
-        if haskey(counts, x)
-            counts[x] += 1
-        else
-            counts[x] = 1
-        end
-    end
-    return counts
-end
+# function countdict(a::AbstractArray{T}) where T
+#     counts = OrderedDict{T, Int}()
+#     for x in a
+#         if haskey(counts, x)
+#             counts[x] += 1
+#         else
+#             counts[x] = 1
+#         end
+#     end
+#     return counts
+# end
 
 
 unzip(coll) = map(collect, zip(coll...))
@@ -115,7 +115,7 @@ unzip(coll) = map(collect, zip(coll...))
 
 func_name(f) = Base.function_name(f)
 # func_mod(f) = Base.function_module(f)
-func_mod(f) = Base.datatype_module(typeof(f))
+func_mod(f) = Base.parentmodule(typeof(f))
 
 
 """
@@ -170,7 +170,6 @@ function canonical(cur_mod::Module, qname)
         else
             error("Can't understand module of $f")
         end
-
     catch e
         # if qname isn't defined in module `cur_mod`, return it as is
         if isa(e, UndefVarError)
@@ -524,7 +523,12 @@ force_bitness(x::AT, ::Val{32}) where {AT <: AbstractArray{T,N}} where {T <: Abs
 force_bitness(x::Integer, ::Val{B}) where B = x
 
 
-## EinGraph deprecation
+## fixes for Julia 0.7
+
+to_dict(t::NamedTuple) = Dict(zip(keys(t), t))
+
+
+# EinGraph deprecation
 
 function depwarn_eingraph(funcsym)
     Base.depwarn("Einstein notation is deprecated and will be removed in Espresso 0.4.0",

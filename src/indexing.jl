@@ -101,7 +101,7 @@ function get_vars!(ex::ExH{Symbol("'")}, rec::Bool, result::Vector{Union{Symbol,
         push!(result, arg)
     elseif rec
         get_vars!(arg, rec, result)
-    end    
+    end
 end
 
 

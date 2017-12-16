@@ -1,5 +1,5 @@
 using Espresso
-using Base.Test
+using Test
 
 include("rewrite_test.jl")
 include("simplify_test.jl")

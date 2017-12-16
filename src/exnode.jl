@@ -165,7 +165,7 @@ function Base.show(io::IO, nd::ExNode{C}) where C
     if isa(getvalue(nd), AbstractArray)
         val = "<$(typeof(val))>"
     elseif isa(getvalue(nd), Tuple)
-        val = ([isa(v, AbstractArray) ?  "<$(typeof(v))>" : v for v in val]...)
+        val = ([isa(v, AbstractArray) ?  "<$(typeof(v))>" : v for v in val]...,)
     elseif isstruct(getvalue(nd))
         val = "$(typeof(getvalue(nd)))"
     end

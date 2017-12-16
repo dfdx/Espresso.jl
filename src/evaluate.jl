@@ -33,31 +33,43 @@ end
 function mk_eval_expr(g::ExGraph, nd::ExNode)
     dep_nodes = [g[dep] for dep in dependencies(nd) if haskey(g, dep)]
     deps_vals = Dict((varname(nd), getvalue(nd)) for nd in dep_nodes)
-    eval_ex = Expr(:block, Expr(:let, Expr(:block)))
-    block = eval_ex.args[1].args[1]    
+    evex = Expr(:block)
     for dep in unique(keys(deps_vals))
         val = deps_vals[dep]
-        push!(block.args, :(local $dep = $val))
+        push!(evex.args, :(local $dep = $val))
     end
     codegen = eval_codegen(@get(g.ctx, :codegen, VectorCodeGen()))
-    push!(block.args, generate_code(codegen, g, nd))
-    push!(block.args, varname(nd))
-    return eval_ex
+    push!(evex.args, generate_code(codegen, g, nd))
+    push!(evex.args, varname(nd))
+    return evex
 end
 
 
 function mk_eval_expr(g::ExGraph, nd::ExNode{:ctor})
     dep_nodes = [g[dep] for dep in dependencies(nd) if haskey(g, dep)]
-    deps_vals = [(varname(nd), getvalue(nd)) for nd in dep_nodes]
-    eval_ex = Expr(:block, Expr(:let, Expr(:block)))
-    block = eval_ex.args[1].args[1]
-    for (dep, val) in unique(deps_vals)
-        push!(block.args, :(local $dep = $val))
-    end
-    push!(block.args, to_expr_kw(nd))
-    push!(block.args, varname(nd))
-    return eval_ex
+    deps_vals = Dict((varname(nd), getvalue(nd)) for nd in dep_nodes)
+    evex = Expr(:block)
+    for dep in unique(keys(deps_vals))
+        val = deps_vals[dep]
+        push!(evex.args, :(local $dep = $val))
+    end    
+    push!(evex.args, to_expr_kw(nd))
+    push!(evex.args, varname(nd))
+    return evex
 end
+
+# function mk_eval_expr(g::ExGraph, nd::ExNode{:ctor})
+#     dep_nodes = [g[dep] for dep in dependencies(nd) if haskey(g, dep)]
+#     deps_vals = [(varname(nd), getvalue(nd)) for nd in dep_nodes]
+#     eval_ex = Expr(:block, Expr(:let, Expr(:block)))
+#     block = eval_ex.args[1].args[1]
+#     for (dep, val) in unique(deps_vals)
+#         push!(block.args, :(local $dep = $val))
+#     end
+#     push!(block.args, to_expr_kw(nd))
+#     push!(block.args, varname(nd))
+#     return eval_ex
+# end
 
 
 """

@@ -1,7 +1,7 @@
 
 @testset "exnode" begin
     
-    let
+    @testset "basic ops" begin
         nd = ExNode{:call}(:z, :(x + y))
         
         @test getvar(nd) == :z
@@ -23,19 +23,19 @@
     end
 
 
-    let
+    @testset "simple node" begin
         nd = ExNode{:call}(:z, :(x + y))
         @test to_expr(nd) == :(z = x + y)
     end
 
 
-    let
+    @testset "indexed node" begin
         nd = ExNode{:call}(:(z[i]), :(x[i] + y[i]))
         @test to_expr(nd) == :(z[i] = x[i] + y[i])
     end
 
 
-    let
+    @testset "dependencies" begin
         @test dependencies(ExNode{:constant}(:z, 42)) == []
         
         @test dependencies(ExNode{:input}(:z, 42)) == []
@@ -50,7 +50,7 @@
     end
 
 
-    let
+    @testset "broadcasting" begin
         nd = ExNode{:bcast}(:z, :(f.(x)))
         @test isindexed(nd) == false
         

@@ -4,7 +4,6 @@
 # If you want to learn the package structure, just go through
 # included files one by one, read header notes and other comments
 
-using DataStructures
 using Sugar
 
 include("types.jl")
