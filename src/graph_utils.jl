@@ -112,7 +112,7 @@ function make_subgraph(g::ExGraph, nd::ExNode{:call})
     fname = getexpr(nd).args[1]
     f = eval(mod, fname)
     args = dependencies(nd)
-    arg_types = ([typeof(getvalue(g[arg])) for arg in args]...)
+    arg_types = ([typeof(getvalue(g[arg])) for arg in args]...,)
     params, sub_ex = funexpr(f, arg_types)
     sub_g = ExGraph(sub_ex; ctx=g.ctx)
     st = Dict(zip(params, args))           # rename internal params to actual arguments

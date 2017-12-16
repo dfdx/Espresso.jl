@@ -94,17 +94,17 @@ function flatten1(a::Vector{Vector{T}}) where T
 end
 
 
-function countdict(a::AbstractArray{T}) where T
-    counts = OrderedDict{T, Int}()
-    for x in a
-        if haskey(counts, x)
-            counts[x] += 1
-        else
-            counts[x] = 1
-        end
-    end
-    return counts
-end
+# function countdict(a::AbstractArray{T}) where T
+#     counts = OrderedDict{T, Int}()
+#     for x in a
+#         if haskey(counts, x)
+#             counts[x] += 1
+#         else
+#             counts[x] = 1
+#         end
+#     end
+#     return counts
+# end
 
 
 unzip(coll) = map(collect, zip(coll...))
@@ -530,6 +530,10 @@ force_bitness(x::AT, ::Val{32}) where {AT <: AbstractArray{T,N}} where {T <: Abs
 # e.g. try `rand(Float32, 10) * 2`
 force_bitness(x::Integer, ::Val{B}) where B = x
 
+
+## fixes for Julia 0.7
+
+to_dict(t::NamedTuple) = Dict(zip(keys(t), t))
 
 
 # EinGraph deprecation

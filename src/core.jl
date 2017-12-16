@@ -4,8 +4,6 @@
 # If you are willing to learn the package structure, just go through
 # included files one by one, read header notes and other comments
 
-using DataStructures
-using Einsum
 using Sugar
 
 include("types.jl")
@@ -23,10 +21,7 @@ include("graph_utils.jl")
 include("expand_temp.jl")
 include("expand_deps.jl")
 include("optimize.jl")
-include("propagate_size.jl")
 include("merge.jl")
-# include("to_einstein.jl")
-# include("from_einstein.jl")
 include("inplace.jl")
 include("codegen.jl")
 include("destruct.jl")

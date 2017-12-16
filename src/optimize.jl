@@ -4,23 +4,6 @@
 const OPT_PHS = [:X, :Y, :Z, :V, :W,
                  :i, :j, :k, :l, :m, :n, :p, :q, :r, :s, :t]
 
-# const OPT_RULES = OrderedDict(
-#     :(W[i,k,j] = X[i,k] .* Y[j,k]; Z[i,j] = W[i,k,j]) =>
-#     :(genname__(1)[k,j] = Y[j,k]; Z[i,j] = X[i,k] * genname__(1)[k,j]),
-
-#     :(W[i,k,j] = X[i,k] .* Y[k,j]; Z[i,j] = W[i,k,j]) =>
-#     :(Z[i,j] = X[i,k] * Y[k,j]),
-
-#     :(W[i,j,k] = X[i] .* Y[j,k]; Z[i,j] = W[i,j,k]) =>
-#     :(Z[i,j] = X[i] .* Y[j,k]),
-
-#     # :(W[j,k,i] = X[i] .* Y[j,k]; Z[i,j] = W[i,j,k]) =>
-#     # :(Z[i,j] = X[i] .* Y[j,k]),
-
-#     :(W[k,i,j] = X[k,i] .* Y[k,j]; Z[i,j] = W[k,i,j]) =>
-#     :(genname__(1)[i,k] = X[k,i]; Z[i,j] = genname__(1)[i,k] * Y[k,j])
-# )
-
 
 const OPT_VEC_RULES = [
     :(Z = X * transpose(Y)) => :(Z = X * Y'),

@@ -47,7 +47,7 @@ end
 
 
 function matchex!(m::Dict{Symbol,Any}, ps::Vector, xs::Vector; opts...)
-    opts = Dict(opts)
+    opts = to_dict(opts)
     phs = get(opts, :phs, Set([]))
     length(ps) <= length(xs) || return false
     for i in eachindex(ps)

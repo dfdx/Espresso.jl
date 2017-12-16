@@ -1,5 +1,8 @@
 
 # indexing.jl - low-level utils for working with indexed expressions
+#
+# TODO: it has been desgined to support Einstein notstion which is now deprecated
+#       so it's worth to clean it up a bit
 
 const IDX_NAMES = [:i, :j, :k, :m, :n, :p, :q, :r, :s, :l]
 
@@ -100,7 +103,7 @@ function get_vars!(ex::ExH{Symbol("'")}, rec::Bool, result::Vector{Union{Symbol,
         push!(result, arg)
     elseif rec
         get_vars!(arg, rec, result)
-    end    
+    end
 end
 
 
@@ -190,23 +193,7 @@ function repeated_non_repeated(depidxs::Vector)
 end
 
 
-# function forall_sum_indices(op::Symbolic, depidxs::Vector)    
-#     longest_idx = longest_index(depidxs)
-#     elem_wise = all(idx -> idx == longest_idx || isempty(idx), depidxs)
-#     if op == :*
-#         repeated, non_repeated = repeated_non_repeated(depidxs)
-#         return non_repeated, repeated
-#     elseif elem_wise
-#         return longest_idx, []
-#     else
-#         # broadcasting - pass on all indices, preserving order of longest index
-#         # TODO: depidxs = [[:i], [:j, :n]] ->  [:j, :n, :i] - not broadcasting
-#         all_idxs = vcat(longest_idx, flatten(Symbol, depidxs))
-#         return unique(all_idxs), Symbol[]
-#     end
-# end
-
-function forall_sum_indices(op::Symbolic, depidxs::Vector)    
+function forall_sum_indices(op::Symbolic, depidxs::Vector)
     longest_idx = longest_index(depidxs)
     bcast = all(idx -> idx == longest_idx || isempty(setdiff(idx, longest_idx)), depidxs)
     if op == :*
@@ -273,23 +260,6 @@ find_guards(ex) = find_guards!(Expr[], ex)
 function without_guards(ex)
     return without(ex, :(i == j); phs=[:i, :j])
 end
-
-
-# """
-# Translates guarded expression, e.g. :(Y[i,j] = X[i] * (i == j)),
-# into the unguarded one, e.g. :(Y[i, i] = X[i])
-# """
-# function unguarded(ex::Expr)
-#     st = Dict([(grd.args[3], grd.args[2]) for grd in get_guards(ex)])
-#     new_ex = without_guards(ex)
-#     idxs = @view new_ex.args[1].args[2:end]
-#     for i=1:length(idxs)
-#         if haskey(st, idxs[i])
-#             idxs[i] = st[idxs[i]]
-#         end
-#     end
-#     return new_ex
-# end
 
 
 ## index permutations
