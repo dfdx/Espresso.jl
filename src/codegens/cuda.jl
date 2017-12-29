@@ -11,7 +11,7 @@ const CUDA_NATIVE_RULES = [
     :(sqrt.(x)) => :(CUDAnative.sqrt.(x)),
     :(x .^ n) => :(CUDAnative.pow.(x, __FLOAT_TYPE__(n))),
     :(ones(n)) => :(CuArray(ones(__FLOAT_TYPE__, n))),
-    :(transpose(x)) => :(permutedims(x, (2,1))),
+    # :(transpose(x)) => :(permutedims(x, (2,1))),  -- seems to cauase segfault in complex cases
 ]
 
 

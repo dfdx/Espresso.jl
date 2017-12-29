@@ -139,7 +139,12 @@ evaluate!(g::AbstractExGraph, name::Symbol; force=false) = evaluate!(g, g[name];
 
 function evaluate!(g::AbstractExGraph; force=false)
     for i=1:length(g)
-        evaluate!(g, g[i]; force=force)
+        try
+            evaluate!(g, g[i]; force=force)
+        catch e
+            info("Failed to evaluate node: $(g[i])")
+            throw(e)
+        end
     end
     return getvalue(g[end])
 end
