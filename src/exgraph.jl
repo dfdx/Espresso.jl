@@ -52,6 +52,7 @@ function Base.show(io::IO, g::ExGraph)
 end
 
 Base.haskey(g::AbstractExGraph, var::Symbol) = haskey(g.idx, var)
+Base.in(var::Symbol, g::AbstractExGraph) = haskey(g, var)
 Base.endof(g::AbstractExGraph) = endof(g.tape)
 Base.length(g::AbstractExGraph) = length(g.tape)
 Base.get(g::AbstractExGraph, var::Symbol) = g.idx[var]

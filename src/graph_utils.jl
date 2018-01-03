@@ -15,7 +15,9 @@ function dependents(g::AbstractExGraph)
     for nd in g.tape
         vname = varname(nd)
         for dep in dependencies(nd)
-            push!(dpts[dep], vname)
+            if haskey(dpts, dep)          # don't include global constants
+                push!(dpts[dep], vname)
+            end
         end
     end
     return dpts
@@ -117,7 +119,7 @@ function make_subgraph(g::ExGraph, nd::ExNode{:call})
     sub_g = ExGraph(sub_ex; ctx=g.ctx)
     st = Dict(zip(params, args))           # rename internal params to actual arguments
     st[varname(sub_g[end])] = varname(nd)  # rename output var to this node's
-    dont_subs = Set(keys(st))    
+    dont_subs = Set(keys(st))
     st = merge(st, subgraph_interm_subs_table(sub_g, dont_subs; prefix=fname))
     rename!(sub_g, st)
     return sub_g
