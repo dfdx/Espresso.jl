@@ -217,7 +217,8 @@ end
 
 function parse!(g::ExGraph, ex::ExH{:ref})
     @assert isa(ex.args[2], Number) "Currently only constant indices are supported"
-    vname = push!(g, :ref, genname(), Expr(ex))
+    base = isa(ex.args[1], Symbol) ? ex.args[1] : parse!(g, ex.args[1])
+    vname = push!(g, :ref, genname(), Expr(:ref, base, ex.args[2:end]...))
     return vname
 end
 
