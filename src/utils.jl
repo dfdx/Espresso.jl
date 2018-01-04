@@ -531,8 +531,7 @@ force_bitness(x::AT, ::Val{32}) where {AT <: AbstractArray{T,N}} where {T <: Abs
 force_bitness(x::Integer, ::Val{B}) where B = x
 
 
-
-# EinGraph deprecation
+## EinGraph deprecation
 
 function depwarn_eingraph(funcsym)
     Base.depwarn("Einstein notation is deprecated and will be removed in Espresso 0.4.0",

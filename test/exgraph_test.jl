@@ -14,37 +14,11 @@
         @test evaluate!(g) == 4
 
         g = ExGraph(:(z = (x .+ y).^2); x=ones(3), y=ones(3))
-        @test evaluate!(g) == [4.0, 4.0, 4.0]
-
-        # deprecated
-        # g = EinGraph(:(z = x[i] .+ y[i]); x=ones(3), y=ones(3))
-        # @test length(g.tape) == 3     # check that fuse_assigned() removed extra var
-        # @test varname(g[3]) == :z
-        # @test evaluate!(g) == 6.0
+        @test evaluate!(g) == [4.0, 4.0, 4.0]       
     end
 
 
     let
-        # deprecated
-        # # test parse!()
-        # ex = quote
-        #     M[i,j] = exp.(u[i] .* v[j])
-        #     x[i] = M[i,j]
-        #     y[i] = 2 * x[i]
-        #     z = y[i]
-        # end
-        # g = EinGraph(ex; u=rand(3), v=rand(3))
-        # @test getcategory(g[1]) == :input
-        # @test getcategory(g[3]) == :call
-        # @test getcategory(g[4]) == :bcast    
-        # @test getcategory(g[6]) == :call
-
-        # # test node access methods
-        # @test g[end] == g[:z] && g[:z] == g["z"]
-
-        # # test variable index inference
-        # @test varidxs(g[3]) == [:i,:j]
-
         ex = :(M = u'v)
         g = ExGraph(ex; u=rand(3), v=rand(3))
         @test getcategory(g[3]) == :call
@@ -83,4 +57,20 @@
         @test getcategory(rw_nd) == :opaque
         @test getvalue(rw_nd) == nothing        # value should be cleared
     end
+end
+
+
+@testset "var renaming" begin
+
+    ex = quote
+        x = 0
+        x = x + 1
+        y = 4
+        x = 2x + y
+        y = 5
+        z = x + y
+    end
+
+    g = ExGraph(ex)
+    @test to_expr(g[end]) == :(z = x3 + y2)
 end

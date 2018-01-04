@@ -118,6 +118,25 @@ function gennames(count::Int)
     return [genname() for _=1:count]
 end
 
+
+function rename_repeated(g::AbstractExGraph, ex)    
+    st = @get_or_create(g.ctx, :renamings, Dict())
+    st = prop_subs(st)
+    return subs(ex, st)
+end
+rename_repeated(g::AbstractExGraph, ex::ExH) = rename_repeated(g, Expr(ex))
+
+function add_renaming!(g::AbstractExGraph, var::Symbol)
+    old = var
+    while var in g
+        var = inc_var_name(var)
+    end
+    st = @get_or_create(g.ctx, :renamings, Dict())
+    st[old] = var
+    return var
+end
+
+
 ## push!, insert!, delete!
 
 """
@@ -177,8 +196,8 @@ Return the the output variable.
 parse!(g::AbstractExGraph, ex::Expr) = parse!(g, ExH(ex))
 parse!(g::AbstractExGraph, ::LineNumberNode) = :nil
 parse!(g::AbstractExGraph, ::ExH{:line}) = :nil
-parse!(g::AbstractExGraph, s::Symbol) = s
-# parse!(g::ExGraph, gr::GlobalRef) = (gr, [])
+parse!(g::AbstractExGraph, s::Symbol) = rename_repeated(g, s)
+
 
 function parse!(g::AbstractExGraph, x::Number)
     if haskey(g.ctx, :bitness)
@@ -200,8 +219,12 @@ end
 
 function parse!(g::ExGraph, ex::ExH{:(=)})
     lhs, rhs = ex.args
+    rhs = rename_repeated(g, rhs)
     dep = parse!(g, rhs)
     if isa(lhs, Symbol)
+        if haskey(g, lhs)
+            lhs = add_renaming!(g, lhs)            
+        end
         push!(g, :(=), lhs, dep)
         return lhs
     elseif isa(lhs, Expr) && lhs.head == :tuple
@@ -217,6 +240,7 @@ end
 
 
 function parse!(g::ExGraph, ex::ExH{:ref})
+    ex = rename_repeated(g, ex)
     @assert isa(ex.args[2], Number) "Currently only constant indices are supported"
     base = isa(ex.args[1], Symbol) ? ex.args[1] : parse!(g, ex.args[1])
     vname = push!(g, :ref, genname(), Expr(:ref, base, ex.args[2:end]...))
@@ -228,6 +252,7 @@ end
 const CONST_OPS = Set([:length])
 
 function parse!(g::ExGraph, ex::ExH{:call})
+    ex = rename_repeated(g, ex)
     op = canonical(g.ctx[:mod], ex.args[1])
     args, kw_args = parse_call_args(ex)
     meta = isempty(kw_args) ? Dict() : Dict(:kw => kw_args)
@@ -243,6 +268,7 @@ end
 
 
 function parse!(g::ExGraph, ex::ExH{:.})
+    ex = rename_repeated(g, ex)
     if isa(ex.args[2], Expr) && ex.args[2].head == :tuple
         # broadcasting
         op = canonical(g.ctx[:mod], ex.args[1])
@@ -253,13 +279,14 @@ function parse!(g::ExGraph, ex::ExH{:.})
         return var
     elseif isa(ex.args[2], QuoteNode)
         # field
-        var = push!(g, :field, genname(), Expr(ex))
+        var = push!(g, :field, genname(), ex)
         return var
     end
 end
 
 
 function parse!(g::ExGraph, ex::ExH{Symbol("'")})
+    ex = rename_repeated(g, ex)
     dep = parse!(g, ex.args[1])
     pex = :(transpose($dep))
     var = push!(g, :call, genname(), pex)
@@ -274,6 +301,7 @@ end
 
 
 function parse!(g::ExGraph, ex::ExH{:tuple})
+    ex = rename_repeated(g, ex)
     deps = [parse!(g, arg) for arg in ex.args]
     pex = Expr(:tuple, deps...)
     vname = push!(g, :tuple, genname(), pex)

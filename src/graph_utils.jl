@@ -168,3 +168,24 @@ function convert_call(g::AbstractExGraph, nd::Union{ExNode{:call}, ExNode{:bcast
         error("Call node $nd is simplified to an unknown non-call $new_ex")
     end
 end
+
+
+"""
+Given a symbolic name, either adds `2` to the end
+or increment existing number. Example:
+
+    inc_var_name(:x)   # ==> x2
+    inc_var_name(:x2)  # ==> x3
+
+"""
+function inc_var_name(var::Symbol)
+    svar = string(var)
+    r = match(r"(.*)(\d+)", svar)
+    if r != nothing
+        base = r.captures[1]
+        num = parse(Int, r.captures[2]) + 1
+        return Symbol("$base$num")
+    else
+        return Symbol("$(svar)2")
+    end
+end
