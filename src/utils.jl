@@ -148,21 +148,31 @@ Return canonical representation of a function name, e.g.:
 function canonical(cur_mod::Module, qname)
     try
         f = eval(cur_mod, qname)
-        mod = func_mod(f)
-        name = func_name(f)
-        if qname in [:.*, :./, :.+, :.-, :.^, :.>, :.<, :.>=, :.<=, :.==]
-            return qname  # for Julia 0.6 only
-        elseif (mod == cur_mod || mod == Main || mod == Base || mod == Base.Math ||
-                mod == Base.LinAlg || mod == Base.DSP)
-            return Symbol(name)
+        if f isa Function
+            mod = func_mod(f)
+            name = func_name(f)
+            if qname in [:.*, :./, :.+, :.-, :.^, :.>, :.<, :.>=, :.<=, :.==]
+                return qname  # for Julia 0.6 only
+            elseif (mod == cur_mod || mod == Main || mod == Base || mod == Base.Math ||
+                    mod == Base.LinAlg || mod == Base.DSP)
+                return Symbol(name)
+            else
+                # there should be a smarter way to do it...
+                parts = map(Symbol, split(string(mod), "."))
+                mod_ex = dot_expr(parts)
+                return Expr(:., mod_ex, QuoteNode(name))
+            end
+        elseif f isa DataType || f isa UnionAll
+            # parts = split(string(f), ".")
+            # mod = eval(cur_mod, parse(join(parts[1:end-1], ".")))
+            # name = parse(parts[end])
+            return parse(string(f))    # use it for functions as well?
         else
-            # there should be a smarter way to do it...
-            parts = map(Symbol, split(string(mod), "."))
-            mod_ex = dot_expr(parts)
-            return Expr(:., mod_ex, QuoteNode(name))
+            error("Can't understand module of $f")
         end
+        
     catch e
-        # if qname isn't defined in module `mod`, return it as is
+        # if qname isn't defined in module `cur_mod`, return it as is
         if isa(e, UndefVarError)
             return qname
         else

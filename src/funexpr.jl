@@ -132,7 +132,7 @@ function to_expr(src::CodeInfo)
 end
 
 
-function funexpr(f::Function, types::NTuple{N,DataType}) where N
+function funexpr(f::Union{Function, DataType, UnionAll}, types::NTuple{N,DataType}) where N
     method = Sugar.get_method(f, types)
     file = string(method.file)
     linestart = method.line
