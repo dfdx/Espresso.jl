@@ -11,6 +11,7 @@ sanitize(ex::LineNumberNode) = nothing
 sanitize(m::Module) = Symbol(string(m))
 sanitize(ex::ExH{:line}) = nothing
 sanitize(ex::ExH{:return}) = sanitize(ex.args[1])
+sanitize(ex::ExH{:macrocall}) = nothing  # note: ignoring macros, experimental
 
 function sanitize(ex::ExH{:block})
     sanitized_args = [sanitize(arg) for arg in ex.args]
@@ -43,6 +44,8 @@ const RECOVER_LOWERED_RULES = [
     :(Base.broadcast(_m._f, _xs...)) => :(_m._f.(_xs...)),
     :(Base.literal_pow(Main.:^, _x, _v)) => :(_x ^ _v),
     :(Core.apply_type(Base.Val, _x)) => :_x,
+    # :(Core.getfield(_x, _y)) => :(_x._y),
+    :(Core.getfield(_x, $(QuoteNode(:_y)))) => :(_x._y),
 ]
 
 """
@@ -115,9 +118,13 @@ function arg_names(sig::Expr)
 end
 
 
-# there's already func_name in utils.jl
-# funname(f::Function) = (methods(f) |> first).name
-
+function arg_types(sig::Expr)
+    # note: ignoring type parameters, may not always be the right thing
+    while sig.head == :where
+        sig = sig.args[1]
+    end
+    return [isa(arg, Symbol) ? Any : arg.args[2] for arg in sig.args[2:end]]    
+end
 
 
 function to_expr(src::CodeInfo)
@@ -132,18 +139,43 @@ function to_expr(src::CodeInfo)
 end
 
 
+function concretise_types(code::Expr, types::NTuple{N, DataType}) where N
+    sig_types = arg_types(code.args[1])
+    st = Dict(zip(sig_types, types))
+    return subs(code, st)
+end
+
+
+"""
+Replace all calls to an inner constructor with the corresponding outer constructor
+"""
+function replace_inner_constr(f, ex::Expr)
+    f_name = parse(string(f))
+    constr = :($f_name(_xs...))
+    ex = rewrite_all(ex, :(new{_T1, _T2, _T3}(_xs...)), constr)
+    ex = rewrite_all(ex, :(new{_T1, _T2}(_xs...)), constr)
+    ex = rewrite_all(ex, :(new{_T}(_xs...)), constr)
+    ex = rewrite_all(ex, :(new(_xs...)), constr)    
+    return ex
+end
+
+
 function funexpr(f::Union{Function, DataType, UnionAll}, types::NTuple{N,DataType}) where N
     method = Sugar.get_method(f, types)
     file = string(method.file)
     linestart = method.line
     try
-        code, _ = Sugar.get_source_at(file, linestart)
-        return arg_names(code.args[1]), sanitize(code.args[2])
+        ex, _ = Sugar.get_source_at(file, linestart)
+        ex.head == :toplevel && throw(LoadError(file, linestart, "Bad code found"))
+        ex = concretise_types(ex, types)
+        ex = replace_inner_constr(f, ex)
+        return arg_names(ex.args[1]), sanitize(ex.args[2])
     catch err
         if isa(err, LoadError)
             code = code_lowered(f, types)[1]
             args = convert(Vector{Symbol}, code.slotnames[2:end])
             ex = to_expr(code) |> sanitize |> recover_lowered
+            # ex = subs(ex, Dict(:new => parse(string(f))))
             return args, ex
         else
             rethrow(err)
