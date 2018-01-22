@@ -115,7 +115,7 @@ unzip(coll) = map(collect, zip(coll...))
 
 func_name(f) = Base.function_name(f)
 # func_mod(f) = Base.function_module(f)
-func_mod(f) = Base.datatype_module(typeof(f))
+func_mod(f) = Base.parentmodule(typeof(f))
 
 
 """
@@ -153,7 +153,7 @@ function canonical(cur_mod::Module, qname)
         if qname in [:.*, :./, :.+, :.-, :.^, :.>, :.<, :.>=, :.<=, :.==]
             return qname  # for Julia 0.6 only
         elseif (mod == cur_mod || mod == Main || mod == Base || mod == Base.Math ||
-                mod == Base.LinAlg || mod == Base.DSP)
+                mod == LinearAlgebra || mod == Base.DSP)
             return Symbol(name)
         else
             # there should be a smarter way to do it...
@@ -534,6 +534,7 @@ force_bitness(x::Integer, ::Val{B}) where B = x
 ## fixes for Julia 0.7
 
 to_dict(t::NamedTuple) = Dict(zip(keys(t), t))
+to_dict(t::Base.Iterators.IndexValue) = Dict(t)
 
 
 # EinGraph deprecation

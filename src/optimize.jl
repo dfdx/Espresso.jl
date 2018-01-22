@@ -78,20 +78,19 @@ end
 
 function tryoptimize(ex::Expr)
     for (pat, subs_ex) in OPT_VEC_RULES
-        new_ex_nlb = tryrewrite(ex, pat, subs_ex; phs=OPT_PHS, allow_ex=false)
-        if !isnull(new_ex_nlb)
-            new_ex = get(new_ex_nlb)
+        new_ex = tryrewrite(ex, pat, subs_ex; phs=OPT_PHS, allow_ex=false)
+        if new_ex != nothing
             genname_patterns = unique(findex(:(genname__(_n)), new_ex))
             if !isempty(genname_patterns)
                 new_names = gennames(length(genname_patterns))
                 st = Dict(zip(genname_patterns, new_names))
-                return Nullable(subs(new_ex, st))
+                return subs(new_ex, st)
             else
-                return Nullable(new_ex)
+                return new_ex
             end
         end
     end
-    return Nullable{Expr}()
+    return nothing
 end
 
 
@@ -101,8 +100,8 @@ function expand_fixed_sequences(g::ExGraph, nd::ExNode)
     for dep in dependencies(nd)
         expanded = subs(ex, Dict(dep => getexpr(g[dep])))
         new_ex = tryoptimize(expanded)
-        if !isnull(new_ex)
-            ex = get(new_ex)
+        if new_ex != nothing
+            ex = new_ex
             changed = true
         end
     end
