@@ -20,6 +20,7 @@ function ExGraph(; ctx=Dict(), inputs...)
 end
 
 function ExGraph(ex::Expr; fuse=true, ctx=Dict(), inputs...)
+    ex = preprocess(ex)
     ctx = to_context(ctx)
     g = ExGraph(;ctx=ctx, inputs...)
     g.ctx[:expr] = ex
