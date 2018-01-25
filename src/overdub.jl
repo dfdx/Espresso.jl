@@ -5,6 +5,8 @@ import Cassette: lookup_method_body
 # import Espresso: rewrite_all
 
 
+# TODO: change to Overdub{F,world}
+
 function overdub_calls!(code::CodeInfo, w::Val{W}) where W
     for i=1:length(code.code)
         code.code[i] = rewrite_all(code.code[i], [:(_f(_args...)) => :(overdub($w, _f, _args...))])
