@@ -1,12 +1,14 @@
 
 ## homegrown alternative to Cassette.jl, solely experimental/educational
 
+
 struct Overdub{F,w}
-    func::F
     world::Val{w}
+    func::F
+    args::Any    
 end
 
-Overdub(func) = Overdub(func, Val(get_world_age()))
+Overdub(func, args...) = Overdub(Val(get_world_age()), func, args)
 
 
 get_world_age() = ccall(:jl_get_tls_world_age, UInt, ())
@@ -27,10 +29,11 @@ function lookup_method(S, world)
 end
 
 
-function overdub_calls!(code::CodeInfo)
+function overdub_calls!(code::CodeInfo, w)
     for i=1:length(code.code)
         if isa(code.code[i], Expr)
-            code.code[i] = rewrite_all(code.code[i], [:(_f(_args...)) => :(Overdub(_f)(_args...))])
+            code.code[i] = rewrite_all(code.code[i], [:(_f(_args...)) =>
+                                                      :(Overdub(Val($w), _f, _args...)(_args...))])
         end
     end
     return code
@@ -40,16 +43,17 @@ overdub_calls!(::Nothing) = nothing
 
 
 @generated function (f::Overdub{F,world})(args...) where {F,world}
-    println("calling function $F")
     signature = Tuple{F,args...}
     code_info = lookup_method(signature, world)
+    println("calling $F, original code is: $code_info")
     if isa(code_info, CodeInfo)
-        new_code_info = overdub_calls!(code_info)
+        new_code_info = overdub_calls!(code_info, world)
     else
-        # new_code_info = :(f.func(args...))
-        new_code_info = nothing
+        println("args are: $args")
+        new_code_info = :(f.func(args...))
+        # new_code_info = nothing
     end
-    println(new_code_info)
+    println("calling $F, code after transformation: $new_code_info")
     return new_code_info
 end
 
