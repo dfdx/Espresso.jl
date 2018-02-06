@@ -177,14 +177,14 @@ function track_call(sig)
     sig_vars, types = unzip([(arg.args[1], eval(arg.args[2])) for arg in sig.args[2:end]])
     call_ex = Expr(:call, op,
                 [istracked(t) ? :($(v).val) : v for (v, t) in zip(sig_vars, types)]...)
-    ex = Expr(:call, :Expr, QuoteNode(:call), QuoteNode(op),
-              [Expr(:., sig_var, QuoteNode(:var)) for sig_var in sig_vars]...)
+    ex_in_ex = Expr(:call, :Expr, QuoteNode(:call), QuoteNode(op),
+                    [Expr(:., sig_var, QuoteNode(:var)) for sig_var in sig_vars]...)
 
     defquot = quote
         function $op($(sig.args[2:end]...))
             val = $call_ex
             tv = tracked_val(x.graph, genname(), val) # TODO: x may be undefined
-            ex = $ex
+            ex = $ex_in_ex
             nd = ExNode{:call}(tv.var, ex; val=val)
             push!(x.graph, nd)
             return tv
@@ -200,28 +200,17 @@ function track_bcast(sig)
     sig_vars, types = unzip([(arg.args[1], eval(arg.args[2])) for arg in sig.args[2].args])
     bcast_ex = Expr(:., op, Expr(:tuple, [istracked(t) ? :($(v).val) : v
                                           for (v, t) in zip(sig_vars, types)]...))
-    # ex = Expr(:call, :Expr, QuoteNode(:.), QuoteNode(op),
-    #           [Expr(:., sig_var, QuoteNode(:var)) for sig_var in sig_vars]...)
-    # ex = Expr(:., :sin, Expr(:tuple, Expr(:., :A, QuoteNode(:val))))
-
-    inner_exprs = [Expr(:call, :Expr, QuoteNode(:.), QuoteNode(sig_var),
-                        Expr(:call, :QuoteNode, QuoteNode(:val))) for sig_var in sig_vars]
+    # we want to get this after code generation:
+    # ex = :(Expr(:., :sin, Expr(:tuple, x.var, y.var))) 
     ex_in_ex = Expr(:call, :Expr, QuoteNode(:.), QuoteNode(:sin),
                     Expr(:call, :Expr, QuoteNode(:tuple),
-                         inner_exprs...))
-    
-    # ex_in_ex = Expr(:call, :Expr, QuoteNode(:.), QuoteNode(:sin),
-    #                 Expr(:call, :Expr, QuoteNode(:tuple),
-    #                      Expr(:call, :Expr, QuoteNode(:.), QuoteNode(:A),
-    #                           Expr(:call, :QuoteNode, QuoteNode(:val)))))
-    
-
+                         [Expr(:., sig_var, QuoteNode(:var)) for sig_var in sig_vars]...))
     defquot = quote
         function broadcast_(::typeof($op), $(sig.args[2].args...))
             val = $bcast_ex
             tv = tracked_val(x.graph, genname(), val) # TODO: x may be undefined
             ex = $ex_in_ex
-            println(ex)
+            # println(ex)
             nd = ExNode{:bcast}(tv.var, ex; val=val)
             push!(x.graph, nd)
             return tv
@@ -247,10 +236,45 @@ end
 @tracked -(x::TrackedReal, y::TrackedReal)
 @tracked *(x::TrackedReal, y::TrackedReal)
 @tracked /(x::TrackedReal, y::TrackedReal)
+
+@tracked *(x::TrackedArray, y::TrackedArray)
 @tracked maximum(x::TrackedArray)
 
 
 @tracked sin.(x::TrackedArray)
+@tracked cos.(x::TrackedArray)
+
+
+# I couldn't find a way to overload .+ and friends as either call or broadcasting
+# fortunately, the list of such unusual operations is small and fixed
+function broadcast_(::typeof(+), x::TrackedArray, y::TrackedArray)
+    val = x.val .+ y.val
+    var = genname()
+    nd = ExNode{:call}(var, :($(x.var) .+ $(y.var)))
+    push!(x.graph, nd)
+    return TrackedArray(var, val)
+end
+function broadcast_(::typeof(-), x::TrackedArray, y::TrackedArray)
+    val = x.val .- y.val
+    var = genname()
+    nd = ExNode{:call}(var, :($(x.var) .- $(y.var)))
+    push!(x.graph, nd)
+    return TrackedArray(var, val)
+end
+function broadcast_(::typeof(*), x::TrackedArray, y::TrackedArray)
+    val = x.val .* y.val
+    var = genname()
+    nd = ExNode{:call}(var, :($(x.var) .* $(y.var)))
+    push!(x.graph, nd)
+    return TrackedArray(var, val)
+end
+function broadcast_(::typeof(/), x::TrackedArray, y::TrackedArray)
+    val = x.val ./ y.val
+    var = genname()
+    nd = ExNode{:call}(var, :($(x.var) ./ $(y.var)))
+    push!(x.graph, nd)
+    return TrackedArray(var, val)
+end
 
 
 
