@@ -2,7 +2,7 @@
 ## tracked.jl - build ExGraph using tracked data types
 
 import Base: +, -, *, /, log, exp, min, max, reshape, transpose, sum, mean,
-    minimum, maximum
+    minimum, maximum, getindex
 
 
 const DEFAULT_GRAPH = Ref(ExGraph())
@@ -33,6 +33,8 @@ end
 TrackedArray(var::Symbol, val::AbstractArray) = TrackedArray(get_default_graph(), var, val)
 
 Base.show(io::IO, x::TrackedArray{T,N}) where {T,N} =
+    print(io, "Tracked{$T,$N}($(x.var) = $(x.val))")
+Base.show(io::IO, ::MIME{Symbol("text/plain")}, x::TrackedArray{T,N}) where {T,N} =
     print(io, "Tracked{$T,$N}($(x.var) = $(x.val))")
 
 tracked_val(g::ExGraph, var::Symbol, val::AbstractArray) = TrackedArray(g, var, val)
@@ -77,39 +79,6 @@ end
 
 Base.convert(::Type{TrackedReal}, x::TrackedReal) = x
 
-## overloaded functions
-
-# for op in (:+, :-, :*, :/, :^, :max, :min, :log, :exp)
-
-#     @eval function $op(xs::TrackedReal...)
-#         x1 = xs[1]
-#         val = $op([x.val for x in xs]...)
-#         tv = tracked_val(x1.graph, genname(), val)
-#         iop = Symbol($op)
-#         ex = Expr(:call, iop, [x.var for x in xs]...)
-#         nd = ExNode{:call}(tv.var, ex; val=val)
-#         push!(x1.graph, nd)
-#         return tv
-#     end
-
-# end
-
-
-# for op in (:+, :-, :*, :/, :^, :max, :min)
-
-#     @eval function $op(x::TrackedReal, y::TrackedReal)
-#         val = $op(x.val, y.val)
-#         tv = tracked_val(x.graph, genname(), val)
-#         iop = Symbol($op)
-#         ex = :($iop($(x.var), $(y.var)))
-#         nd = ExNode{:call}(tv.var, ex; val=val)
-#         push!(x.graph, nd)
-#         return tv
-#     end
-
-# end
-
-
 
 ## TRACKED ARRAY
 
@@ -117,8 +86,8 @@ Base.convert(::Type{TrackedReal}, x::TrackedReal) = x
 # TODO: should write this to graph? presumably no
 Base.size(x::TrackedArray) = size(x.val)
 # TODO: and these? presumably yes, but be carefull about printing
-Base.getindex(x::TrackedArray, I...) = getindex(x.val, I...)
-Base.setindex!(x::TrackedArray, val, I...) = setindex!(x.val, val, I...)
+# Base.getindex(x::TrackedArray, I...) = getindex(x.val, I...)
+# Base.setindex!(x::TrackedArray, val, I...) = setindex!(x.val, val, I...)
 
 
 ## conversion and promotion
@@ -134,26 +103,8 @@ end
 
 Base.convert(::Type{TrackedArray}, x::TrackedArray) = x
 
-# overloaded functions
 
-# for op in (:+, :-, :*, :/, :^, :transpose, :sum, :mean, :minimum, :maximum)
-
-#     @eval function $op(xs::TrackedArray...)
-#         x1 = xs[1]
-#         val = $op([x.val for x in xs]...)
-#         tv = tracked_val(x1.graph, genname(), val)
-#         iop = Symbol($op)
-#         ex = Expr(:call, iop, [x.var for x in xs]...)
-#         nd = ExNode{:call}(tv.var, ex; val=val)
-#         push!(x1.graph, nd)
-#         return tv
-#     end
-
-# end
-
-
-
-
+## @tracked macro
 
 function track_call(sig)
     @assert sig.head == :call
@@ -170,10 +121,8 @@ function track_call(sig)
         call_ex = Expr(:call, op, make_kw_params(kw),
                        [istracked(eval(t)) ? :($(v).val) : v for (v, t) in vars_types]...)
         keys = [k for (k, v) in kw]
-
         # we need to get this:
         # :( Expr(:call, :mult, Expr(:parameters, Expr(:kw, :pow, pow)), :(x.var)) )
-        # TODO: no, this way we pass fixed paramerers instead of passed values - done!
         ex_in_ex = Expr(:call, :Expr, QuoteNode(:call), QuoteNode(op),
                         Expr(:call, :Expr, QuoteNode(:parameters),
                              [Expr(:call, :Expr, QuoteNode(:kw), QuoteNode(k), k)
@@ -181,7 +130,6 @@ function track_call(sig)
                         [istracked(eval(t)) ? Expr(:., sig_var, QuoteNode(:var)) : sig_var
                          for (sig_var, t) in vars_types]...)
     end
-
     defquot = quote
         function $op($(sig.args[2:end]...))
             val = $call_ex
@@ -222,7 +170,13 @@ function track_bcast(sig)
 end
 
 
+"""
+Define a function or broadcasting rule for the specified signature which computes
+the result as for ordinary (not tracked) data and writes it to the graph.
 
+Note: this function expects at least 1 parameter of TrackedReal or TrackedArray type
+with name `x`.
+"""
 macro tracked(sig)
     if sig.head == :call
         return track_call(sig)
@@ -242,6 +196,11 @@ end
 @tracked *(x::TrackedArray, y::TrackedArray)
 @tracked maximum(x::TrackedArray)
 
+@tracked getindex(x::TrackedArray, i::Integer)
+@tracked getindex(x::TrackedArray, i::Integer, j::Integer)
+@tracked getindex(x::TrackedArray, i::Integer, j::Integer, k::Integer)
+@tracked getindex(x::TrackedArray, i::Integer, j::Integer, k::Integer, l::Integer)
+
 @tracked reshape(x::TrackedArray, dims::Tuple{Int})
 @tracked reshape(x::TrackedArray, dims::Tuple{Int, Int})
 @tracked reshape(x::TrackedArray, dims::Tuple{Int, Int, Int})
@@ -251,7 +210,6 @@ end
 
 @tracked sin.(x::TrackedArray)
 @tracked cos.(x::TrackedArray)
-
 
 
 ## why this one doesn't work?
@@ -264,7 +222,6 @@ end
 #         return TrackedArray(var, val)
 #     end
 # end
-
 
 
 # I couldn't find a way to overload .+ and friends as either call or broadcasting
@@ -318,7 +275,7 @@ function main()
 
     g = reset_default_graph()
     A = TrackedArray(g, :A, rand(3,4))
-    B = TrackedArray(g, :B, rand(4,3))
+    b = TrackedArray(g, :b, rand(3))
     C = A * B
     println(g)
 

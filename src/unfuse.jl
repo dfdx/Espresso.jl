@@ -1,67 +1,38 @@
-## unfuse.jl - prevent broadcasting fusion for tracked data
-##
-## Based on AutoGrad.jl:
-## https://github.com/denizyuret/AutoGrad.jl/blob/42616b245e28f52a5f5207ec65cc2fdce6a595a7/src/unfuse.jl
+## copied from https://github.com/MikeInnes/TakingBroadcastSeriously.jl
+## added some functions that need broadcasting
 
-import Base.Broadcast: broadcast, broadcast_c, containertype
+import Base: ^
+using Base.Broadcast: broadcast_c, containertype
 
+broadcast_(f, A, Bs...) = broadcast_c(f, containertype(A, Bs...), A, Bs...)
 
 struct Broadcasted{T}
-    value::T
+  x::T
 end
 
-getvalue(x::Broadcasted) = x.value
+unwrap(w::Broadcasted) = w.x
 
-# We need this to not override regular broadcast(f, A, Bs...):
-broadcast(f, x::Union{Number, AbstractArray}...) = broadcast_c(f, containertype(x...), x...)
+# We must hack each function we want to use with un-fused broadcasting.
+for f in :[sin, cos, +, -, *, /, %, ^, <, <=, >, >=, !=, ==].args
+  @eval Base.$f(a::Broadcasted...) = Broadcasted(broadcast_($f, unwrap.(a)...))
 
-# This captures cases where at least one arg is a TrackedArray:
-# broadcast(f, x::Union{Number, AbstractArray, TrackedArray}...) = f(Broadcasted.(x)...).value
-broadcast(f, x::Union{Number, AbstractArray, TrackedArray}...) = f(Broadcasted(x)...).value
-
-
-# broadcast_func(f) gets called with every primitive function in AutoGrad.
-
-function broadcast_func(f)
-    f = Symbol(lstrip(string(f), '.'))
-    bf = Symbol("broadcast!!", f)
-    if !isdefined(bf) # !isdefined(Espresso, bf)
-        @eval begin
-            # We need this when x is of a regular type (@primitive only defines bf for Rec)
-            $bf(x...) = (println("bf over regular type"); broadcast($f, x...))
-            $f(x::Broadcasted...) = (println("f over Broadcasted, arg is $x");
-                                     $bf(getvalue.(x)...) |> Broadcasted)
-            
-            # We need the following because sometimes the interpreter does not
-            # convert all args to Broadcasted:
-            # $f(x1::Broadcasted, x2) = $bf(getvalue(x1), x2) |> Broadcasted
-            # $f(x1, x2::Broadcasted) = $bf(x1, getvalue(x2)) |> Broadcasted
-        end
-    end
-    return bf
+  #sometimes literals "resist" wrapping, so catch them too
+  @eval Base.$f(a::Broadcasted, b) = Broadcasted(broadcast_($f, unwrap(a), b))
+  @eval Base.$f(b, a::Broadcasted) = Broadcasted(broadcast_($f, b, unwrap(a)))
 end
 
-# TODO: overload broadcast!!func for tracked arrays
+#Avoid ambiguitity with Base
+^(a::Broadcasted, b::Integer) = Broadcasted(broadcast_(^, unwrap(a), b))
 
-
-foo(x::Number) = 2x
-
-broadcast_func(foo)
-
-broadcast!!foo(x::TrackedArray) = (println("broadcast!!foo over TrackedArray, x.val = $(x.val)");
-                                   foo.(x.val))
-
-
-function main()
-    g = reset_default_graph()
-    a = TrackedReal(:a, 1.0)
-    b = TrackedReal(:b, 2.0)
-    c = a * b + a
-    println(g)
-
-    g = ExGraph()
-    A  = TrackedArray(g, :A, rand(3,4))
-    B  = TrackedArray(g, :B, rand(4,3))
-    C = A * B
-    println(g)
+macro unfuse(T)
+  T = esc(T)
+  quote
+    Base.broadcast(f, A::$T, Bs...) = f(Broadcasted(A), Broadcasted.(Bs)...) |> unwrap
+    Base.broadcast(f, A, B::$T, Cs...) = f(Broadcasted(A), Broadcasted(B), Broadcasted.(Cs)...) |> unwrap
+    Base.broadcast(f, A::$T, B::$T, Cs...) = f(Broadcasted(A), Broadcasted(B), Broadcasted.(Cs)...) |> unwrap
+  end
 end
+
+
+@unfuse TrackedArray
+
