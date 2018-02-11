@@ -170,7 +170,7 @@ function canonical(cur_mod::Module, qname)
         else
             error("Can't understand module of $f")
         end
-        
+
     catch e
         # if qname isn't defined in module `cur_mod`, return it as is
         if isa(e, UndefVarError)
@@ -368,44 +368,6 @@ end
 
 
 
-# function apply_guards(ex::Expr, guards::Vector{Expr}; keep=[])
-#     return apply_guards(ExH(ex), guards; keep=keep)
-# end
-
-
-# function apply_guards(ex::ExH{:block}, guards::Vector{Expr}; keep=[])
-#     res = Expr(:block)
-#     for subex in ex.args
-#         new_subex = apply_guards(subex, guards::Vector{Expr}; keep=[])
-#         push!(res.args, new_subex)
-#     end
-#     return res
-# end
-
-
-# function apply_guards(ex::ExH{:(=)}, guards::Vector{Expr}; keep=[])
-#     ex = Expr(ex)
-#     lhs, rhs = ex.args
-#     used = flatten(get_indices(ex; rec=true))
-#     keep = vcat(keep, flatten(get_indices(lhs)))
-#     st, new_guards = reduce_guards(guards; keep=keep, used=used)
-#     new_lhs = subs(lhs, st)
-#     new_rhs = with_guards(subs(rhs, st), new_guards)
-#     return :($new_lhs = $new_rhs)
-# end
-
-
-# function apply_guards(ex::ExH, guards::Vector{Expr}; keep=[])
-#     ex = Expr(ex)
-#     used = flatten(get_indices(ex; rec=true))
-#     st, new_guards = reduce_guards(guards; keep=keep, used=used)
-#     new_ex = with_guards(subs(ex, st), new_guards)
-#     return new_ex
-# end
-
-
-# apply_guards(x, guards::Vector{Expr}; keep=[]) = x
-
 
 # dot-operators & broadcasting
 
@@ -458,6 +420,8 @@ is_bcast(x) = error("Don't know if $x is a broadcast expression")
 
 """
 Given a call expression, parse regular and keyword arguments
+
+See also: split_args
 """
 function parse_call_args(ex::ExH{:call})
     if length(ex.args) == 1
@@ -467,6 +431,25 @@ function parse_call_args(ex::ExH{:call})
         return ex.args[3:end], kw_args
     else
         return ex.args[2:end], Dict()
+    end
+end
+
+
+"""
+Split parameters of a function signature, returning a list of (param name, param type) tuples
+and a list of keyword parameters.
+
+See also: parse_call_args
+"""
+function split_params(sig::Expr)
+    if length(sig.args) == 1
+        return Tuple{Symbol,Symbol}[], Any[]
+    elseif isa(sig.args[2], Expr) && sig.args[2].head == :parameters
+        kw_params = Any[a.args[1] => a.args[2] for a in sig.args[2].args]
+        params = [(arg.args[1], arg.args[2]) for arg in sig.args[3:end]]
+        return params, kw_params
+    else
+        return [(arg.args[1], arg.args[2]) for arg in sig.args[2:end]], []
     end
 end
 

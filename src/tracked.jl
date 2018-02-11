@@ -154,31 +154,33 @@ Base.convert(::Type{TrackedArray}, x::TrackedArray) = x
 
 
 
-# for op in (:reshape, )
-
-#     @eval function $op(x::TrackedArray, dims::Int...)
-#         val = $op(x.val, dims...)
-#         tv = tracked_val(x.graph, genname(), val)
-#         iop = Symbol($op)
-#         ex = Expr(:call, iop, x.var, dims...)
-#         nd = ExNode{:call}(tv.var, ex; val=val)
-#         push!(x.graph, nd)
-#         return tv
-#     end
-
-# end
-
-
-
 
 function track_call(sig)
     @assert sig.head == :call
     op = sig.args[1]
-    sig_vars, types = unzip([(arg.args[1], eval(arg.args[2])) for arg in sig.args[2:end]])
-    call_ex = Expr(:call, op,
-                [istracked(t) ? :($(v).val) : v for (v, t) in zip(sig_vars, types)]...)
-    ex_in_ex = Expr(:call, :Expr, QuoteNode(:call), QuoteNode(op),
-                    [Expr(:., sig_var, QuoteNode(:var)) for sig_var in sig_vars]...)
+    vars_types, kw = split_params(sig)
+    call_ex = nothing; ex_in_ex = nothing
+    if isempty(kw)
+        call_ex = Expr(:call, op,
+                       [istracked(eval(t)) ? :($(v).val) : v for (v, t) in vars_types]...)
+        ex_in_ex = Expr(:call, :Expr, QuoteNode(:call), QuoteNode(op),
+                        [istracked(eval(t)) ? Expr(:., sig_var, QuoteNode(:var)) : sig_var
+                         for (sig_var, t) in vars_types]...)
+    else        
+        call_ex = Expr(:call, op, make_kw_params(kw),
+                       [istracked(eval(t)) ? :($(v).val) : v for (v, t) in vars_types]...)
+        keys = [k for (k, v) in kw]
+
+        # we need to get this:
+        # :( Expr(:call, :mult, Expr(:parameters, Expr(:kw, :pow, pow)), :(x.var)) )
+        # TODO: no, this way we pass fixed paramerers instead of passed values - done!
+        ex_in_ex = Expr(:call, :Expr, QuoteNode(:call), QuoteNode(op),
+                        Expr(:call, :Expr, QuoteNode(:parameters),
+                             [Expr(:call, :Expr, QuoteNode(:kw), QuoteNode(k), k)
+                             for k in keys]...),
+                        [istracked(eval(t)) ? Expr(:., sig_var, QuoteNode(:var)) : sig_var
+                         for (sig_var, t) in vars_types]...)
+    end
 
     defquot = quote
         function $op($(sig.args[2:end]...))
@@ -201,7 +203,7 @@ function track_bcast(sig)
     bcast_ex = Expr(:., op, Expr(:tuple, [istracked(t) ? :($(v).val) : v
                                           for (v, t) in zip(sig_vars, types)]...))
     # we want to get this after code generation:
-    # ex = :(Expr(:., :sin, Expr(:tuple, x.var, y.var))) 
+    # ex = :(Expr(:., :sin, Expr(:tuple, x.var, y.var)))
     ex_in_ex = Expr(:call, :Expr, QuoteNode(:.), QuoteNode(:sin),
                     Expr(:call, :Expr, QuoteNode(:tuple),
                          [Expr(:., sig_var, QuoteNode(:var)) for sig_var in sig_vars]...))
@@ -240,9 +242,29 @@ end
 @tracked *(x::TrackedArray, y::TrackedArray)
 @tracked maximum(x::TrackedArray)
 
+@tracked reshape(x::TrackedArray, dims::Tuple{Int})
+@tracked reshape(x::TrackedArray, dims::Tuple{Int, Int})
+@tracked reshape(x::TrackedArray, dims::Tuple{Int, Int, Int})
+@tracked reshape(x::TrackedArray, dims::Tuple{Int, Int, Int, Int})
+@tracked reshape(x::TrackedArray, dims::Tuple{Int, Int, Int, Int, Int})
+@tracked reshape(x::TrackedArray, dims::Tuple{Int, Int, Int, Int, Int, Int})
 
 @tracked sin.(x::TrackedArray)
 @tracked cos.(x::TrackedArray)
+
+
+
+## why this one doesn't work?
+# for (op, dotop) in [(+, .+), (-, .-), (*, .*), (/, ./)]
+#     @eval function broadcast_(::typeof($op), x::TrackedArray, y::TrackedArray)
+#         val = $dotop(x.val, y.val)
+#         var = genname()
+#         nd = ExNode{:call}(var, :($(x.var) $dotop $(y.var)))
+#         push!(x.graph, nd)
+#         return TrackedArray(var, val)
+#     end
+# end
+
 
 
 # I couldn't find a way to overload .+ and friends as either call or broadcasting
@@ -281,6 +303,12 @@ end
 # tests
 
 
+mult(x::Array; pow=2, bias=1) = x .^ pow .+ bias
+
+@tracked mult(x::TrackedArray; pow=2, bias=1)
+
+
+
 function main()
     g = reset_default_graph()
     a = TrackedReal(:a, 1.0)
@@ -296,17 +324,7 @@ function main()
 
 
     sin.(A)
-end
 
 
-
-
-
-function example(f_vars::Vector{Symbol})
-    quote
-        function foo($(f_vars...))
-            ex_vars = [ :($v.name) for v in $f_vars ]
-            Expr(:call, :op, ex_vars...)
-        end
-    end
+    sig = :(conv2d(x::TrackedArray, w::TrackedArray; stride=1))
 end
