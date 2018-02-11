@@ -13,7 +13,7 @@ end
 unwrap(w::Broadcasted) = w.x
 
 # We must hack each function we want to use with un-fused broadcasting.
-for f in :[sin, cos, +, -, *, /, %, ^, <, <=, >, >=, !=, ==].args
+for f in :[sin, cos, exp, log, +, -, *, /, %, ^, <, <=, >, >=, !=, ==].args
   @eval Base.$f(a::Broadcasted...) = Broadcasted(broadcast_($f, unwrap.(a)...))
 
   #sometimes literals "resist" wrapping, so catch them too

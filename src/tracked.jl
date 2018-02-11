@@ -10,6 +10,7 @@ const DEFAULT_GRAPH = Ref(ExGraph())
 get_default_graph() = DEFAULT_GRAPH[]
 set_default_graph(g::ExGraph) = (DEFAULT_GRAPH[] = g)
 reset_default_graph() = (DEFAULT_GRAPH[] = ExGraph())
+swap_default_graph!(g::ExGraph) = (og = DEFAULT_GRAPH[]; DEFAULT_GRAPH[] = g; og)
 
 
 ## TRACKED REAL
@@ -117,7 +118,7 @@ function track_call(sig)
         ex_in_ex = Expr(:call, :Expr, QuoteNode(:call), QuoteNode(op),
                         [istracked(eval(t)) ? Expr(:., sig_var, QuoteNode(:var)) : sig_var
                          for (sig_var, t) in vars_types]...)
-    else        
+    else
         call_ex = Expr(:call, op, make_kw_params(kw),
                        [istracked(eval(t)) ? :($(v).val) : v for (v, t) in vars_types]...)
         keys = [k for (k, v) in kw]
@@ -152,7 +153,7 @@ function track_bcast(sig)
                                           for (v, t) in zip(sig_vars, types)]...))
     # we want to get this after code generation:
     # ex = :(Expr(:., :sin, Expr(:tuple, x.var, y.var)))
-    ex_in_ex = Expr(:call, :Expr, QuoteNode(:.), QuoteNode(:sin),
+    ex_in_ex = Expr(:call, :Expr, QuoteNode(:.), QuoteNode(op),
                     Expr(:call, :Expr, QuoteNode(:tuple),
                          [Expr(:., sig_var, QuoteNode(:var)) for sig_var in sig_vars]...))
     defquot = quote
@@ -181,6 +182,7 @@ macro tracked(sig)
     if sig.head == :call
         return track_call(sig)
     elseif sig.head == :.
+        # TODO: we also need to add the op to broadcast list in `unfuse.jl`
         return track_bcast(sig)
     else
         error("Can only track calls or broadcasting")
@@ -208,8 +210,13 @@ end
 @tracked reshape(x::TrackedArray, dims::Tuple{Int, Int, Int, Int, Int})
 @tracked reshape(x::TrackedArray, dims::Tuple{Int, Int, Int, Int, Int, Int})
 
+@tracked sum(x::TrackedArray)
+@tracked mean(x::TrackedArray)
+
 @tracked sin.(x::TrackedArray)
 @tracked cos.(x::TrackedArray)
+@tracked exp.(x::TrackedArray)
+@tracked log.(x::TrackedArray)
 
 
 ## why this one doesn't work?
@@ -217,7 +224,7 @@ end
 #     @eval function broadcast_(::typeof($op), x::TrackedArray, y::TrackedArray)
 #         val = $dotop(x.val, y.val)
 #         var = genname()
-#         nd = ExNode{:call}(var, :($(x.var) $dotop $(y.var)))
+#         nd = ExNode{:call}(var, :($(x.var) $dotop $(y.var)); val=val)
 #         push!(x.graph, nd)
 #         return TrackedArray(var, val)
 #     end
@@ -229,59 +236,28 @@ end
 function broadcast_(::typeof(+), x::TrackedArray, y::TrackedArray)
     val = x.val .+ y.val
     var = genname()
-    nd = ExNode{:call}(var, :($(x.var) .+ $(y.var)))
+    nd = ExNode{:call}(var, :($(x.var) .+ $(y.var)); val=val)
     push!(x.graph, nd)
     return TrackedArray(var, val)
 end
 function broadcast_(::typeof(-), x::TrackedArray, y::TrackedArray)
     val = x.val .- y.val
     var = genname()
-    nd = ExNode{:call}(var, :($(x.var) .- $(y.var)))
+    nd = ExNode{:call}(var, :($(x.var) .- $(y.var)); val=val)
     push!(x.graph, nd)
     return TrackedArray(var, val)
 end
 function broadcast_(::typeof(*), x::TrackedArray, y::TrackedArray)
     val = x.val .* y.val
     var = genname()
-    nd = ExNode{:call}(var, :($(x.var) .* $(y.var)))
+    nd = ExNode{:call}(var, :($(x.var) .* $(y.var)); val=val)
     push!(x.graph, nd)
     return TrackedArray(var, val)
 end
 function broadcast_(::typeof(/), x::TrackedArray, y::TrackedArray)
     val = x.val ./ y.val
     var = genname()
-    nd = ExNode{:call}(var, :($(x.var) ./ $(y.var)))
+    nd = ExNode{:call}(var, :($(x.var) ./ $(y.var)); val=val)
     push!(x.graph, nd)
     return TrackedArray(var, val)
-end
-
-
-
-# tests
-
-
-mult(x::Array; pow=2, bias=1) = x .^ pow .+ bias
-
-@tracked mult(x::TrackedArray; pow=2, bias=1)
-
-
-
-function main()
-    g = reset_default_graph()
-    a = TrackedReal(:a, 1.0)
-    b = TrackedReal(:b, 2.0)
-    c = a * b + a
-    println(g)
-
-    g = reset_default_graph()
-    A = TrackedArray(g, :A, rand(3,4))
-    b = TrackedArray(g, :b, rand(3))
-    C = A * B
-    println(g)
-
-
-    sin.(A)
-
-
-    sig = :(conv2d(x::TrackedArray, w::TrackedArray; stride=1))
 end
