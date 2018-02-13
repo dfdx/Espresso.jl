@@ -50,8 +50,7 @@ function to_inplace(g::ExGraph, nd::Union{ExNode{:call}, ExNode{:bcast}, ExNode{
     # try broadcasting
     if is_bcast_vec(nd)
         lhs_is_scalar = isa(getvalue(nd), Number)
-        return make_elementwise(without_indices(to_expr_kw(nd));
-                                lhs_is_scalar=lhs_is_scalar)
+        return make_elementwise(to_expr_kw(nd); lhs_is_scalar=lhs_is_scalar)
     end
     # if LHS is an array, use .= instead of =
     if isa(getvalue(nd), AbstractArray)
