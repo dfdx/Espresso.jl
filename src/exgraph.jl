@@ -24,7 +24,14 @@ function ExGraph(ex::Expr; fuse=true, ctx=Dict(), inputs...)
     ctx = to_context(ctx)
     g = ExGraph(;ctx=ctx, inputs...)
     g.ctx[:expr] = ex
-    parse!(g, ex)
+    method = @get(g.ctx, :method, :parse)
+    if method == :parse
+        parse!(g, ex)
+    elseif method == :track
+        eval_tracked!(g, ex, inputs...)
+    else
+        error("Method $method is not supported")
+    end
     if fuse
         g = fuse_assigned(g)
     end
@@ -96,6 +103,18 @@ function to_expr_kw(g::AbstractExGraph)
         end
     end
     return res
+end
+
+
+function eval_tracked!(g::ExGraph, ex::Expr, inputs...)
+    og = swap_default_graph!(g)
+    evex = ex.head == :block ? deepcopy(ex) : Expr(:block, deepcopy(ex))
+    for (var, val) in inputs    
+        tv = isa(val, AbstractArray) ? TrackedArray(g, var, val) : TrackedReal(g, var, val)
+        unshift!(evex.args, :($var = $tv))
+    end
+    eval(evex)
+    return swap_default_graph!(og)
 end
 
 
@@ -312,10 +331,10 @@ end
 
 ## reparsing of opaque nodes
 
-function reparse(g::AbstractExGraph)
+function reparse(g::AbstractExGraph; all=false)
     new_g = reset_tape(g)
     for nd in g.tape
-        if isa(nd, ExNode{:opaque})
+        if all || isa(nd, ExNode{:opaque})
             parse!(new_g, to_expr(nd))
         else
             push!(new_g, nd)

@@ -1,7 +1,7 @@
-
+ 
 # core.jl - single place to load all package definitions.
 #
-# If you are willing to learn the package structure, just go through
+# If you want to learn the package structure, just go through
 # included files one by one, read header notes and other comments
 
 using DataStructures
@@ -18,6 +18,8 @@ include("indexing.jl")
 include("preprocess.jl")
 include("exnode.jl")
 include("exgraph.jl")
+include("tracked.jl")
+include("unfuse.jl")
 include("eingraph.jl")
 include("evaluate.jl")
 include("graph_utils.jl")
@@ -26,8 +28,6 @@ include("expand_deps.jl")
 include("optimize.jl")
 include("propagate_size.jl")
 include("merge.jl")
-# include("to_einstein.jl")
-# include("from_einstein.jl")
 include("inplace.jl")
 include("codegen.jl")
 include("destruct.jl")

@@ -42,6 +42,11 @@ end
 const RECOVER_LOWERED_RULES = [
     :(Base.broadcast(_f, _xs...)) => :(_f.(_xs...)),
     :(Base.broadcast(_m._f, _xs...)) => :(_m._f.(_xs...)),
+    :(A_mul_B(_x, _y)) => :(_x * _y),
+    :(A_mul_Bt(_x, _y)) => :(_x * _y'),
+    :(At_mul_B(_x, _y)) => :(_x' * _y),
+    :(A_mul_Bc(_x, _y)) => :(_x * _y'),
+    :(Ac_mul_B(_x, _y)) => :(_x' * _y),
     :(Base.literal_pow(Main.:^, _x, _v)) => :(_x ^ _v),
     :(Core.apply_type(Base.Val, _x)) => :_x,
     # :(Core.getfield(_x, _y)) => :(_x._y),
@@ -89,6 +94,16 @@ function recover_lowered(ex::ExH{H}) where H
 end
 
 
+function recover_lowered_rec(ex)
+    ex_old = ex
+    ex = recover_lowered(ex)
+    # TODO: create a function for this
+    while string(ex) != string(ex_old)  # no more changes
+        ex_old = ex
+        ex = recover_lowered(ex)
+    end
+    return ex
+end
 
 ## funexpr
 
@@ -174,7 +189,7 @@ function funexpr(f::Union{Function, DataType, UnionAll}, types::NTuple{N,DataTyp
         if isa(err, LoadError)
             code = code_lowered(f, types)[1]
             args = convert(Vector{Symbol}, code.slotnames[2:end])
-            ex = to_expr(code) |> sanitize |> recover_lowered
+            ex = to_expr(code) |> sanitize |> recover_lowered_rec
             # ex = subs(ex, Dict(:new => parse(string(f))))
             return args, ex
         else
