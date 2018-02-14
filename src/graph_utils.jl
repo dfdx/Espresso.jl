@@ -75,23 +75,6 @@ function expand_const(g::AbstractExGraph, ex)
     return subs(ex, st)
 end
 
-## reindex from beginning
-
-function reindex_from_beginning(g::EinGraph)
-    new_g = reset_tape(g)
-    for nd in g.tape
-        full_ex = to_expr(nd)
-        idxs = unique(flatten(get_indices(full_ex)))
-        idxs = [idx for idx in idxs if idx != :(:) && idx != :(::)]  # skip [:] indices
-        new_idxs = IDX_NAMES[1:length(idxs)]
-        st = Dict(zip(idxs, new_idxs))
-        new_full_ex = subs(full_ex, st)
-        C = getcategory(nd)
-        push!(new_g, ExNode{C}(new_full_ex; val=getvalue(nd)))
-    end
-    return new_g
-end
-
 
 reindex_from_beginning(g::ExGraph) = g
 

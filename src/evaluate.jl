@@ -77,17 +77,6 @@ function evaluate!(g::ExGraph, nd::ExNode{:constant}; force=false)
 end
 
 
-function evaluate!(g::EinGraph, nd::ExNode{:constant}; force=false)
-    # note: in case of broadcasting (e.g. `x[i] = 1.0`) node value may change
-    # after evaluation, e.g. become `[1.0, 1.0, 1.0]` instead of `1.0`
-    # this is correct and desired behavior; caching value is thus NOT allowed
-    val = eval(g.ctx[:mod], mk_eval_expr(g, nd))
-    setvalue!(nd, val)
-    remember_size!(g, nd)
-    return getvalue(nd)
-end
-
-
 function evaluate!(g::AbstractExGraph, nd::ExNode{:input}; force=false)
     remember_size!(g, nd)
     return getvalue(nd)
