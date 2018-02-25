@@ -59,8 +59,8 @@ function tracked(g::ExGraph, x::T) where {T <: AbstractArray}
 end
 
 
-value(x::TrackedArray) = x.v
-value(x::TrackedReal) = x.v
+value(x::TrackedArray) = x.val
+value(x::TrackedReal) = x.val
 value(x) = x
 
 istracked(x::TrackedReal) = true
@@ -79,6 +79,7 @@ function Base.convert(::Type{TrackedReal}, x::R) where {R <: Real}
 end
 
 Base.convert(::Type{TrackedReal}, x::TrackedReal) = x
+Base.convert(::Type{R}, x::TrackedReal) where {R <: Real} = x.val
 
 
 ## TRACKED ARRAY
@@ -103,7 +104,7 @@ function Base.convert(::Type{TrackedArray}, x::A) where {A <: AbstractArray}
 end
 
 Base.convert(::Type{TrackedArray}, x::TrackedArray) = x
-
+# Base.convert(::Type{<:AbstractArray}, x::TrackedArray) = x.val
 
 ## @tracked macro
 
@@ -155,7 +156,8 @@ function track_bcast(sig)
     # ex = :(Expr(:., :sin, Expr(:tuple, x.var, y.var)))
     ex_in_ex = Expr(:call, :Expr, QuoteNode(:.), QuoteNode(op),
                     Expr(:call, :Expr, QuoteNode(:tuple),
-                         [Expr(:., sig_var, QuoteNode(:var)) for sig_var in sig_vars]...))
+                         [istracked(t) ? Expr(:., sv, QuoteNode(:var)) : QuoteNode(:var)
+                          for (sv, t) in zip(sig_vars, types)]...))
     defquot = quote
         function broadcast_(::typeof($op), $(sig.args[2].args...))
             val = $bcast_ex
@@ -217,6 +219,7 @@ end
 @tracked cos.(x::TrackedArray)
 @tracked exp.(x::TrackedArray)
 @tracked log.(x::TrackedArray)
+@tracked log.(b::Integer, x::TrackedArray)
 
 
 ## why this one doesn't work?
@@ -261,3 +264,5 @@ function broadcast_(::typeof(/), x::TrackedArray, y::TrackedArray)
     push!(x.graph, nd)
     return TrackedArray(var, val)
 end
+
+# TODO: also track dot ops with scalars, e.g. x .+ 1
