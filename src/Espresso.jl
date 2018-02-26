@@ -77,6 +77,7 @@ export
     remove_unused,
     eliminate_common,
     inline_nodes,
+    graph_hash,
     # expr utils
     mergeex,
     sanitize,

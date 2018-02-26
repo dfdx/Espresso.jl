@@ -172,3 +172,23 @@ function inc_var_name(var::Symbol)
         return Symbol("$(svar)2")
     end
 end
+
+
+
+function rename_from_beginning(g::ExGraph)
+    new_g = deepcopy(g)
+    vars = [getvar(nd) for nd in g]
+    new_vars = [Symbol("var$i") for i=1:length(vars)]
+    st = Dict(zip(vars, new_vars))
+    rename!(new_g, st)
+    return new_g
+end
+
+
+"""
+A single number to represent a graph.
+Insensitive to variable names.
+"""
+function graph_hash(g::ExGraph)
+    return rename_from_beginning(g) |> to_expr |> hash
+end
