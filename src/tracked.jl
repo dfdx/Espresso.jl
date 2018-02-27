@@ -266,3 +266,21 @@ function broadcast_(::typeof(/), x::TrackedArray, y::TrackedArray)
 end
 
 # TODO: also track dot ops with scalars, e.g. x .+ 1
+
+
+## utils
+
+function tracked_exgraph(f::Function, args...)
+    ctx = Dict{Any,Any}(:method => :track)
+    input_vars = [genname() for i=1:length(args)]
+    inputs = [iv => a for (iv, a) in zip(input_vars, args)]
+    g = ExGraph(; ctx=ctx, inputs...)
+    # replace default graph to capture constants to `g` as well
+    og = swap_default_graph!(g)
+    tr_args = [tracked_val(g, var, val) for (var, val) in inputs]
+    # evaluate function with tracked args
+    f(tr_args...)
+    # put original graph back
+    swap_default_graph!(og)
+    return g
+end

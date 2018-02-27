@@ -81,6 +81,11 @@ export
     # expr utils
     mergeex,
     sanitize,
+    # tracking
+    TrackedArray,
+    TrackedReal,
+    tracked_val,
+    tracked_exgraph,
     # conversions
     to_buffered,
     to_inplace,
