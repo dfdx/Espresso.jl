@@ -2,9 +2,9 @@
 ## added some functions that need broadcasting
 
 import Base: ^
-using Base.Broadcast: broadcast_c, containertype
 
-broadcast_(f, A, Bs...) = broadcast_c(f, containertype(A, Bs...), A, Bs...)
+broadcast_(f, A, Bs...) = broadcast(f, Broadcast.ArrayStyle, nothing, nothing, A, Bs...)
+
 
 struct Broadcasted{T}
   x::T
@@ -25,14 +25,15 @@ end
 ^(a::Broadcasted, b::Integer) = Broadcasted(broadcast_(^, unwrap(a), b))
 
 macro unfuse(T)
-  T = esc(T)
-  quote
-    Base.broadcast(f, A::$T, Bs...) = f(Broadcasted(A), Broadcasted.(Bs)...) |> unwrap
-    Base.broadcast(f, A, B::$T, Cs...) = f(Broadcasted(A), Broadcasted(B), Broadcasted.(Cs)...) |> unwrap
-    Base.broadcast(f, A::$T, B::$T, Cs...) = f(Broadcasted(A), Broadcasted(B), Broadcasted.(Cs)...) |> unwrap
+    T = esc(T)
+    quote
+        Base.broadcast(f, A::$T, Bs...) = f(Broadcasted(A), Broadcasted.(Bs)...) |> unwrap
+        Base.broadcast(f, A, B::$T, Cs...) = f(Broadcasted(A), Broadcasted(B), Broadcasted.(Cs)...) |> unwrap
+        Base.broadcast(f, A::$T, B::$T, Cs...) = f(Broadcasted(A), Broadcasted(B), Broadcasted.(Cs)...) |> unwrap
+        Base.BroadcastStyle(::Type{<:$T}) = Broadcast.ArrayStyle{$T}()
+
   end
 end
 
 
 @unfuse TrackedArray
-

@@ -9,7 +9,7 @@ mutable struct ExGraph <: AbstractExGraph
     ctx::Dict{Any,Any}             # settings and caches
 end
 
-function ExGraph(; ctx=Dict(), inputs...)    
+function ExGraph(; ctx=Dict(), inputs...)
     ctx = to_context(ctx)
     @get_or_create(ctx, :mod, @__MODULE__)
     g = ExGraph(ExNode[], Dict(), ctx)
@@ -61,7 +61,7 @@ end
 
 Base.haskey(g::AbstractExGraph, var::Symbol) = haskey(g.idx, var)
 Base.in(var::Symbol, g::AbstractExGraph) = haskey(g, var)
-Base.endof(g::AbstractExGraph) = endof(g.tape)
+Base.lastindex(g::AbstractExGraph) = lastindex(g.tape)
 Base.length(g::AbstractExGraph) = length(g.tape)
 Base.get(g::AbstractExGraph, var::Symbol) = g.idx[var]
 Base.getindex(g::AbstractExGraph, var::Symbol) = g.idx[var]
@@ -109,9 +109,9 @@ end
 function eval_tracked!(g::ExGraph, ex::Expr, inputs...)
     og = swap_default_graph!(g)
     evex = ex.head == :block ? deepcopy(ex) : Expr(:block, deepcopy(ex))
-    for (var, val) in inputs    
+    for (var, val) in inputs
         tv = isa(val, AbstractArray) ? TrackedArray(g, var, val) : TrackedReal(g, var, val)
-        unshift!(evex.args, :($var = $tv))
+        pushfirst!(evex.args, :($var = $tv))
     end
     eval(evex)
     return swap_default_graph!(og)
@@ -139,7 +139,7 @@ function gennames(count::Int)
 end
 
 
-function rename_repeated(g::AbstractExGraph, ex)    
+function rename_repeated(g::AbstractExGraph, ex)
     st = @get_or_create(g.ctx, :renamings, Dict())
     st = prop_subs(st)
     return subs(ex, st)
@@ -254,7 +254,7 @@ function parse!(g::ExGraph, ex::ExH{:(=)})
     dep = parse!(g, rhs)
     if isa(lhs, Symbol)
         if haskey(g, lhs)
-            lhs = add_renaming!(g, lhs)            
+            lhs = add_renaming!(g, lhs)
         end
         push!(g, :(=), lhs, dep)
         return lhs
