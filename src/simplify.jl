@@ -86,6 +86,7 @@ end
 @simple_rule (x * 1) x
 @simple_rule (1 * x) x
 @simple_rule (x ^ 1) x
+@simple_rule (x ^ 0) 1
 @simple_rule (x .* 1) x
 @simple_rule (1 .* x) x
 @simple_rule (x .^ 1) x
