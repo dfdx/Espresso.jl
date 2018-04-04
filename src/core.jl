@@ -4,9 +4,9 @@
 # If you want to learn the package structure, just go through
 # included files one by one, read header notes and other comments
 
-# using Sugar
+using Sugar
 using LinearAlgebra
-import Base: CodeInfo
+import Base: CodeInfo, Slot
 
 include("types.jl")
 include("utils.jl")

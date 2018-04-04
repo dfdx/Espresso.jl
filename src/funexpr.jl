@@ -77,7 +77,7 @@ function recover_lowered(ex::ExH{:call})
     # check patterns
     for (pat, rpat) in RECOVER_LOWERED_RULES
         rex = tryrewrite(ex, pat, rpat)
-        if !isnull(rex)
+        if rex != nothing
             ex = get(rex)
             break
         end
@@ -109,7 +109,7 @@ end
 
 
 function replace_slots(ex::Expr, slotnames::Vector)
-    new_args = Array{Any}(length(ex.args))
+    new_args = Array{Any}(uninitialized, length(ex.args))
     for (i, arg) in enumerate(ex.args)
         if isa(arg, Slot)
             new_args[i] = slotnames[arg.id]
