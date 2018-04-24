@@ -11,7 +11,7 @@ sanitize(ex::LineNumberNode) = nothing
 sanitize(m::Module) = Symbol(string(m))
 sanitize(ex::ExH{:line}) = nothing
 sanitize(ex::ExH{:return}) = sanitize(ex.args[1])
-sanitize(ex::ExH{:macrocall}) = nothing  # note: ignoring macros, experimental
+# sanitize(ex::ExH{:macrocall}) = nothing  # note: ignoring macros, experimental
 
 function sanitize(ex::ExH{:block})
     sanitized_args = [sanitize(arg) for arg in ex.args]
