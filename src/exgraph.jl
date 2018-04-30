@@ -261,9 +261,10 @@ end
 
 function parse!(g::ExGraph, ex::ExH{:ref})
     ex = rename_repeated(g, ex)
-    @assert isa(ex.args[2], Number) "Currently only constant indices are supported"
+    # @assert isa(ex.args[2], Number) "Currently only constant indices are supported"
+    idx_vars = [parse!(g, v) for v in ex.args[2:end]]
     base = isa(ex.args[1], Symbol) ? ex.args[1] : parse!(g, ex.args[1])
-    vname = push!(g, :ref, genname(), Expr(:ref, base, ex.args[2:end]...))
+    vname = push!(g, :ref, genname(), Expr(:ref, base, idx_vars...))
     return vname
 end
 

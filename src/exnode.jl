@@ -145,7 +145,7 @@ dependencies(nd::ExNode{:(=)}) = get_var_names(getexpr(nd))
 dependencies(nd::ExNode{:call}) = get_var_names(getexpr(nd))
 dependencies(nd::ExNode{:bcast}) = get_var_names(getexpr(nd))
 dependencies(nd::ExNode{:tuple}) = [split_indexed(dep)[1] for dep in getexpr(nd).args]
-dependencies(nd::ExNode{:ref}) = [getexpr(nd).args[1]]
+dependencies(nd::ExNode{:ref}) = getexpr(nd).args
 dependencies(nd::ExNode{:opaque}) = get_var_names(getexpr(nd); rec=true)
 dependencies(nd::ExNode{:field}) = [getexpr(nd).args[1]]
 dependencies(nd::ExNode{:ctor}) =

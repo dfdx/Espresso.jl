@@ -17,7 +17,7 @@ function struct_like(m)
     catch e
         if e isa MethodError
             println("ERROR: Trying to instantiate mutable type $(typeof(m)), " *
-                    "but it doesn't have a default constructor")            
+                    "but it doesn't have a default constructor")
         end
         throw(e)
     end
