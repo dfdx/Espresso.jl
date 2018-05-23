@@ -15,6 +15,7 @@ end
 
 function generate_code(codegen::VectorCodeGen, g::ExGraph)
     # g = cast_const_type(nd, codegen.eltyp)
+    g = eliminate_common(g)
     ex = to_expr_kw(g)
     return ex
 end

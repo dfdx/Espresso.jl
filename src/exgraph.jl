@@ -237,6 +237,17 @@ function parse!(g::AbstractExGraph, x::AbstractArray)
 end
 
 
+function parse!(g::AbstractExGraph, x::ExH{:vect})
+    @assert all(e -> e isa Number, x.args) "Can only create vector literal node with numbers"
+    nums = convert(Vector{Float64}, x.args)
+    if haskey(g.ctx, :bitness)
+        nums = force_bitness(nums, Val(g.ctx[:bitness]))
+    end
+    var = push!(g, :constant, genname(), nums; val=nums)
+    return var
+end
+
+
 function parse!(g::ExGraph, ex::ExH{:(=)})
     lhs, rhs = ex.args
     rhs = rename_repeated(g, rhs)

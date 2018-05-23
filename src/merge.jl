@@ -6,8 +6,12 @@ end
 
 function rename!(g::AbstractExGraph, st::Dict{Symbol,Symbol})
     for nd in g.tape
-        setvar!(nd, subs(getvar(nd), st))
+        var = getvar(nd)
+        new_var = subs(var, st)
+        setvar!(nd, subs(var, st))
         setexpr!(nd, subs(getexpr(nd), st))
+        delete!(g.idx, var)
+        g.idx[new_var] = nd
     end
     return g
 end
