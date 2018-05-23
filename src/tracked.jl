@@ -2,7 +2,7 @@
 ## tracked.jl - build ExGraph using tracked data types
 
 import Base: +, -, *, /, log, exp, min, max, reshape, transpose, sum, mean,
-    minimum, maximum, getindex
+    abs, abs2, minimum, maximum, getindex
 
 
 const DEFAULT_GRAPH = Ref(ExGraph())
@@ -196,6 +196,15 @@ end
 @tracked -(x::TrackedReal, y::TrackedReal)
 @tracked *(x::TrackedReal, y::TrackedReal)
 @tracked /(x::TrackedReal, y::TrackedReal)
+
+@tracked -(x::TrackedReal)
+
+@tracked sin(x::TrackedReal)
+@tracked cos(x::TrackedReal)
+@tracked exp(x::TrackedReal)
+@tracked log(x::TrackedReal)
+@tracked abs(x::TrackedReal)
+@tracked abs2(x::TrackedReal)
 
 @tracked *(x::TrackedArray, y::TrackedArray)
 @tracked maximum(x::TrackedArray)
