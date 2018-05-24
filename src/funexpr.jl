@@ -199,3 +199,13 @@ function funexpr(f::Union{Function, DataType, UnionAll}, types::NTuple{N,DataTyp
 end
 
 func_expr = funexpr
+
+
+function get_or_generate_argnames(f, types)
+    try
+        args, _ = funexpr(f, types)
+        return args
+    catch
+        return [Symbol("arg$i") for i=1:length(types)]
+    end
+end

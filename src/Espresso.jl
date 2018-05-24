@@ -24,6 +24,7 @@ export
     funexpr,
     func_expr,
     func_name,
+    get_or_generate_argnames,
     # indexing
     split_indexed,
     make_indexed,
@@ -86,6 +87,8 @@ export
     TrackedReal,
     tracked_val,
     tracked_exgraph,
+    swap_default_graph!,
+    reset_default_graph!,
     # conversions
     to_buffered,
     to_inplace,

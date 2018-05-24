@@ -2,7 +2,7 @@
 ## tracked.jl - build ExGraph using tracked data types
 
 import Base: +, -, *, /, log, exp, min, max, reshape, transpose, sum, mean,
-    abs, abs2, minimum, maximum, getindex
+    abs, abs2, >, >=, <, <=, minimum, maximum, getindex
 
 
 const DEFAULT_GRAPH = Ref(ExGraph())
@@ -198,6 +198,10 @@ end
 @tracked /(x::TrackedReal, y::TrackedReal)
 
 @tracked -(x::TrackedReal)
+# @tracked (Base.:<=)(x::TrackedReal, y::TrackedReal)
+# @tracked (Base.:>)(x::TrackedReal, y::TrackedReal)
+# @tracked (Base.:>=)(x::TrackedReal, y::TrackedReal)
+# @tracked (Base.:<)(x::TrackedReal, y::TrackedReal)
 
 @tracked sin(x::TrackedReal)
 @tracked cos(x::TrackedReal)
@@ -230,8 +234,15 @@ end
 @tracked log.(x::TrackedArray)
 @tracked log.(b::Integer, x::TrackedArray)
 
+# TODO: make @nontracked macro?
+# boolean operators aren't tracked
+for op in [:<, :<=, :>, :>=, :(==)]
+    @eval (Base.$op)(x::TrackedReal, y::TrackedReal) = $op(x.val, y.val)
+end
 
-## why this one doesn't work?
+
+
+## why this one doesn't work
 # for (op, dotop) in [(+, .+), (-, .-), (*, .*), (/, ./)]
 #     @eval function broadcast_(::typeof($op), x::TrackedArray, y::TrackedArray)
 #         val = $dotop(x.val, y.val)
