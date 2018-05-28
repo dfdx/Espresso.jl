@@ -81,7 +81,7 @@ function evaluate!(g::ExGraph, nd::ExNode{:constant}; force=false)
     if getvalue(nd) == nothing && (isa(ex, Symbol) || isa(ex, Expr))
         # constant expression - need to evaluate it
         evex = mk_eval_expr(g, nd)
-        val = eval(g.ctx[:mod], evex)
+        val = Core.eval(g.ctx[:mod], evex)
         setvalue!(nd, val)
     end
     remember_size!(g, nd)
@@ -100,7 +100,7 @@ function evaluate!(g::AbstractExGraph, nd::ExNode{:(=)}; force=false)
     dep = dependencies(nd)[1]
     evaluate!(g, g[dep]; force=false)
     evex = mk_eval_expr(g, nd)
-    setvalue!(nd, eval(g.ctx[:mod], evex))
+    setvalue!(nd, Core.eval(g.ctx[:mod], evex))
     remember_size!(g, nd)
     return getvalue(nd)
 end
@@ -118,7 +118,7 @@ function evaluate!(g::AbstractExGraph, nd::ExNode; force=false)
         end
     end
     evex = mk_eval_expr(g, nd)
-    setvalue!(nd, eval(g.ctx[:mod], evex))
+    setvalue!(nd, Core.eval(g.ctx[:mod], evex))
     remember_size!(g, nd)
     return getvalue(nd)
 end
@@ -143,7 +143,8 @@ function evaluate!(g::AbstractExGraph; force=false)
         try
             evaluate!(g, g[i]; force=force)
         catch e
-            info("Failed to evaluate node: $(g[i])")
+            mod = @get(g.ctx, :mod, nothing)
+            @info("Failed to evaluate node (in module $mod): $(g[i])")
             throw(e)
         end
     end

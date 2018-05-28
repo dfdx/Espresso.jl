@@ -9,9 +9,10 @@ include("codegens/gpu.jl")
 
 
 function autoselect_codegen(inputs)
-    first_array_idx = findfirst(a -> isa(a, AbstractArray) && eltype(a) != Any,
+    # assuming inputs is Base.Iterators.Pairs or Vector{Any} with pairs
+    first_array_idx = findfirst(a -> isa(a, AbstractArray) && eltype(a) != Any, 
                                 [v for (k,v) in inputs])
-    first_array_idx > 0 || return VectorCodeGen()
+    first_array_idx != nothing || return VectorCodeGen()
     eltyp = eltype(inputs[first_array_idx][2])
     # we don't want to include CuArrays as dependency, so working on strings
     if any(startswith(string(typeof(v)), "CuArray") for (k, v) in inputs)
@@ -20,27 +21,3 @@ function autoselect_codegen(inputs)
         return BufCodeGen(eltyp)
     end
 end
-
-
-# """
-# Cast types or element types of constants to `typ` to avoid performance issues
-# """
-# function cast_const_type(nd::ExNode, typ::Type)
-    
-#     if isa(nd, ExNode{:constant}) && isa(getvalue(nd), AbstractFloat)
-#         new_val = typ(getvalue(nd))
-#         new_nd = copy(nd; val=new_val, ex=new_val)        
-#     else
-#         new_nd = copy(nd)
-#     end
-#     return new_nd
-# end
-
-
-# function cast_const_type(g::AbstractExGraph, typ::Type)
-#     new_g = reset_tape(g)
-#     for nd in g
-#         push!(new_g, cast_const_type(nd, typ))
-#     end
-#     return new_g
-# end

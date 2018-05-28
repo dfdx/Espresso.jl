@@ -4,7 +4,7 @@
 # If you want to learn the package structure, just go through
 # included files one by one, read header notes and other comments
 
-using Sugar
+# using Sugar
 using LinearAlgebra
 import Base: CodeInfo, Slot
 
@@ -12,13 +12,13 @@ include("types.jl")
 include("utils.jl")
 include("rewrite.jl")
 include("simplify.jl")
+include("sugar.jl")
 include("funexpr.jl")
 include("indexing.jl")
 include("preprocess.jl")
 include("exnode.jl")
 include("exgraph.jl")
 include("tracked.jl")
-include("unfuse.jl")
 include("evaluate.jl")
 include("graph_utils.jl")
 include("expand_deps.jl")

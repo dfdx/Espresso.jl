@@ -11,6 +11,7 @@ sanitize(ex::LineNumberNode) = nothing
 sanitize(m::Module) = Symbol(string(m))
 sanitize(ex::ExH{:line}) = nothing
 sanitize(ex::ExH{:return}) = sanitize(ex.args[1])
+sanitize(x::Core.SSAValue) = Symbol("SSAValue_$(x.id)")
 # sanitize(ex::ExH{:macrocall}) = nothing  # note: ignoring macros, experimental
 
 function sanitize(ex::ExH{:block})
@@ -109,7 +110,7 @@ end
 
 
 function replace_slots(ex::Expr, slotnames::Vector)
-    new_args = Array{Any}(uninitialized, length(ex.args))
+    new_args = Array{Any}(undef, length(ex.args))
     for (i, arg) in enumerate(ex.args)
         if isa(arg, Slot)
             new_args[i] = slotnames[arg.id]
@@ -165,7 +166,7 @@ end
 Replace all calls to an inner constructor with the corresponding outer constructor
 """
 function replace_inner_constr(f, ex::Expr)
-    f_name = parse(string(f))
+    f_name = Meta.parse(string(f))
     constr = :($f_name(_xs...))
     ex = rewrite_all(ex, :(new{_T1, _T2, _T3}(_xs...)), constr)
     ex = rewrite_all(ex, :(new{_T1, _T2}(_xs...)), constr)
@@ -176,12 +177,12 @@ end
 
 
 function funexpr(f::Union{Function, DataType, UnionAll}, types::NTuple{N,DataType}) where N
-    method = Sugar.get_method(f, types)
+    method = get_method(f, types)
     file = string(method.file)
     linestart = method.line
     try
-        ex, _ = Sugar.get_source_at(file, linestart)
-        ex.head == :toplevel && throw(LoadError(file, linestart, "Bad code found"))
+        ex, _ = get_source_at(file, linestart)
+        ex.head == :toplevel && throw(LoadError(file, Int(linestart), "Bad code found"))
         ex = concretise_types(ex, types)
         ex = replace_inner_constr(f, ex)
         return arg_names(ex.args[1]), sanitize(ex.args[2])

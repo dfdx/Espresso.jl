@@ -1,8 +1,0 @@
-authors = ["Andrei Zhabinski <andrei.zhabinski@gmail.com>"]
-name = "Espresso"
-uuid = "54998882-6107-11e8-04e6-8f7493601179"
-version = "0.4.2"
-
-[deps]
-DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
-Sugar = "e18849f4-891b-50d0-807d-7841c4cb7c8f"

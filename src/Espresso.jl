@@ -7,6 +7,11 @@ export
     # utils
     ExH,
     to_block,
+    parse_call_args,
+    parse_call_expr,
+    make_call_expr,
+    with_keywords,
+    without_keywords,
     # rewrite
     matchex,
     matchingex,
@@ -15,7 +20,7 @@ export
     rewrite,
     tryrewrite,
     rewrite_all,
-    without,
+    without,    
     set_default_placeholders,
     # simplification
     simplify,
@@ -38,9 +43,6 @@ export
     forall_sum_indices,
     forall_indices,
     sum_indices,
-    find_guards,
-    with_guards,
-    without_guards,
     # ExNode
     ExNode,
     getcategory,
@@ -113,7 +115,9 @@ export
     squeeze_sum,
     squeeze_sum_1,
     squeeze_sum_2,
-    __construct
+    __construct,
+    # re-export
+    mul!
 
 
 
