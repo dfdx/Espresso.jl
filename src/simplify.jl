@@ -37,19 +37,18 @@ is_calculable(ex::Expr) = (ex.head == :call
                                          for arg in ex.args[2:end]]))
 is_calculable(c::Colon) = false
 
-tryeval(ex) = is_calculable(ex) ? Nullable(eval(ex)) : Nullable()
+tryeval(ex) = is_calculable(ex) ? eval(ex) : nothing
 
 
 function _simplify(ex::Expr)
     evaled = tryeval(ex)
-    if !isnull(evaled)
-        return get(evaled)
+    if evaled != nothing
+        return evaled
     else
         simplified_args = [_simplify(arg) for arg in ex.args]
         ex_new_args = Expr(ex.head, simplified_args...)
         for (pat, subex) in SIMPLE_RULES
-            st = matchex(pat, ex_new_args; phs=SIMPLE_PHS)
-            if !isnull(st)
+            if matchingex(pat, ex_new_args; phs=SIMPLE_PHS)
                 return rewrite(ex_new_args, pat, subex; phs=SIMPLE_PHS)
             end
         end

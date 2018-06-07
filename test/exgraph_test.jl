@@ -1,15 +1,14 @@
-
 @testset "exgraph" begin
-    begin
+    let
         g = ExGraph()
-        g = ExGraph(ctx=[:foo => 42], x=1)
+        g = ExGraph(;ctx=[:foo => 42], x=1)
         @test g.ctx[:foo] == 42
         @test getvalue(g[1]) == 1    
     end
 
     let
         g = ExGraph(:(z = (x + y)^2); x=1, y=1)
-        @test length(g.tape) == 5     # check that fuse_assigned() removed extra var
+        @test length(g) == 5     # check that fuse_assigned() removed extra var
         @test varname(g[5]) == :z
         @test evaluate!(g) == 4
 

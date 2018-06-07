@@ -94,17 +94,17 @@ function flatten1(a::Vector{Vector{T}}) where T
 end
 
 
-function countdict(a::AbstractArray{T}) where T
-    counts = OrderedDict{T, Int}()
-    for x in a
-        if haskey(counts, x)
-            counts[x] += 1
-        else
-            counts[x] = 1
-        end
-    end
-    return counts
-end
+# function countdict(a::AbstractArray{T}) where T
+#     counts = OrderedDict{T, Int}()
+#     for x in a
+#         if haskey(counts, x)
+#             counts[x] += 1
+#         else
+#             counts[x] = 1
+#         end
+#     end
+#     return counts
+# end
 
 
 unzip(coll) = map(collect, zip(coll...))
@@ -113,9 +113,10 @@ unzip(coll) = map(collect, zip(coll...))
 
 ## package-specific stuff
 
-func_name(f) = Base.function_name(f)
+# func_name(f) = Base.function_name(f)
+func_name(f) = nameof(f)
 # func_mod(f) = Base.function_module(f)
-func_mod(f) = Base.datatype_module(typeof(f))
+func_mod(f) = Base.parentmodule(typeof(f))
 
 
 """
@@ -147,14 +148,15 @@ Return canonical representation of a function name, e.g.:
 """
 function canonical(cur_mod::Module, qname)
     try
-        f = eval(cur_mod, qname)
+        f = Core.eval(cur_mod, qname)
         if f isa Function
             mod = func_mod(f)
             name = func_name(f)
+            # TODO: review operators and module names for Julia 0.7/1.0
             if qname in [:.*, :./, :.+, :.-, :.^, :.>, :.<, :.>=, :.<=, :.==]
                 return qname  # for Julia 0.6 only
             elseif (mod == cur_mod || mod == Main || mod == Base || mod == Base.Math ||
-                    mod == Base.LinAlg || mod == Base.DSP)
+                    mod == Base.DSP)
                 return Symbol(name)
             else
                 # there should be a smarter way to do it...
@@ -170,7 +172,6 @@ function canonical(cur_mod::Module, qname)
         else
             error("Can't understand module of $f")
         end
-
     catch e
         # if qname isn't defined in module `cur_mod`, return it as is
         if isa(e, UndefVarError)
@@ -210,111 +211,6 @@ end
 to_context(d::Dict{Any,Any}) = d
 to_context(x) = x
 
-# guards
-
-# """create cross-reference dict of cliques"""
-# function cliqueset(pairs::Vector{Tuple{T,T}}) where T
-#     cliques = Dict{T, Set{T}}()
-#     for (x1, x2) in pairs
-#         has_x1 = haskey(cliques, x1)
-#         has_x2 = haskey(cliques, x2)
-#         if !has_x1 && !has_x2
-#             set = Set([x1, x2])
-#             cliques[x1] = set
-#             cliques[x2] = set
-#         elseif has_x1 && !has_x2
-#             push!(cliques[x1], x2)
-#             cliques[x2] = cliques[x1]
-#         elseif !has_x1 && has_x2
-#             push!(cliques[x2], x1)
-#             cliques[x1] = cliques[x2]
-#         end
-#     end
-#     return cliques
-# end
-
-
-# function crosspairs(pairs::Vector{Tuple{T,T}}) where T
-#     cliques = cliqueset(pairs)
-#     xpairs = Set{Tuple{T,T}}()
-#     for (x, ys) in cliques
-#         for y in ys
-#             if x != y
-#                 mn, mx = min(x, y), max(x, y)
-#                 push!(xpairs, (mn, mx))
-#             end
-#         end
-#     end
-#     return xpairs
-# end
-
-
-# function reduce_equalities(pairs::Vector{Tuple{T,T}}, anchors::Set{T}; replace_anchors=true) where T
-#     # Q: Why do we need prop_subs here?
-#     # cliques = cliqueset([(k, v) for (k, v) in prop_subs(Dict(pairs))])
-#     cliques = cliqueset(pairs)
-#     st = Dict{T,T}()
-#     new_pairs = Set{Tuple{T,T}}()
-#     for (x, ys) in cliques
-#         for y in ys
-#             if x == y
-#                 continue
-#             elseif in(x, anchors) && in(y, anchors)
-#                 # replace larger anchor with smaller one, keep pair
-#                 mn, mx = min(x, y), max(x, y)
-#                 if replace_anchors
-#                     st[mx] = mn
-#                 end
-#                 push!(new_pairs, (mn, mx))
-#             elseif in(x, anchors)
-#                 # replace non-anchor with anchor
-#                 st[y] = x
-#             elseif !in(x, anchors) && !in(y, anchors)
-#                 # replace larger element with smaller one
-#                 mn, mx = min(x, y), max(x, y)
-#                 st[mx] = mn
-#             end
-#         end
-#     end
-#     return st, collect(new_pairs)
-# end
-
-
-# """
-# Reduce a list of guards. Optional parameters:
-
-#  * keep : iterable, indices that need to be kept; default = []
-#  * used : iterable, indices used in indexed expression; default = all indices
-
-# """
-# function reduce_guards(guards::Vector{Expr}; keep=[], used=nothing)
-#     keep = Set{Any}(keep)
-#     pairs = [(g.args[2], g.args[3]) for g in guards]
-#     xpairs = crosspairs(pairs)
-#     used = used == nothing ? Set(flatten(map(collect, pairs))) : Set{Any}(used)
-#     ordered = [(min(x, y), max(x, y)) for (x, y) in xpairs if in(x, used) && in(y, used)]
-#     st = Dict{Any,Any}()
-#     new_pairs = Tuple{Any,Any}[]
-#     for (x, y) in ordered
-#         if in(x, keep) && in(y, keep)
-#             # requested to keep both indices, don't replace anything
-#             push!(new_pairs, (x, y))
-#         elseif in(x, keep)
-#             # replace 2nd element with the 1st one
-#             st[y] = x
-#         elseif in(y, keep)
-#             # replace 1st element with the 2nd one
-#             st[x] = y
-#         else
-#             # free to replace either way, but keep min index for simplicity
-#             st[y] = x
-#         end
-#     end
-#     new_guards = [:($x == $y) for (x, y) in new_pairs]
-#     return prop_subs(st), new_guards
-# end
-
-
 
 function expr_like(x)
     flds = Set(fieldnames(typeof(x)))
@@ -345,7 +241,7 @@ is transformed into:
 
 """
 function prop_subs(st::Dict)
-    new_st = similar(st)
+    new_st = empty(st)
     for (k, v) in st
         while haskey(st, v)
             v = st[v]
@@ -421,16 +317,56 @@ is_bcast(x) = error("Don't know if $x is a broadcast expression")
 """
 Given a call expression, parse regular and keyword arguments
 
-See also: split_args
+See also: split_params
 """
 function parse_call_args(ex::ExH{:call})
-    if length(ex.args) == 1
-        return [], Dict()
-    elseif isa(ex.args[2], Expr) && ex.args[2].head == :parameters
-        kw_args = Dict{Any,Any}(a.args[1] => a.args[2] for a in ex.args[2].args)
-        return ex.args[3:end], kw_args
+    ordinary_args = []
+    kw_args = Dict()
+    for arg in ex.args[2:end]
+        if arg isa Expr && arg.head == :kw
+            kw_args[arg.args[1]] = arg.args[2]
+        elseif arg isa Expr && arg.head == :parameters
+            for kw in arg.args
+                kw_args[kw.args[1]] = kw.args[2]
+            end
+        else
+            push!(ordinary_args, arg)
+        end
+    end
+    return ordinary_args, kw_args
+end
+
+
+function parse_call_args(ex::Expr)
+    @assert ex.head == :call
+    return parse_call_args(ExH(ex))
+end
+
+
+"""
+Parse call expression into function name, ordinary and keyword arguments.
+:kw and :parameters arguments are treated the same way.
+
+The reverse of this operation is make_call_expr()
+"""
+function parse_call_expr(ex::Expr)
+    @assert ex.head == :call
+    op = ex.args[1]
+    ordinary_args, kw_args = parse_call_args(ex)
+    return op, ordinary_args, kw_args
+end
+
+
+"""
+Make call expression from function name, ordinary and keyword arguments.
+
+The reverse of this operation is parse_call_expr()
+"""
+function make_call_expr(op::Symbol, args::Vector, kw_args::Dict=Dict{Any,Any}())
+    if isempty(kw_args)
+        return Expr(:call, op, args...)
     else
-        return ex.args[2:end], Dict()
+        return Expr(:call, op, make_kw_params(kw_args), args...)
     end
 end
 
@@ -454,9 +390,24 @@ function split_params(sig::Expr)
 end
 
 
-function parse_call_args(ex::Expr)
+"""
+Remove all :kw and :parameters nodes from a call expression
+"""
+function without_keywords(ex::Expr)
     @assert ex.head == :call
-    return parse_call_args(ExH(ex))
+    ex = without(ex, Expr(:parameters, Expr(:..., :_x)))
+    ex = without(ex, Expr(:kw, Expr(:..., :_x)))
+    return ex
+end
+
+
+function with_keywords(ex::Expr, kw_args::Dict)
+    @assert ex.head == :call
+    if isempty(kw_args)
+        return ex
+    else
+        return Expr(:call, ex.args[1], make_kw_params(kw_args), ex.args[2:end]...)
+    end
 end
 
 
@@ -501,7 +452,7 @@ end
 
 
 function make_elementwise(ex; lhs_is_scalar=false)
-    new_ex = macroexpand(:(@. $ex))
+    new_ex = macroexpand(@__MODULE__, :(@. $ex))
     if isa(new_ex, Expr) && new_ex.head == :.= && lhs_is_scalar
         new_ex.head = :(=)  # can't use :.= if LHS is scalar
     end
@@ -524,7 +475,32 @@ force_bitness(x::AT, ::Val{32}) where {AT <: AbstractArray{T,N}} where {T <: Abs
 force_bitness(x::Integer, ::Val{B}) where B = x
 
 
-## EinGraph deprecation
+## fixes for Julia 0.7
+
+# to_dict(t::NamedTuple) = Dict(zip(keys(t), t))
+to_dict(x::Base.Iterators.Pairs) = Dict(x)
+
+
+## handling of different modules
+
+const KNOWN_MODULES = Set([:Core, :Base, :MainInclude, :REPL, :Espresso, :XGrad])
+
+function get_caller_module()
+    s = stacktrace()
+    for i=2:length(s)        
+        if s[i].linfo isa Core.MethodInstance
+            mod = s[i].linfo.def.module
+            if !in(nameof(mod), KNOWN_MODULES)
+                return mod
+            end
+        end
+    end
+    return Main
+    # error("Can't get module of a caller from the stacktrace")
+end
+
+
+# EinGraph deprecation
 
 function depwarn_eingraph(funcsym)
     Base.depwarn("Einstein notation is deprecated and will be removed in Espresso 0.4.0",

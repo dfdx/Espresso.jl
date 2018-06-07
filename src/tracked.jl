@@ -3,13 +3,14 @@
 
 import Base: +, -, *, /, log, exp, min, max, reshape, transpose, sum, mean,
     abs, abs2, >, >=, <, <=, minimum, maximum, getindex
+# import Broadcast: broadcasted
 
 
 const DEFAULT_GRAPH = Ref(ExGraph())
 
 get_default_graph() = DEFAULT_GRAPH[]
 set_default_graph(g::ExGraph) = (DEFAULT_GRAPH[] = g)
-reset_default_graph() = (DEFAULT_GRAPH[] = ExGraph())
+reset_default_graph!() = (DEFAULT_GRAPH[] = ExGraph())
 swap_default_graph!(g::ExGraph) = (og = DEFAULT_GRAPH[]; DEFAULT_GRAPH[] = g; og)
 
 
@@ -115,13 +116,15 @@ function track_call(sig)
     call_ex = nothing; ex_in_ex = nothing
     if isempty(kw)
         call_ex = Expr(:call, op,
-                       [istracked(eval(t)) ? :($(v).val) : v for (v, t) in vars_types]...)
+                       [istracked(Core.eval(@__MODULE__, t)) ? :($(v).val) : v
+                        for (v, t) in vars_types]...)
         ex_in_ex = Expr(:call, :Expr, QuoteNode(:call), QuoteNode(op),
-                        [istracked(eval(t)) ? Expr(:., sig_var, QuoteNode(:var)) : sig_var
-                         for (sig_var, t) in vars_types]...)
+                        [(istracked(Core.eval(@__MODULE__, t)) ? Expr(:., sig_var, QuoteNode(:var))
+                         : sig_var) for (sig_var, t) in vars_types]...)
     else
         call_ex = Expr(:call, op, make_kw_params(kw),
-                       [istracked(eval(t)) ? :($(v).val) : v for (v, t) in vars_types]...)
+                       [istracked(Core.eval(@__MODULE__, t)) ? :($(v).val) : v
+                        for (v, t) in vars_types]...)
         keys = [k for (k, v) in kw]
         # we need to get this:
         # :( Expr(:call, :mult, Expr(:parameters, Expr(:kw, :pow, pow)), :(x.var)) )
@@ -129,8 +132,8 @@ function track_call(sig)
                         Expr(:call, :Expr, QuoteNode(:parameters),
                              [Expr(:call, :Expr, QuoteNode(:kw), QuoteNode(k), k)
                              for k in keys]...),
-                        [istracked(eval(t)) ? Expr(:., sig_var, QuoteNode(:var)) : sig_var
-                         for (sig_var, t) in vars_types]...)
+                        [(istracked(Core.eval(@__MODULE__, t)) ? Expr(:., sig_var, QuoteNode(:var))
+                          : sig_var) for (sig_var, t) in vars_types]...)
     end
     defquot = quote
         function $op($(sig.args[2:end]...))
@@ -149,7 +152,8 @@ end
 function track_bcast(sig)
     @assert sig.head == :.
     op = sig.args[1]
-    sig_vars, types = unzip([(arg.args[1], eval(arg.args[2])) for arg in sig.args[2].args])
+    sig_vars, types = unzip([(arg.args[1], Core.eval(@__MODULE__, arg.args[2]))
+                             for arg in sig.args[2].args])
     bcast_ex = Expr(:., op, Expr(:tuple, [istracked(t) ? :($(v).val) : v
                                           for (v, t) in zip(sig_vars, types)]...))
     # we want to get this after code generation:
@@ -159,7 +163,7 @@ function track_bcast(sig)
                          [istracked(t) ? Expr(:., sv, QuoteNode(:var)) : QuoteNode(:var)
                           for (sv, t) in zip(sig_vars, types)]...))
     defquot = quote
-        function broadcast_(::typeof($op), $(sig.args[2].args...))
+        function Broadcast.broadcasted(::typeof($op), $(sig.args[2].args...))
             val = $bcast_ex
             tv = tracked_val(x.graph, genname(), val) # TODO: x may be undefined
             ex = $ex_in_ex
@@ -241,43 +245,30 @@ for op in [:<, :<=, :>, :>=, :(==)]
 end
 
 
-
-## why this one doesn't work
-# for (op, dotop) in [(+, .+), (-, .-), (*, .*), (/, ./)]
-#     @eval function broadcast_(::typeof($op), x::TrackedArray, y::TrackedArray)
-#         val = $dotop(x.val, y.val)
-#         var = genname()
-#         nd = ExNode{:call}(var, :($(x.var) $dotop $(y.var)); val=val)
-#         push!(x.graph, nd)
-#         return TrackedArray(var, val)
-#     end
-# end
-
-
 # I couldn't find a way to overload .+ and friends as either call or broadcasting
 # fortunately, the list of such unusual operations is small and fixed
-function broadcast_(::typeof(+), x::TrackedArray, y::TrackedArray)
+function Broadcast.broadcasted(::typeof(+), x::TrackedArray, y::TrackedArray)
     val = x.val .+ y.val
     var = genname()
     nd = ExNode{:call}(var, :($(x.var) .+ $(y.var)); val=val)
     push!(x.graph, nd)
     return TrackedArray(var, val)
 end
-function broadcast_(::typeof(-), x::TrackedArray, y::TrackedArray)
+function Broadcast.broadcasted(::typeof(-), x::TrackedArray, y::TrackedArray)
     val = x.val .- y.val
     var = genname()
     nd = ExNode{:call}(var, :($(x.var) .- $(y.var)); val=val)
     push!(x.graph, nd)
     return TrackedArray(var, val)
 end
-function broadcast_(::typeof(*), x::TrackedArray, y::TrackedArray)
+function Broadcast.broadcasted(::typeof(*), x::TrackedArray, y::TrackedArray)
     val = x.val .* y.val
     var = genname()
     nd = ExNode{:call}(var, :($(x.var) .* $(y.var)); val=val)
     push!(x.graph, nd)
     return TrackedArray(var, val)
 end
-function broadcast_(::typeof(/), x::TrackedArray, y::TrackedArray)
+function Broadcast.broadcasted(::typeof(/), x::TrackedArray, y::TrackedArray)
     val = x.val ./ y.val
     var = genname()
     nd = ExNode{:call}(var, :($(x.var) ./ $(y.var)); val=val)

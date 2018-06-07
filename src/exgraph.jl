@@ -11,7 +11,8 @@ end
 
 function ExGraph(; ctx=Dict(), inputs...)
     ctx = to_context(ctx)
-    @get_or_create(ctx, :mod, current_module())
+    # @get_or_create(ctx, :mod, @__MODULE__)
+    @get_or_create(ctx, :mod, get_caller_module())
     g = ExGraph(ExNode[], Dict(), ctx)
     for (var, val) in inputs
         push!(g, :input, var, var; val=val)
@@ -61,7 +62,7 @@ end
 
 Base.haskey(g::AbstractExGraph, var::Symbol) = haskey(g.idx, var)
 Base.in(var::Symbol, g::AbstractExGraph) = haskey(g, var)
-Base.endof(g::AbstractExGraph) = endof(g.tape)
+Base.lastindex(g::AbstractExGraph) = lastindex(g.tape)
 Base.length(g::AbstractExGraph) = length(g.tape)
 Base.get(g::AbstractExGraph, var::Symbol) = g.idx[var]
 Base.getindex(g::AbstractExGraph, var::Symbol) = g.idx[var]
@@ -70,7 +71,8 @@ Base.getindex(g::AbstractExGraph, i::Integer) = g.tape[i]
 Base.setindex!(g::AbstractExGraph, nd::ExNode, i::Integer) =
     (g.tape[i] = nd; g.idx[varname(nd)] = nd)
 
-indexof(g::AbstractExGraph, vname::Symbol) = findfirst(map(varname, g.tape), vname)
+# indexof(g::AbstractExGraph, vname::Symbol) = findfirst(map(varname, g.tape), vname)
+indexof(g::AbstractExGraph, vname::Symbol) = findfirst(isequal(vname), map(varname, g.tape))
 getsize(g::AbstractExGraph, vname::Symbol) = g.ctx[:rsizes][vname]
 getsize(g::AbstractExGraph, nd::ExNode) = getsize(g, varname(nd))
 
@@ -109,11 +111,11 @@ end
 function eval_tracked!(g::ExGraph, ex::Expr, inputs...)
     og = swap_default_graph!(g)
     evex = ex.head == :block ? deepcopy(ex) : Expr(:block, deepcopy(ex))
-    for (var, val) in inputs    
+    for (var, val) in inputs
         tv = isa(val, AbstractArray) ? TrackedArray(g, var, val) : TrackedReal(g, var, val)
-        unshift!(evex.args, :($var = $tv))
+        pushfirst!(evex.args, :($var = $tv))
     end
-    eval(evex)
+    Core.eval(@get(g.ctx, :mod, Main), evex)
     return swap_default_graph!(og)
 end
 
@@ -121,17 +123,17 @@ end
 """Generate a new unique name for intermediate variable in graph"""
 function genname()
     s = String(gensym())
-    return Symbol(replace(s, "##", "tmp"))
+    return Symbol(replace(s, "##" => "tmp"))
 end
 
 function genname(prefix::String)
     s = String(gensym())
-    return Symbol(replace(s, "##", prefix))
+    return Symbol(replace(s, "##" => prefix))
 end
 
 function genname(prefix::Symbol)
     s = String(gensym())
-    return Symbol(replace(s, "##", prefix))
+    return Symbol(replace(s, "##" => prefix))
 end
 
 function gennames(count::Int)
@@ -139,7 +141,7 @@ function gennames(count::Int)
 end
 
 
-function rename_repeated(g::AbstractExGraph, ex)    
+function rename_repeated(g::AbstractExGraph, ex)
     st = @get_or_create(g.ctx, :renamings, Dict())
     st = prop_subs(st)
     return subs(ex, st)
@@ -202,7 +204,7 @@ end
 
 function Base.delete!(g::AbstractExGraph, vname::Symbol)
     delete!(g.idx, vname)
-    i = find(nd -> varname(nd) == vname, g.tape)
+    i = findall(nd -> varname(nd) == vname, g.tape)
     deleteat!(g.tape, i)
 end
 
@@ -254,7 +256,7 @@ function parse!(g::ExGraph, ex::ExH{:(=)})
     dep = parse!(g, rhs)
     if isa(lhs, Symbol)
         if haskey(g, lhs)
-            lhs = add_renaming!(g, lhs)            
+            lhs = add_renaming!(g, lhs)
         end
         push!(g, :(=), lhs, dep)
         return lhs

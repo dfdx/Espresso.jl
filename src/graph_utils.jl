@@ -95,9 +95,9 @@ Find definition of a called function and build its subgraph ready for inlining
 function make_subgraph(g::ExGraph, nd::ExNode{:call})
     mod = @get(g.ctx, :mod, Main)  # TODO: Main or current_graph()?
     fname = getexpr(nd).args[1]
-    f = eval(mod, fname)
+    f = Core.eval(mod, fname)
     args = dependencies(nd)
-    arg_types = ([typeof(getvalue(g[arg])) for arg in args]...)
+    arg_types = ([typeof(getvalue(g[arg])) for arg in args]...,)
     params, sub_ex = funexpr(f, arg_types)
     sub_g = ExGraph(sub_ex; ctx=g.ctx)
     st = Dict(zip(params, args))           # rename internal params to actual arguments

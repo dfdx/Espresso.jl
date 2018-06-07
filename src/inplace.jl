@@ -8,9 +8,9 @@ const Mat = AbstractMatrix
 const INPLACE_PHS = Set([:u, :v, :w, :x, :y, :z, :X, :Y, :Z])
 
 const INPLACE_RULES = [
-    Type[Mat, Mat] => :(Z = X' * Y) => :(At_mul_B!(Z, X, Y)),
-    Type[Mat, Mat] => :(Z = X * Y') => :(A_mul_Bt!(Z, X, Y)),
-    Type[Mat, Mat] => :(Z = X * Y) => :(A_mul_B!(Z, X, Y)),    
+    Type[Mat, Mat] => :(Z = X' * Y) => :(mul!(Z, transpose(X), Y)),
+    Type[Mat, Mat] => :(Z = X * Y') => :(mul!(Z, X, transpose(Y))),
+    Type[Mat, Mat] => :(Z = X * Y) => :(mul!(Z, X, Y)),    
 ]
 
 
@@ -42,8 +42,8 @@ function to_inplace(g::ExGraph, nd::Union{ExNode{:call}, ExNode{:bcast}, ExNode{
         if all(isa(val, T) for (val, T) in zip(dep_vals, types))
             pat = sanitize(pat)
             rex = tryrewrite(ex, pat, rpat; phs=INPLACE_PHS)
-            if !isnull(rex)
-                return get(rex)
+            if rex != nothing
+                return rex
             end
         end
     end
@@ -121,7 +121,7 @@ end
 
 
 macro inplacerule(tpat, rpat)
-    mod = current_module()
+    mod = @__MODULE__
     add_inplace_rule(mod, tpat, rpat)
     nothing
 end
