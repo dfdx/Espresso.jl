@@ -4,5 +4,6 @@
 .juliahistory
 *.save
 .\#*
+_*
 docs/build/
 docs/site/_*

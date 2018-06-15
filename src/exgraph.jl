@@ -116,7 +116,11 @@ function eval_tracked!(g::ExGraph, ex::Expr, inputs...)
         pushfirst!(evex.args, :($var = $tv))
     end
     Core.eval(@get(g.ctx, :mod, Main), evex)
-    return swap_default_graph!(og)
+    new_g = reparse(swap_default_graph!(og); all=true)
+    # copy nodes, but keep old context; maybe we will introduce special copyto! for this later
+    g.tape = new_g.tape
+    g.idx = new_g.idx
+    return g
 end
 
 
@@ -348,7 +352,9 @@ end
 function reparse(g::AbstractExGraph; all=false)
     new_g = reset_tape(g)
     for nd in g.tape
-        if all || isa(nd, ExNode{:opaque})
+        if isa(nd, ExNode{:input}) || isa(nd, ExNode{:constant})
+            push!(new_g, nd)
+        elseif all || isa(nd, ExNode{:opaque})
             parse!(new_g, to_expr(nd))
         else
             push!(new_g, nd)
@@ -381,7 +387,7 @@ function assign_chain!(g::AbstractExGraph, nd::ExNode{:(=)},
     if getguards(nd) == guards #  && !is_special_expr(getexpr(nd))
         push!(chain, varname(nd))
         dep = dependencies(nd)[1]
-        if haskey(g, dep) && !isa(g[dep], ExNode{:input})
+        if haskey(g, dep) && !isa(g[dep], ExNode{:input}) && !isa(g[dep], ExNode{:constant})
             dep_nd = g[dep]
             assign_chain!(g, dep_nd, guards, chain)
         end
@@ -450,9 +456,9 @@ function fuse_assigned(g::AbstractExGraph; outvars=nothing)
         if isa(nd, ExNode{:(=)})
             chain = assign_chain(g, nd)
             root_assign_nd = g[chain[end]]
-            new_ex_ = getexpr(root_assign_nd)
-            st = assign_chain_index_replacements(g, chain)
-            new_ex = subs(new_ex_, st)
+            new_ex = getexpr(root_assign_nd)
+            # st = assign_chain_index_replacements(g, chain)
+            # new_ex = subs(new_ex_, st)
             new_nd = copy(root_assign_nd; var=getvar(nd), ex=new_ex)
             push!(new_g, new_nd)
         else
