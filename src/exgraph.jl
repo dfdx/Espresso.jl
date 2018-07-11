@@ -108,11 +108,16 @@ function to_expr_kw(g::AbstractExGraph)
 end
 
 
+"""
+Wrap inputs into tracked data structures and evaluate expression ex, updating graph g.
+NOTE: this method doesn't add input nodes, nor it fills node values.
+"""
 function eval_tracked!(g::ExGraph, ex::Expr, inputs...)
     og = swap_default_graph!(g)
     evex = ex.head == :block ? deepcopy(ex) : Expr(:block, deepcopy(ex))
     for (var, val) in inputs
-        tv = isa(val, AbstractArray) ? TrackedArray(g, var, val) : TrackedReal(g, var, val)
+        tv = tracked(g, var, val)
+        # TODO: do it in let-end block!
         pushfirst!(evex.args, :($var = $tv))
     end
     Core.eval(@get(g.ctx, :mod, Main), evex)
@@ -243,6 +248,12 @@ function parse!(g::AbstractExGraph, x::AbstractArray)
 end
 
 
+function parse!(g::AbstractExGraph, x::Tuple)
+    var = push!(g, :constant, genname(), x; val=x)
+    return var
+end
+
+
 function parse!(g::AbstractExGraph, x::ExH{:vect})
     @assert all(e -> e isa Number, x.args) "Can only create vector literal node with numbers"
     nums = convert(Vector{Float64}, x.args)
@@ -351,11 +362,11 @@ end
 
 function reparse(g::AbstractExGraph; all=false)
     new_g = reset_tape(g)
-    for nd in g.tape
+    for nd in g.tape   
         if isa(nd, ExNode{:input}) || isa(nd, ExNode{:constant})
             push!(new_g, nd)
         elseif all || isa(nd, ExNode{:opaque})
-            parse!(new_g, to_expr(nd))
+            parse!(new_g, to_expr_kw(nd))
         else
             push!(new_g, nd)
         end

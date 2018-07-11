@@ -20,7 +20,7 @@ export
     rewrite,
     tryrewrite,
     rewrite_all,
-    without,    
+    without,
     set_default_placeholders,
     # simplification
     simplify,
@@ -85,10 +85,10 @@ export
     mergeex,
     sanitize,
     # tracking
-    TrackedArray,
-    TrackedReal,
-    tracked_val,
+    tracked,
+    istracked,
     tracked_exgraph,
+    eval_tracked!,
     swap_default_graph!,
     reset_default_graph!,
     # conversions
@@ -103,7 +103,7 @@ export
     destruct,
     destruct_inputs,
     # codegens
-    generate_code,    
+    generate_code,
     VectorCodeGen,
     BufCodeGen,
     CuCodeGen,
