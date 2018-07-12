@@ -1,3 +1,5 @@
+import Base: +, -, *, /, log, exp, min, max, reshape, transpose, sum, mean,
+    abs, abs2, >, >=, <, <=, minimum, maximum, getindex
 
 @tracking +(x::TReal, y::TReal)
 @tracking -(x::TReal, y::TReal)
@@ -34,17 +36,44 @@
 
 @tracking transpose(x::TArray)
 
-@tracking sum(x::TArray)
-@tracking mean(x::TArray)
-
 @tracking sin.(x::TArray)
 @tracking cos.(x::TArray)
 @tracking exp.(x::TArray)
 @tracking log.(x::TArray)
 @tracking log.(b::Integer, x::TArray)
 
-# TODO: make @nontracked macro?
+
+# functions with unassigned kw params
+# currently `@tracking` doesn't support them, so we have to implement them manually
+# note that `@tracking foo(x; dims=1)` IS supported, only `@tracking foo(x; dims)` isn't
+
+function sum(x::TArray; dims)
+    val = sum(x.val; dims=dims)
+    var = genname()
+    nd = ExNode{:call}(var, :(sum($(x.var); dims=$dims)); val=val)
+    push!(x.graph, nd)
+    return tracked(x.graph, var, val)
+end
+
+
+function mean(x::TArray; dims)
+    val = mean(x.val; dims=dims)
+    var = genname()
+    nd = ExNode{:call}(var, :(mean($(x.var); dims=$dims)); val=val)
+    push!(x.graph, nd)
+    return tracked(x.graph, var, val)
+end
+
+# variants with @tracking should go after, otherwise variants with unassigned kw params
+# would overwrite these ones
+
+@tracking sum(x::TArray)
+@tracking mean(x::TArray)
+
+
 # boolean operators aren't tracked
+# TODO: make @nontracked macro?
+
 for op in [:<, :<=, :>, :>=, :(==)]
     @eval (Base.$op)(x::TReal, y::TReal) = $op(x.val, y.val)
 end

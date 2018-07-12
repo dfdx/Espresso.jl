@@ -361,11 +361,12 @@ end
 ## reparsing of opaque nodes
 
 function reparse(g::AbstractExGraph; all=false)
+    _all = all
     new_g = reset_tape(g)
-    for nd in g.tape   
+    for nd in g.tape
         if isa(nd, ExNode{:input}) || isa(nd, ExNode{:constant})
             push!(new_g, nd)
-        elseif all || isa(nd, ExNode{:opaque})
+        elseif _all || isa(nd, ExNode{:opaque})
             parse!(new_g, to_expr_kw(nd))
         else
             push!(new_g, nd)

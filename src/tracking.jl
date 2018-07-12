@@ -1,10 +1,4 @@
-
 ## tracked.jl - build ExGraph using tracked data types
-
-import Base: +, -, *, /, log, exp, min, max, reshape, transpose, sum, mean,
-    abs, abs2, >, >=, <, <=, minimum, maximum, getindex
-# import Broadcast: broadcasted
-
 
 const DEFAULT_GRAPH = Ref(ExGraph())
 
@@ -95,7 +89,6 @@ macro tracking(sig)
     if sig.head == :call
         return track_call(sig)
     elseif sig.head == :.
-        # TODO: we also need to add the op to broadcast list in `unfuse.jl`
         return track_bcast(sig)
     else
         error("Can only track calls or broadcasting")
@@ -111,7 +104,7 @@ end
 function tracked_exgraph(f::Function, args...)
     ctx = Dict{Any,Any}(:method => :track)
     input_vars = [genname() for i=1:length(args)]
-    inputs = [iv => a for (iv, a) in zip(input_vars, args)]
+    inputs = Any[iv => a for (iv, a) in zip(input_vars, args)]
     g = ExGraph(; ctx=ctx, inputs...)
     # replace default graph to capture constants to `g` as well
     og = swap_default_graph!(g)
@@ -120,5 +113,6 @@ function tracked_exgraph(f::Function, args...)
     f(tr_args...)
     # put original graph back
     swap_default_graph!(og)
+    g = reparse(g; all=true)
     return g
 end
