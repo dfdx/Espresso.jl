@@ -30,3 +30,6 @@ include("inplace.jl")
 include("codegen.jl")
 include("destruct.jl")
 include("helpers.jl")
+
+
+version() = v"0.4.3.0"
