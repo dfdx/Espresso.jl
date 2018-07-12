@@ -32,4 +32,4 @@ include("destruct.jl")
 include("helpers.jl")
 
 
-version() = v"0.4.3.0"
+version() = v"0.4.3-alpha"
