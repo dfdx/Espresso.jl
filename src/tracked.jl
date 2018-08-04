@@ -1,7 +1,7 @@
 
 ## tracked.jl - build ExGraph using tracked data types
 
-import Base: +, -, *, /, log, exp, min, max, reshape, transpose, sum
+import Base: +, -, *, /, log, exp, min, max, reshape, transpose, sum,
     abs, abs2, >, >=, <, <=, minimum, maximum, getindex
 import Statistics: mean
 # import Broadcast: broadcasted
