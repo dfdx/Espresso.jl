@@ -6,6 +6,7 @@
 
 # using Sugar
 using LinearAlgebra
+using Statistics
 import Base: CodeInfo, Slot
 
 include("types.jl")
