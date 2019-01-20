@@ -131,6 +131,9 @@ end
 
 # common subexpression elimination
 
+safe_size(a::AbstractArray) = size(a)
+safe_size(a) = nothing
+
 function eliminate_common(g::AbstractExGraph)
     g = reindex_from_beginning(g)
     new_g = reset_tape(g)
@@ -141,7 +144,7 @@ function eliminate_common(g::AbstractExGraph)
         vname, vidxs = split_indexed(new_full_ex.args[1])
         key = string((vidxs, new_full_ex.args[2]))
         if haskey(existing, key) &&
-            (g[vname] |> getvalue |> size) == (g[existing[key]] |> getvalue |> size)
+            (g[vname] |> getvalue |> safe_size) == (g[existing[key]] |> getvalue |> safe_size)
             st[vname] = existing[key]
         else
             # C = getcategory(nd)
