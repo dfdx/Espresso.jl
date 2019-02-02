@@ -4,12 +4,9 @@ os:
   - linux
 #  - osx
 julia:
-  - 0.7
+  - 1.0
 notifications:
   email: false
-script:
- - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
- - julia -e 'Pkg.clone(pwd()); Pkg.build("Espresso"); Pkg.test("Espresso"; coverage=true)'
 after_success:
-  - julia -e 'Pkg.add("Documenter")'
-  - julia -e 'cd(Pkg.dir("Espresso")); include(joinpath("docs", "make.jl"))'
+    # push coverage results to Codecov
+    - julia -e 'cd(Pkg.dir("Espresso")); Pkg.add("Coverage"); using Coverage; Codecov.submit(Codecov.process_folder())'
