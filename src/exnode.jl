@@ -162,11 +162,13 @@ dependencies(nd::ExNode{:ctor}) =
 
 function Base.show(io::IO, nd::ExNode{C}) where C
     val = getvalue(nd)
-    if isa(getvalue(nd), AbstractArray)
+    if val == nothing
+        val = "nothing"
+    elseif isa(val, AbstractArray)
         val = "<$(typeof(val))>"
-    elseif isa(getvalue(nd), Tuple)
+    elseif isa(val, Tuple)
         val = ([isa(v, AbstractArray) ?  "<$(typeof(v))>" : v for v in val]...,)
-    elseif isstruct(getvalue(nd))
+    elseif isstruct(val)
         val = "$(typeof(getvalue(nd)))"
     end
     ex_str = "ExNode{$C}($(to_expr_kw(nd)) | $val)"
