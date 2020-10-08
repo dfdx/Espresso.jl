@@ -148,7 +148,7 @@ Return canonical representation of a function name, e.g.:
 """
 function canonical(cur_mod::Module, qname)
     try
-        f = Core.eval(cur_mod, qname)
+        f = getproperty(cur_mod, qname)
         if f isa Function
             mod = func_mod(f)
             name = func_name(f)
