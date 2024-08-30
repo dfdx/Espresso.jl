@@ -1,4 +1,4 @@
- 
+
 # core.jl - single place to load all package definitions.
 #
 # If you want to learn the package structure, just go through
@@ -7,7 +7,13 @@
 # using Sugar
 using LinearAlgebra
 using Statistics
-import Base: CodeInfo, Slot
+import Base: CodeInfo
+
+if VERSION <= v"1.10"
+    import Base: Slot
+else
+    import Core.Compiler.SlotNumber as Slot
+end
 
 include("types.jl")
 include("utils.jl")
