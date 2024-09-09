@@ -1,7 +1,7 @@
 name = "Espresso"
 uuid = "6912e4f1-e036-58b0-9138-08d1e6358ea9"
 repo = "https://github.com/dfdx/Espresso.jl.git"
-version = "0.6.2"
+version = "0.6.3"
 
 [deps]
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
