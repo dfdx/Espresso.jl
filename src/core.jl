@@ -12,7 +12,8 @@ import Base: CodeInfo
 if VERSION <= v"1.10"
     import Base: Slot
 else
-    import Core.Compiler.SlotNumber as Slot
+    import Core.Compiler.SlotNumber
+    const Slot = SlotNumber
 end
 
 include("types.jl")
