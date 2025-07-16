@@ -7,7 +7,7 @@
 # using Sugar
 using LinearAlgebra
 using Statistics
-import Base: CodeInfo
+import Base: CodeInfo, Expr
 
 if VERSION <= v"1.10"
     import Base: Slot
